@@ -1,0 +1,10 @@
+/build/
+/chart.gpr
+/chart.lock*
+/chart.rep/
+/game.exe
+/music.zip
+/music/
+
+__pycache__/
+*.py[cod]
