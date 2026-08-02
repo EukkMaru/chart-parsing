@@ -1,6 +1,7 @@
 #include "chart/reconstruction.hpp"
 
 #include <cassert>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -12,6 +13,7 @@ int main() {
     using chart::reconstruction::AirHoldStartPhase;
     using chart::reconstruction::AirHoldExclusionInterval;
     using chart::reconstruction::AirHoldGeneratedRecordKind;
+    using chart::reconstruction::AirHoldPathGenerationDisposition;
     using chart::reconstruction::HoldGapState;
     using chart::reconstruction::SharedResultRoute;
     using chart::reconstruction::air_hold_active_path_phase;
@@ -27,7 +29,9 @@ int main() {
     using chart::reconstruction::air_hold_sample_step;
     using chart::reconstruction::air_hold_start_profile;
     using chart::reconstruction::air_hold_start_source_category;
+    using chart::reconstruction::air_path_unsigned_tick_delta;
     using chart::reconstruction::filter_air_hold_path_emissions;
+    using chart::reconstruction::evaluate_air_hold_path_generation;
     using chart::reconstruction::generate_air_hold_path_records;
     using chart::reconstruction::route_shared_result;
     using chart::reconstruction::update_air_hold_contact;
@@ -41,6 +45,12 @@ int main() {
     // Postprocessing uses a 384-tick major / 96-tick minor grid and halves its
     // cadence while the selected tempo-map value is below 4 * reference.
     assert(air_hold_grid_tick(AirHoldPathPoint{2.0F, 1.0F, 0.0F}) == 864);
+    assert(air_hold_grid_tick(AirHoldPathPoint{
+               std::numeric_limits<float>::infinity(), 0.0F, 0.0F}) ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(air_hold_grid_tick(AirHoldPathPoint{
+               std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F}) ==
+           std::numeric_limits<std::int32_t>::min());
     assert(air_hold_sample_step(4.0F, 1.0F) == 384);
     assert(air_hold_sample_step(1.0F, 1.0F) == 96);
 
@@ -48,6 +58,33 @@ int main() {
         {0.0F, 0.0F, 0.0F},
         {3.0F, 0.0F, 30.0F},
     };
+    const std::vector<AirHoldPathPoint> decreasing_anchors{
+        {0.0F, 0.0F, 0.0F},
+        {-1.0F, 0.0F, -10.0F},
+    };
+    assert(evaluate_air_hold_path_generation({}) ==
+           AirHoldPathGenerationDisposition::no_anchors);
+    assert(evaluate_air_hold_path_generation(anchors) ==
+           AirHoldPathGenerationDisposition::generated);
+    assert(evaluate_air_hold_path_generation(decreasing_anchors) ==
+           AirHoldPathGenerationDisposition::
+               source_large_unsigned_span_expansion);
+    const std::vector<AirHoldPathPoint> narrow_wrap_anchors{
+        {5592405.0F, 0.0F, 0.0F},
+        {std::numeric_limits<float>::infinity(), 0.0F, 1.0F},
+    };
+    assert(air_path_unsigned_tick_delta(
+               air_hold_grid_tick(narrow_wrap_anchors[0]),
+               air_hold_grid_tick(narrow_wrap_anchors[1])) == 128U);
+    assert(evaluate_air_hold_path_generation(narrow_wrap_anchors) ==
+           AirHoldPathGenerationDisposition::generated);
+    const std::vector<AirHoldPathPoint> large_wrap_anchors{
+        {-5592405.0F, 0.0F, 0.0F},
+        {5592405.0F, 0.0F, 1.0F},
+    };
+    assert(evaluate_air_hold_path_generation(large_wrap_anchors) ==
+           AirHoldPathGenerationDisposition::
+               source_large_unsigned_span_expansion);
     const auto constant_tempo = [](float) { return 4.0F; };
     const auto point_at_tick = [](std::int32_t tick) {
         const auto major = tick / 384;
@@ -72,6 +109,17 @@ int main() {
     assert(generated[2].kind == AirHoldGeneratedRecordKind::path_end);
     assert(!generated[2].emission_enabled);
 
+    const std::vector<AirHoldPathPoint> indefinite_anchors{
+        {std::numeric_limits<float>::infinity(), 0.0F, 0.0F},
+        {std::numeric_limits<float>::infinity(), 0.0F, 1.0F},
+    };
+    const auto indefinite_generated = generate_air_hold_path_records(
+        std::span<const AirHoldPathPoint>{indefinite_anchors}, 1.0F,
+        constant_tempo, point_at_tick, schedule_at_point);
+    assert(indefinite_generated.size() == 1);
+    assert(indefinite_generated.front().kind ==
+           AirHoldGeneratedRecordKind::path_end);
+
     // Exclusion intervals are open on both ends and require selector zero.
     const std::vector<AirHoldExclusionInterval> intervals{
         {10.0F, 20.0F, 0},
@@ -95,6 +143,15 @@ int main() {
         false, std::span<const AirHoldExclusionInterval>{}, constant_tempo);
     assert(generated[0].emission_enabled);
     assert(!generated[1].emission_enabled);
+
+    generated[0].emission_enabled = true;
+    generated[1].emission_enabled = true;
+    filter_air_hold_path_emissions(
+        std::span{generated}, AirHoldCommand::ahd, anchors.back(), 1.0F,
+        std::numeric_limits<float>::infinity(), false,
+        std::span<const AirHoldExclusionInterval>{}, constant_tempo);
+    assert(generated[0].emission_enabled);
+    assert(generated[1].emission_enabled);
 
     generated[0].emission_enabled = true;
     generated[1].emission_enabled = true;

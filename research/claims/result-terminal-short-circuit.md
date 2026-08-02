@@ -116,10 +116,10 @@ aggregate mappings are closed by
   and end-threshold selector values remain unresolved. Their structural
   producers are closed by
   `claim.judgement.ordinary-terminal-summary-producers`.
-- Alternate-mode player-facing identities are not closed. The externally set
-  ordinary byte is now lifetime-bounded: one initial selector-2 setup path can
-  set it, the setup lock prevents periodic reapplication, selectors remain
-  alternate, and the next result-owner setup/reset clears it.
+- Alternate-mode player-facing identities are intentionally unassigned. The
+  externally set ordinary byte is lifetime-bounded: one initial selector-2
+  setup path can set it, the setup lock prevents periodic reapplication,
+  selectors remain alternate, and the next result-owner setup/reset clears it.
 
 ## Consequences
 

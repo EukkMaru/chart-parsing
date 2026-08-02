@@ -7,7 +7,9 @@
 using chart::reconstruction::TapInterval;
 using chart::reconstruction::TapAdjacentWindowAdjustment;
 using chart::reconstruction::TapLaneWindows;
-using chart::reconstruction::apply_active_result_threshold;
+using chart::reconstruction::ActiveResultControlUnit;
+using chart::reconstruction::LoadedActiveResultControls;
+using chart::reconstruction::apply_loaded_active_result_controls;
 using chart::reconstruction::apply_tap_adjacent_window_adjustment;
 using chart::reconstruction::apply_tap_center_window_adjustment;
 using chart::reconstruction::classify_tap_delta;
@@ -174,16 +176,47 @@ int main() {
     assert(tap_detailed_result_code(4, 0) == 6);
     assert(tap_detailed_result_code(99, 0) == 0);
 
-    // The active result-control threshold is applied after classification but
-    // before the detailed code conversion.
-    assert(apply_active_result_threshold(4, false, 4, 5) == 4);
-    assert(apply_active_result_threshold(0, true, 2, 5) == 0);
-    assert(apply_active_result_threshold(1, true, 2, 5) == 0);
-    assert(apply_active_result_threshold(2, true, 2, 5) == 0);
-    assert(apply_active_result_threshold(3, true, 2, 5) == 3);
-    assert(apply_active_result_threshold(4, true, 4, 5) == 0);
-    assert(apply_active_result_threshold(5, true, 4, 5) == 5);
-    assert(apply_active_result_threshold(2, true, 5, 5) == 2);
+    // A loaded profile's first result-control threshold is applied after
+    // classification but before detailed-code conversion.
+    const std::array<ActiveResultControlUnit, 2> controls{{
+        {.source_record_present = true, .threshold = 2},
+        {.source_record_present = true, .threshold = 4},
+    }};
+    const LoadedActiveResultControls loaded{
+        .skill_profile_id = 7,
+        .units = controls,
+    };
+    assert(apply_loaded_active_result_controls(
+               4, {.skill_profile_id = -1, .units = controls}, 5) == 4);
+    assert(apply_loaded_active_result_controls(
+               4, {.skill_profile_id = 7, .units = {}}, 5) == 4);
+    const std::array<ActiveResultControlUnit, 1> missing_source{{
+        {.source_record_present = false, .threshold = 4},
+    }};
+    assert(apply_loaded_active_result_controls(
+               4, {.skill_profile_id = 7, .units = missing_source}, 5) == 4);
+    assert(apply_loaded_active_result_controls(0, loaded, 5) == 0);
+    assert(apply_loaded_active_result_controls(1, loaded, 5) == 0);
+    assert(apply_loaded_active_result_controls(2, loaded, 5) == 0);
+    assert(apply_loaded_active_result_controls(3, loaded, 5) == 3);
+    // Only the first control participates; the second threshold is ignored.
+    assert(apply_loaded_active_result_controls(4, loaded, 5) == 4);
+    const std::array<ActiveResultControlUnit, 1> threshold_four{{
+        {.source_record_present = true, .threshold = 4},
+    }};
+    assert(apply_loaded_active_result_controls(
+               4, {.skill_profile_id = 7, .units = threshold_four}, 5) == 0);
+    assert(apply_loaded_active_result_controls(
+               5, {.skill_profile_id = 7, .units = threshold_four}, 5) == 5);
+    const std::array<ActiveResultControlUnit, 1> invalid_threshold{{
+        {.source_record_present = true, .threshold = 5},
+    }};
+    assert(apply_loaded_active_result_controls(
+               2, {.skill_profile_id = 7, .units = invalid_threshold}, 5) == 2);
     assert(tap_detailed_result_code(
-               apply_active_result_threshold(4, true, 4, 5), 0) == 11);
+               apply_loaded_active_result_controls(
+                   4,
+                   {.skill_profile_id = 7, .units = threshold_four},
+                   5),
+               0) == 11);
 }

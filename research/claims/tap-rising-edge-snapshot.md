@@ -58,8 +58,9 @@ same gameplay substep.
   TouchSlider Y selectors and `claim.input.snapshot-profile-synthesis` closes
   the remaining snapshot/history fields.
 - The manager forced-result branch can bypass ordinary rising-edge acceptance;
-  its selector is covered by `claim.judgement.forced-result-mode`, while its
-  external activation identity remains open.
+  its selector, only reachable nonzero producer, enable-field source, reset,
+  and lifetime are covered by `claim.judgement.forced-result-mode`. Only the
+  enable field's player-facing label is unassigned.
 
 ## Consequences
 

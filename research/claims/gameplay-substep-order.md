@@ -74,8 +74,10 @@ capped at one prior substep.
 ## Unknowns
 
 - The semantic name of the alternate global mode is deliberately unassigned.
-- Whether every chart setup call after this loop affects the following or the
-  current substep requires further ordering analysis.
+- Post-loop chart setup cannot affect a substep already completed in this outer
+  update. Its lazy materialization and remaining direct-callee order are closed
+  by `claim.pipeline.runtime-note-materialization-order` and
+  `claim.pipeline.outer-update-direct-callee-closure`.
 
 ## Consequences
 

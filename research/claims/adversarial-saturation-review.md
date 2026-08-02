@@ -1,23 +1,20 @@
 # Claim: an adversarial same-investigator pass found no new closed-path contradiction
 
 - ID: `claim.audit.adversarial-saturation-review`
-- State: active
+- State: superseded
 - Maturity: supported
 - Confidence: medium
 - Owner: codex-root
 - Coverage rows: `audit.closure`
-- Last reviewed: 2026-07-26
+- Last reviewed: 2026-07-27
 
 ## Statement
 
-An adversarial review of the current exact-binary evidence found no conflict
-among active claims, no stale superseded claim used by the specification,
-reconstruction, tests, or coverage ledger, and no newly omitted indirect edge
-in a representative rewalk of the parser, materializer, outer update,
-ordinary substep loop, and active-note manager.
-
-This is not the independent closure gate. Substantial gameplay-relevant
-uncertainty remains explicit in coverage, so the grand goal is open.
+This claim is superseded by `claim.audit.independent-closure-review`. Its
+same-investigator review missed a live contradiction: SLA-selected tags reach
+the pending-note materialization predicate through STP/SFL/SLP schedules. It
+also omitted HXD's external checker-profile selection and the group-1 schedule
+producers from the normative reconstruction.
 
 ## Binary identity and coverage snapshot
 

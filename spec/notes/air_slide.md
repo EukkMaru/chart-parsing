@@ -60,6 +60,10 @@ Grid positions use the single-precision formula:
 grid_tick = trunc((major + minor * 0.25F) * 384.0F + 0.5F)
 ```
 
+The conversion uses `CVTTSS2SI`: NaN, infinity, and out-of-range values become
+`INT32_MIN`. Cursor initialization, restart, and advance use wrapped 32-bit
+addition before the signed `cursor < end` test.
+
 The adaptive step starts at 384 ticks. While the BPM selected for the current
 scheduled milliseconds is below four times the `PROGJUDGE_BPM` header, double
 the BPM and integer-halve the step. The authoritative BPM schedule and
@@ -83,6 +87,15 @@ Thus the first sample after the root or an ASD restart is disabled; later
 samples are enabled until another restart. Types 5/6/7 are producer tags. The
 runtime consumer uses only schedule and emission for gameplay.
 
+The control-point comparison is signed. In the ordinary nonwrapping domain, a
+control point before the current cursor contributes no interior samples;
+processing continues and the final authored control is still appended as the
+disabled type-7 end record. At an extreme tick, however, anchor-plus-step or a
+later cursor advance can wrap from positive to negative and create a very
+large source expansion. A zero adaptive step can hold a cursor below the end
+forever. `evaluate_air_slide_segment_generation` and
+`evaluate_air_slide_cursor_advance` expose those source dispositions.
+
 A final ASC enables a nonnegative end-margin filter; final ASD bypasses it. The
 margin is `PROGJUDGE_AER`, which resets from float bits `0x3f7fbe77`. For each
 record it disables emission when:
@@ -90,6 +103,10 @@ record it disables emission when:
 ```text
 record_grid_tick + round(adaptive_step * end_margin) >= final_grid_tick
 ```
+
+The margin conversion is `CVTTSS2SI`; positive infinity/out-of-range maps to
+`INT32_MIN`, and record-plus-margin wraps before the signed comparison. NaN and
+negative margins bypass the filter.
 
 Positive `TUTORIAL` enables the separate key-0 interval table, which also
 disables emission only for an interval with selector zero and strict

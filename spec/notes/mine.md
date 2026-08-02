@@ -4,7 +4,9 @@
 
 The `MNE` event family maps to parsed type 11 and constructs a runtime
 `projView::MineNote`. Shared loading supplies its scheduled time, raw start and
-width, and a bounded logical-lane interval within lanes 0 through 15. Mine
+width, and the common bounded logical-lane interval within lanes 0 through 15.
+The common width and extent rules are specified in `spec/notes/tap.md` and
+proven by `claim.parser.common-lane-width-encoding`. Mine
 loading initializes local phase to 0 and accumulated contact to `0.0`.
 
 MNE never exposes a runtime lane candidate. Its candidate preparation leaves

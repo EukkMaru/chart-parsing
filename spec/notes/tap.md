@@ -3,8 +3,20 @@
 ## Construction and lane extent
 
 Parsed record type 0 constructs a runtime `projView::TapNote`. The record's
-start-lane field is copied directly; its encoded width is resolved through a
-16-entry table. Runtime lane coverage is bounded to logical lanes 0 through 15.
+start-lane field is copied directly. Authored width is clamped to 1 through 16
+and stored as `width - 1`; runtime loading decodes indices 0 through 15 back
+to widths 1 through 16. Runtime lane coverage is:
+
+```text
+start = max(lane, 0)
+count = max(min(lane + width, 16) - start, 0)
+```
+
+The involved tables are fixed and have no compatibility writer in this
+snapshot. Reconstruction: `parse_c2s_common_lane_geometry`,
+`decode_c2s_note_width`, and `bounded_note_lane_extent`; focused tests:
+`tests/common_lane_width_test.cpp`; evidence:
+`claim.parser.common-lane-width-encoding`.
 The note also owns an embedded checker with one `0x38`-byte window record per
 logical lane. Evidence: `claim.parser.event-family-type-map` and
 `claim.note.tap-construction`.
@@ -14,6 +26,12 @@ initialized `0.06F` scale and stored as the note's scheduled chart position.
 There is no integer conversion or explicit rounding on this field path.
 Reconstruction: `make_note_scheduled_position`; evidence:
 `claim.note.tap-construction`.
+
+An ordinary TAP root reserves one source-ordered primary result identifier.
+Its middle/end and secondary identifiers remain negative unless a compatible
+attached component supplies the latter. The shared result path's exact slot
+selection is normative in `spec/judgement.md`. Evidence:
+`claim.judgement.result-component-identifier-flow`.
 
 ## Candidate phase
 
@@ -69,14 +87,17 @@ reach the authoritative aggregate under the validation and terminal-route rules
 in `spec/judgement.md`. A prior result can activate terminal observer routing
 for a later tied TAP without preventing that TAP's own completion. Evidence:
 `claim.judgement.shared-result-two-stage-routing` and
-`claim.interactions.result-terminal-short-circuit`. Cross-family ties, the
-player-facing result names, and remaining note-family interactions remain
-under audit.
+`claim.interactions.result-terminal-short-circuit`. Cross-family ties, dynamic
+creation order, equal-edge fanout, and same-pass result order are normative in
+`claim.interactions.cross-family-candidate-result-order`. Player-facing result
+labels are intentionally unassigned.
 
 When manager forced-result state is active, the shared gate can complete after
 its configured timing point without a rising edge or selected-candidate equality
-test. Fixed, cycling, and random byte selection is normative in
-`spec/judgement.md`. Evidence: `claim.judgement.forced-result-mode`.
+test. The selector's fixed, cycling, and random cases are specified in
+`spec/judgement.md`, but exact-snapshot producer closure makes tutorial mode 2
+and byte 3 the only reachable nonzero case. Evidence:
+`claim.judgement.forced-result-mode`.
 
 ## Window classification
 

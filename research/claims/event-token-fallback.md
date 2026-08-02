@@ -34,9 +34,10 @@ are discarded before event dispatch.
 - The line loader appends a token record only after its command string resolves
   to one of the initialized descriptors. An unknown spelling does not reach a
   group handler.
-- This includes all twenty corpus-visible `T_PROG_00` through `T_PROG_95`
-  spellings, whose fixed-registry exclusion is closed by
-  `claim.parser.legacy-t-prog-command-exclusion`.
+- This includes the four corpus-visible `T_FIRST_*`/`T_FINAL_*` summary
+  spellings and all twenty `T_PROG_00` through `T_PROG_95` spellings, whose
+  fixed-registry exclusion is closed by
+  `claim.parser.legacy-metadata-command-exclusion`.
 - The event handler has a field-count/presence helper, but both complete call
   sites pass its controlling argument as false. Each event-family branch then
   reads only the indices it uses; no live exact-arity rejection precedes those
@@ -73,8 +74,8 @@ erase later family-specific matching or domain checks.
 
 - The application-level presentation of an uncaught conversion exception is
   outside the successful gameplay-load boundary.
-- Family-specific association, range, and compatibility failures remain owned
-  by their note/event claims.
+- Family-specific association, range, and compatibility failures are specified
+  by their linked note/event claims.
 
 ## Consequences
 

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <map>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -324,24 +325,85 @@ inline std::string c2s_string_field(
     return index < fields.size() ? std::string(fields[index]) : std::string{};
 }
 
-// claim.parser.legacy-t-prog-command-exclusion
+// claim.parser.legacy-metadata-command-exclusion
 //
-// These twenty spellings occur in every local backward-compatible chart, but
-// they are absent from the executable's exact 91-entry descriptor registry.
-// The source line loader therefore drops them as unknown commands.
-inline constexpr std::array<std::string_view, 20>
-    ignored_legacy_progress_commands{{
+// These 24 spellings occur in every local backward-compatible chart, but they
+// are absent from the executable's exact 91-entry descriptor registry. The
+// source line loader therefore drops them as unknown commands.
+inline constexpr std::array<std::string_view, 24>
+    ignored_legacy_metadata_commands{{
+        "T_FIRST_MSEC", "T_FIRST_RES", "T_FINAL_MSEC", "T_FINAL_RES",
         "T_PROG_00", "T_PROG_05", "T_PROG_10", "T_PROG_15", "T_PROG_20",
         "T_PROG_25", "T_PROG_30", "T_PROG_35", "T_PROG_40", "T_PROG_45",
         "T_PROG_50", "T_PROG_55", "T_PROG_60", "T_PROG_65", "T_PROG_70",
         "T_PROG_75", "T_PROG_80", "T_PROG_85", "T_PROG_90", "T_PROG_95",
     }};
 
-constexpr bool c2s_command_is_ignored_legacy_progress(
+constexpr bool c2s_command_is_ignored_legacy_metadata(
     std::string_view command) {
-    return std::find(ignored_legacy_progress_commands.begin(),
-                     ignored_legacy_progress_commands.end(),
-                     command) != ignored_legacy_progress_commands.end();
+    return std::find(ignored_legacy_metadata_commands.begin(),
+                     ignored_legacy_metadata_commands.end(),
+                     command) != ignored_legacy_metadata_commands.end();
+}
+
+// claim.parser.derived-command-overwrite
+//
+// Descriptor IDs 0x2e through 0x5a are group-3 commands with one integer
+// field. The parser temporarily stores them in this exact ID order. Before the
+// ordinary parser returns, its derived-summary pass clears the same 45 slots
+// without reading them and rebuilds unrelated chart-derived statistics there.
+inline constexpr std::array<std::string_view, 45>
+    c2s_derived_command_names{{
+        "T_REC_TAP",    "T_REC_CHR",    "T_REC_FLK",
+        "T_REC_MNE",    "T_REC_HLD",    "T_REC_SLD",
+        "T_REC_AIR",    "T_REC_AHD",    "T_REC_ALL",
+        "T_NOTE_TAP",   "T_NOTE_CHR",   "T_NOTE_FLK",
+        "T_NOTE_MNE",   "T_NOTE_HLD",   "T_NOTE_SLD",
+        "T_NOTE_AIR",   "T_NOTE_AHD",   "T_NOTE_ALL",
+        "T_NUM_TAP",    "T_NUM_CHR",    "T_NUM_FLK",
+        "T_NUM_MNE",    "T_NUM_HLD",    "T_NUM_SLD",
+        "T_NUM_AIR",    "T_NUM_AHD",    "T_NUM_AAC",
+        "T_CHRTYPE_UP", "T_CHRTYPE_DW", "T_CHRTYPE_CE",
+        "T_CHRTYPE_RC", "T_CHRTYPE_LC", "T_CHRTYPE_RS",
+        "T_CHRTYPE_LS", "T_CHRTYPE_BS", "T_LEN_HLD",
+        "T_LEN_SLD",    "T_LEN_AHD",    "T_LEN_ALL",
+        "T_JUDGE_TAP",  "T_JUDGE_HLD",  "T_JUDGE_SLD",
+        "T_JUDGE_AIR",  "T_JUDGE_FLK",  "T_JUDGE_ALL",
+    }};
+
+struct C2sDerivedCommandStorage {
+    std::array<std::int32_t, c2s_derived_command_names.size()>
+        authored_values{};
+};
+
+constexpr std::size_t c2s_derived_command_index(std::string_view command) {
+    for (std::size_t index = 0; index < c2s_derived_command_names.size();
+         ++index) {
+        if (c2s_derived_command_names[index] == command) {
+            return index;
+        }
+    }
+    return c2s_derived_command_names.size();
+}
+
+inline bool apply_c2s_derived_command(
+    C2sDerivedCommandStorage& storage,
+    std::string_view command,
+    std::span<const std::string_view> fields) {
+    const std::size_t index = c2s_derived_command_index(command);
+    if (index == c2s_derived_command_names.size()) {
+        return false;
+    }
+    storage.authored_values[index] = parse_c2s_integer_field(fields, 0);
+    return true;
+}
+
+// This models the destructive first action of the summary producer. The
+// rebuilt values have no live gameplay consumer and are intentionally not
+// represented as authored configuration.
+constexpr void begin_c2s_derived_summary_rebuild(
+    C2sDerivedCommandStorage& storage) {
+    storage.authored_values.fill(0);
 }
 
 struct C2sHeader {
@@ -719,8 +781,8 @@ struct TapFineResultRecord {
 };
 
 // Static result metadata indexed by classify_tap_delta().  table_code is kept
-// deliberately neutral because all of its downstream consumers are not yet
-// closed.
+// deliberately anonymous because no player-facing label is needed for the
+// recovered gameplay behavior.
 inline constexpr std::array<TapFineResultRecord, 12> tap_fine_results{{
     {0, 0, 0, 1},
     {0, 0, 0, 4},
@@ -1292,15 +1354,81 @@ constexpr std::int32_t air_source_category(AirDirectionCode direction) {
 
 // claim.judgement.active-tier-zeroing
 //
-// Active result-control state can replace a provisional coarse tier with zero
-// before the detailed result code is selected. The result-type count and
-// threshold originate outside the classifier and therefore remain inputs.
-constexpr std::uint8_t apply_active_result_threshold(
+// A loaded skill profile owns an ordered vector of change-result controls.
+// The remap reads only the first unit and deliberately does not consult the
+// separate temporary-effect lifetime predicate used by other skill consumers.
+// The result-type count and threshold originate outside the classifier.
+struct ActiveResultControlUnit {
+    bool source_record_present{};
+    std::uint8_t threshold{};
+};
+
+struct LoadedActiveResultControls {
+    std::int32_t skill_profile_id{-1};
+    std::span<const ActiveResultControlUnit> units{};
+};
+
+// The same SkillBefore rebuild owns all five gameplay control vectors. Any
+// changed component of the selected identity triple resets every vector. The
+// middle component is the ordered-map lookup key. Source units are routed in
+// order by exact type; type 4 and unknown values are ignored.
+struct SkillBeforeControlIdentity {
+    std::int32_t first{};
+    std::int32_t profile_id{-1};
+    std::int32_t third{};
+};
+
+enum class SkillBeforeGameplayControlRoute : std::uint8_t {
+    gauge_assist,
+    gauge_keep,
+    damage_guard,
+    death_penalty,
+    change_judge_result,
+    ignored,
+};
+
+constexpr bool skill_before_controls_require_rebuild(
+    const SkillBeforeControlIdentity& loaded,
+    const SkillBeforeControlIdentity& selected) {
+    return loaded.first != selected.first ||
+           loaded.profile_id != selected.profile_id ||
+           loaded.third != selected.third;
+}
+
+constexpr std::int32_t skill_before_control_lookup_key(
+    const SkillBeforeControlIdentity& selected) {
+    return selected.profile_id;
+}
+
+constexpr SkillBeforeGameplayControlRoute route_skill_before_gameplay_unit(
+    std::int32_t type) {
+    switch (type) {
+    case 0:
+        return SkillBeforeGameplayControlRoute::gauge_assist;
+    case 1:
+        return SkillBeforeGameplayControlRoute::gauge_keep;
+    case 2:
+        return SkillBeforeGameplayControlRoute::damage_guard;
+    case 3:
+        return SkillBeforeGameplayControlRoute::death_penalty;
+    case 5:
+        return SkillBeforeGameplayControlRoute::change_judge_result;
+    default:
+        return SkillBeforeGameplayControlRoute::ignored;
+    }
+}
+
+constexpr std::uint8_t apply_loaded_active_result_controls(
     std::uint8_t provisional_tier,
-    bool threshold_active,
-    std::uint8_t threshold,
+    LoadedActiveResultControls controls,
     std::uint8_t result_type_count) {
-    if (threshold_active && provisional_tier < result_type_count &&
+    if (controls.skill_profile_id < 0 || controls.units.empty() ||
+        !controls.units.front().source_record_present) {
+        return provisional_tier;
+    }
+
+    const std::uint8_t threshold = controls.units.front().threshold;
+    if (provisional_tier < result_type_count &&
         threshold < result_type_count && provisional_tier <= threshold) {
         return 0;
     }
@@ -1361,6 +1489,41 @@ constexpr bool lane_candidate_gate_allows_start(
         return true;
     }
     return selected >= 0 && selected == exposed;
+}
+
+// claim.interactions.cross-family-candidate-result-order
+//
+// Candidate production and input updates are separate full-vector passes.
+// Reduction is complete before any participant reads the selected value, and
+// neither the selected candidate nor the rising edge is consumed. The returned
+// acceptance vector therefore preserves active-vector order without using it
+// as a tie breaker.
+struct LaneCandidateParticipant {
+    std::int32_t exposed{-1};
+    LaneCandidateGate gate{LaneCandidateGate::selected_equality};
+    bool local_input_accepts{};
+};
+
+struct LaneCandidateFanoutDecision {
+    std::int32_t selected{-1};
+    std::vector<bool> accepts;
+};
+
+inline LaneCandidateFanoutDecision evaluate_lane_candidate_fanout(
+    std::span<const LaneCandidateParticipant> participants) {
+    LaneCandidateFanoutDecision decision;
+    for (const auto& participant : participants) {
+        decision.selected =
+            reduce_lane_candidate(decision.selected, participant.exposed);
+    }
+    decision.accepts.reserve(participants.size());
+    for (const auto& participant : participants) {
+        decision.accepts.push_back(
+            participant.local_input_accepts &&
+            lane_candidate_gate_allows_start(
+                participant.gate, decision.selected, participant.exposed));
+    }
+    return decision;
 }
 
 // The base note state machine stores requested transitions separately from
@@ -1527,6 +1690,156 @@ constexpr float make_note_scheduled_position(float parsed_position) {
     return parsed_position * chart_units_per_millisecond;
 }
 
+// claim.parser.common-lane-width-encoding
+//
+// The group-2 parser clamps an authored note width to [1, 16], then stores the
+// fixed table encoding width - 1. Runtime loading decodes indices [0, 15] back
+// to widths [1, 16]; an invalid encoded value decodes to zero. The standalone
+// encoder also has fixed behavior outside the parser's already-clamped domain.
+constexpr std::int32_t encode_c2s_note_width(std::int32_t width) {
+    if (width > 16) {
+        return 15;
+    }
+    if (width < 0) {
+        width = 0;
+    }
+    return width <= 1 ? 0 : width - 1;
+}
+
+constexpr std::int32_t decode_c2s_note_width(std::int32_t encoded_width) {
+    return encoded_width >= 0 && encoded_width < 16
+               ? encoded_width + 1
+               : 0;
+}
+
+struct C2sCommonLaneGeometry {
+    std::int32_t lane{};
+    std::int32_t width{1};
+    std::int32_t encoded_width{};
+};
+
+constexpr C2sCommonLaneGeometry parse_c2s_common_lane_geometry(
+    std::int32_t lane,
+    std::int32_t authored_width) {
+    const std::int32_t width = std::clamp(authored_width, 1, 16);
+    return {lane, width, encode_c2s_note_width(width)};
+}
+
+struct RuntimeLaneExtent {
+    std::int32_t start{};
+    std::int32_t count{};
+};
+
+// The source's 32-bit lane-plus-width addition wraps before its signed
+// comparisons. Express that explicitly so malformed extremes do not invoke
+// C++ signed-overflow undefined behavior.
+constexpr std::int32_t add_i32_wrapped(
+    std::int32_t left,
+    std::int32_t right) {
+    return std::bit_cast<std::int32_t>(
+        static_cast<std::uint32_t>(left) +
+        static_cast<std::uint32_t>(right));
+}
+
+constexpr std::int32_t subtract_i32_wrapped(
+    std::int32_t left,
+    std::int32_t right) {
+    return std::bit_cast<std::int32_t>(
+        static_cast<std::uint32_t>(left) -
+        static_cast<std::uint32_t>(right));
+}
+
+// x86 CVTTSS2SI truncates a finite in-range float toward zero and returns the
+// signed integer-indefinite bit pattern for NaN, infinity, or an out-of-range
+// value. Keep every chart-reachable float-to-tick/property conversion defined.
+constexpr std::int32_t cvttss2si_i32(float value) {
+    if (!(value >= -2147483648.0F && value < 2147483648.0F)) {
+        return std::numeric_limits<std::int32_t>::min();
+    }
+    return static_cast<std::int32_t>(value);
+}
+
+constexpr RuntimeLaneExtent bounded_note_lane_extent(
+    std::int32_t lane,
+    std::int32_t decoded_width) {
+    const std::int32_t start = std::max(lane, 0);
+    const std::int32_t end =
+        std::min(add_i32_wrapped(lane, decoded_width), 16);
+    return {start, std::max(subtract_i32_wrapped(end, start), 0)};
+}
+
+// claim.judgement.result-component-identifier-flow
+//
+// A parser-local 32-bit counter starts at zero for each event pass. Accepted
+// root types reserve either one or two consecutive component identifiers;
+// attached type 3/5/8 records lazily reserve the third slot on their root.
+// Shared result submission chooses one of the copied slots by source category.
+struct C2sResultComponentIdentifiers {
+    std::int32_t primary{-1};
+    std::int32_t middle{-1};
+    std::int32_t secondary{-1};
+};
+
+constexpr std::int32_t c2s_root_result_identifier_count(
+    std::int32_t parsed_type) {
+    switch (parsed_type) {
+    case 0:
+    case 4:
+    case 6:
+    case 11:
+        return 1;
+    case 1:
+    case 2:
+    case 9:
+    case 10:
+    case 12:
+    case 13:
+        return 2;
+    default:
+        return 0;
+    }
+}
+
+constexpr C2sResultComponentIdentifiers allocate_c2s_root_result_identifiers(
+    std::int32_t parsed_type,
+    std::int32_t& next_identifier) {
+    C2sResultComponentIdentifiers identifiers;
+    const std::int32_t count =
+        c2s_root_result_identifier_count(parsed_type);
+    if (count == 0) {
+        return identifiers;
+    }
+
+    identifiers.primary = next_identifier;
+    next_identifier = add_i32_wrapped(next_identifier, 1);
+    if (count == 2) {
+        identifiers.middle = next_identifier;
+        next_identifier = add_i32_wrapped(next_identifier, 1);
+    }
+    return identifiers;
+}
+
+constexpr void attach_c2s_secondary_result_identifier(
+    C2sResultComponentIdentifiers& identifiers,
+    std::int32_t& next_identifier) {
+    if (identifiers.secondary < 0) {
+        identifiers.secondary = next_identifier;
+        next_identifier = add_i32_wrapped(next_identifier, 1);
+    }
+}
+
+constexpr std::int32_t select_note_result_identifier(
+    const C2sResultComponentIdentifiers& identifiers,
+    std::int32_t source_result_category) {
+    if (2 <= source_result_category && source_result_category <= 6) {
+        return identifiers.middle;
+    }
+    if (7 <= source_result_category && source_result_category <= 13) {
+        return identifiers.secondary;
+    }
+    return identifiers.primary;
+}
+
 // claim.pipeline.runtime-note-materialization-order
 //
 // Runtime-note creation is gated by a projected-position probe. The raw-delta
@@ -1549,6 +1862,59 @@ struct RuntimeMaterializationProbe {
     float positive_delta_projection_factor{1.0F};
 };
 
+// Gameplay setup starts from the scene's PlayOptionSpeedID (zero after fresh
+// construction). The first matching SkillBefore unit of type 6 is decisive:
+// a valid table ID replaces the current ID, while an invalid one prevents
+// later units from being considered and leaves the current ID unchanged.
+struct MaterializationSkillBeforeUnit {
+    std::int32_t type{};
+    std::uint32_t play_option_speed_id{};
+};
+
+struct PlayOptionSpeedTableRecord {
+    double speed{};
+};
+
+constexpr std::uint32_t select_materialization_speed_id(
+    std::uint32_t current_id,
+    std::span<const MaterializationSkillBeforeUnit> skill_before_units,
+    std::size_t play_option_speed_table_count) {
+    for (const auto& unit : skill_before_units) {
+        if (unit.type != 6) {
+            continue;
+        }
+        return unit.play_option_speed_id < play_option_speed_table_count
+                   ? unit.play_option_speed_id
+                   : current_id;
+    }
+    return current_id;
+}
+
+inline float resolve_materialization_runtime_speed(
+    std::uint32_t current_id,
+    std::span<const MaterializationSkillBeforeUnit> skill_before_units,
+    std::span<const PlayOptionSpeedTableRecord> speed_table) {
+    const std::uint32_t selected_id = select_materialization_speed_id(
+        current_id, skill_before_units, speed_table.size());
+    const float selected =
+        selected_id < speed_table.size()
+            ? static_cast<float>(speed_table[selected_id].speed)
+            : 0.0F;
+
+    // The snapshot converts the table double to float, then uses MAXSS with
+    // 0.1F as the source operand. This expression preserves the observed
+    // clamp, including selecting 0.1F for NaN.
+    return selected > 0.1F ? selected : 0.1F;
+}
+
+// The projection base offset is the float selected by the configuration key
+// [OFFSET] DRAW. Its descriptor default is exactly 0.0F.
+constexpr float resolve_materialization_projection_base_offset(
+    bool offset_draw_present,
+    float parsed_offset_draw) {
+    return offset_draw_present ? parsed_offset_draw : 0.0F;
+}
+
 constexpr float runtime_materialization_projected_position(
     const RuntimeMaterializationProbe& probe,
     float runtime_speed,
@@ -1569,13 +1935,15 @@ constexpr bool runtime_materialization_probe_is_eligible(
     float runtime_speed,
     float projection_base_offset,
     float fixed_scale = runtime_materialization_fixed_scale) {
-    if (probe.raw_delta < runtime_materialization_near_delta) {
-        return true;
+    if (runtime_materialization_near_delta <= probe.raw_delta) {
+        const float projected = runtime_materialization_projected_position(
+            probe, runtime_speed, projection_base_offset, fixed_scale);
+        if (projected < runtime_materialization_projection_lower ||
+            runtime_materialization_projection_upper < projected) {
+            return false;
+        }
     }
-    const float projected = runtime_materialization_projected_position(
-        probe, runtime_speed, projection_base_offset, fixed_scale);
-    return runtime_materialization_projection_lower <= projected &&
-           projected <= runtime_materialization_projection_upper;
+    return true;
 }
 
 constexpr bool should_materialize_runtime_record(
@@ -1611,6 +1979,37 @@ constexpr bool runtime_factory_constructs_primary(std::int32_t parsed_type) {
         return true;
     default:
         return false;
+    }
+}
+
+// claim.interactions.cross-family-candidate-result-order
+//
+// Existing objects stay ahead of newly materialized objects. One pending scan
+// visits eligible indices in queue order; a supported root appends first and
+// its optional attached secondary appends immediately after it. An eligible
+// factory-default record appends nothing.
+enum class RuntimeAppendRole : std::uint8_t {
+    primary,
+    attached_secondary,
+};
+
+struct RuntimeAppendEvent {
+    std::int32_t parsed_index{};
+    RuntimeAppendRole role{RuntimeAppendRole::primary};
+};
+
+inline void append_runtime_factory_events(
+    std::vector<RuntimeAppendEvent>& active_order,
+    std::int32_t parsed_index,
+    bool primary_constructed,
+    bool attached_secondary_constructed) {
+    if (!primary_constructed) {
+        return;
+    }
+    active_order.push_back({parsed_index, RuntimeAppendRole::primary});
+    if (attached_secondary_constructed) {
+        active_order.push_back(
+            {parsed_index, RuntimeAppendRole::attached_secondary});
     }
 }
 
@@ -1788,7 +2187,8 @@ constexpr std::int32_t parse_c2s_color_style_code(std::string_view name) {
 }
 
 constexpr std::int32_t quantize_c2s_aso_property(float value) {
-    return static_cast<std::int32_t>(value * 10.0F + 0.5F);
+    const float transformed = value * 10.0F + 0.5F;
+    return cvttss2si_i32(transformed);
 }
 
 struct C2sAsoEndpoint {
@@ -1828,8 +2228,10 @@ inline C2sAsoSegment parse_c2s_aso_record(
         quantize_c2s_aso_property(parse_c2s_float_field(fields, 10));
 
     if (mirrored) {
-        start_lane = 16 - start_lane - start_width;
-        end_lane = 16 - end_lane - end_width;
+        start_lane = subtract_i32_wrapped(
+            subtract_i32_wrapped(16, start_lane), start_width);
+        end_lane = subtract_i32_wrapped(
+            subtract_i32_wrapped(16, end_lane), end_width);
     }
 
     return {
@@ -1838,7 +2240,8 @@ inline C2sAsoSegment parse_c2s_aso_record(
          start_width,
          start_property_a,
          start_property_b},
-        {canonicalize_c2s_position(major, minor + duration, resolution),
+        {canonicalize_c2s_position(
+             major, add_i32_wrapped(minor, duration), resolution),
          end_lane,
          end_width,
          end_property_a,
@@ -1864,7 +2267,7 @@ constexpr bool c2s_aso_segments_connect(const C2sAsoSegment& existing,
            existing_end <= next_start + (1.0F / 192.0F);
 }
 
-// claim.parser.sla-region-selection
+// claim.parser.sla-materialization-selection
 //
 // SLA is a parser-owned region directive rather than a runtime note. Its six
 // numeric fields are major, minor, lane, width, duration, and tag. The source
@@ -1890,11 +2293,13 @@ inline C2sSlaRegion parse_c2s_sla_record(
     const std::int32_t duration = parse_c2s_integer_field(fields, 4);
     const std::int32_t tag = parse_c2s_integer_field(fields, 5);
     if (mirrored) {
-        lane = 16 - lane - width;
+        lane = subtract_i32_wrapped(
+            subtract_i32_wrapped(16, lane), width);
     }
     return {
         canonicalize_c2s_position(major, minor, resolution),
-        canonicalize_c2s_position(major, minor + duration, resolution),
+        canonicalize_c2s_position(
+            major, add_i32_wrapped(minor, duration), resolution),
         lane,
         width,
         tag,
@@ -1918,8 +2323,8 @@ constexpr std::int32_t select_c2s_sla_tag(
             chart_position_scalar(region.start) <= shifted_position &&
             shifted_position < chart_position_scalar(region.end) &&
             region.lane <= lane &&
-            static_cast<std::int64_t>(lane) + width <=
-                static_cast<std::int64_t>(region.lane) + region.width) {
+            add_i32_wrapped(lane, width) <=
+                add_i32_wrapped(region.lane, region.width)) {
             selected = region.tag;
         }
     }
@@ -1942,12 +2347,111 @@ constexpr std::int32_t select_c2s_sla_tag_for_float_span(
             shifted_position < chart_position_scalar(region.end) &&
             -0.00001F <= lane - static_cast<float>(region.lane) &&
             lane + width -
-                    static_cast<float>(region.lane + region.width) <=
+                    static_cast<float>(
+                        add_i32_wrapped(region.lane, region.width)) <=
                 0.00001F) {
             selected = region.tag;
         }
     }
     return selected;
+}
+
+// claim.note.hold-extended-profile-selection
+//
+// HLD and HXD share parsed type 1. HXD adds a sixth string field and sets an
+// extended-form flag even when that field is missing. The exact subtype table
+// is case-sensitive; missing, empty, and unknown strings all use index zero.
+enum class C2sHoldCommandForm : std::uint8_t {
+    hld,
+    hxd,
+};
+
+inline constexpr std::array<std::string_view, 8> c2s_hxd_subtype_names{
+    "UP", "DW", "CE", "RC", "LC", "RS", "LS", "BS",
+};
+
+constexpr std::int32_t c2s_hxd_subtype_code(std::string_view name) {
+    for (std::size_t index = 0; index < c2s_hxd_subtype_names.size();
+         ++index) {
+        if (c2s_hxd_subtype_names[index] == name) {
+            return static_cast<std::int32_t>(index);
+        }
+    }
+    return 0;
+}
+
+struct C2sHoldCommandVariant {
+    bool extended_form{};
+    std::int32_t subtype_code{};
+};
+
+struct C2sHoldGeometry {
+    ChartPosition start{};
+    ChartPosition end{};
+    std::int32_t lane{};
+    std::int32_t width{1};
+    std::int32_t encoded_width{};
+    std::int32_t duration{};
+};
+
+inline C2sHoldGeometry parse_c2s_hold_geometry(
+    std::span<const std::string_view> fields,
+    bool mirrored = false,
+    std::int32_t resolution = 384) {
+    const std::int32_t major = parse_c2s_integer_field(fields, 0);
+    const std::int32_t minor = parse_c2s_integer_field(fields, 1);
+    std::int32_t lane = parse_c2s_integer_field(fields, 2);
+    const std::int32_t width =
+        std::clamp(parse_c2s_integer_field(fields, 3), 1, 16);
+    const std::int32_t duration = parse_c2s_integer_field(fields, 4);
+    if (mirrored) {
+        lane = subtract_i32_wrapped(
+            subtract_i32_wrapped(16, lane), width);
+    }
+    return {
+        canonicalize_c2s_position(major, minor, resolution),
+        canonicalize_c2s_position(
+            major, add_i32_wrapped(minor, duration), resolution),
+        lane,
+        width,
+        encode_c2s_note_width(width),
+        duration,
+    };
+}
+
+inline C2sHoldCommandVariant parse_c2s_hold_command_variant(
+    C2sHoldCommandForm form,
+    std::span<const std::string_view> fields) {
+    if (form == C2sHoldCommandForm::hxd) {
+        return {
+            true,
+            c2s_hxd_subtype_code(c2s_string_field(fields, 5)),
+        };
+    }
+    return {};
+}
+
+// The checker initializer begins with this executable-owned parsed-type map.
+// Extended forms of HOLD, SLIDE, and HeavenHold override their ordinary
+// selector with 4. Invalid parsed types retain the initializer's -1 sentinel.
+constexpr std::int32_t note_checker_profile_selector(
+    std::int32_t parsed_type,
+    bool extended_form) {
+    if (parsed_type < 0 || 13 < parsed_type) {
+        return -1;
+    }
+    if (parsed_type == 4 ||
+        (extended_form &&
+         (parsed_type == 1 || parsed_type == 2 || parsed_type == 13))) {
+        return 4;
+    }
+    if (parsed_type == 6) {
+        return 6;
+    }
+    if (parsed_type == 11) {
+        return 11;
+    }
+    return 0;
 }
 
 struct BpmScheduleRecord {
@@ -1964,6 +2468,287 @@ constexpr bool bpm_record_precedes(const BpmScheduleRecord& left,
     return chart_position_scalar(left.position) +
                chart_position_compare_epsilon <
            chart_position_scalar(right.position);
+}
+
+// The snapshot uses the 32-bit MSVC three-way introsort for both BPM records
+// and keyed projection intervals. Keeping the compiled algorithm explicit
+// also defines its deterministic behavior when the float comparator is
+// unordered by NaN; host std::sort would have an invalid comparator contract.
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_median_three(
+    std::vector<Record>& records,
+    std::size_t left,
+    std::size_t middle,
+    std::size_t right,
+    Precedes precedes) {
+    if (precedes(records[middle], records[left])) {
+        std::swap(records[middle], records[left]);
+    }
+    if (precedes(records[right], records[middle])) {
+        std::swap(records[right], records[middle]);
+        if (precedes(records[middle], records[left])) {
+            std::swap(records[middle], records[left]);
+        }
+    }
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_guess_median(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t last,
+    Precedes precedes) {
+    const std::size_t count = last - first;
+    const std::size_t middle = first + count / 2U;
+    const std::size_t right = last - 1U;
+    if (count >= 42U) {
+        const std::size_t step = count / 8U;
+        snapshot_msvc_median_three(
+            records, first, first + step, first + step * 2U, precedes);
+        snapshot_msvc_median_three(
+            records, middle - step, middle, middle + step, precedes);
+        snapshot_msvc_median_three(
+            records, right - step * 2U, right - step, right, precedes);
+        snapshot_msvc_median_three(
+            records, first + step, middle, right - step, precedes);
+        return;
+    }
+    snapshot_msvc_median_three(records, first, middle, right, precedes);
+}
+
+struct SnapshotSortPartition {
+    std::size_t equal_first{};
+    std::size_t equal_last{};
+};
+
+template <typename Record, typename Precedes>
+inline SnapshotSortPartition snapshot_msvc_partition(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t last,
+    Precedes precedes) {
+    snapshot_msvc_guess_median(records, first, last, precedes);
+    const std::size_t middle = first + (last - first) / 2U;
+    std::size_t equal_first = middle;
+    std::size_t equal_last = middle + 1U;
+
+    while (first < equal_first &&
+           !precedes(records[equal_first - 1U], records[equal_first]) &&
+           !precedes(records[equal_first], records[equal_first - 1U])) {
+        --equal_first;
+    }
+    while (equal_last < last &&
+           !precedes(records[equal_last], records[equal_first]) &&
+           !precedes(records[equal_first], records[equal_last])) {
+        ++equal_last;
+    }
+
+    std::size_t scan_right = equal_last;
+    std::size_t scan_left = equal_first;
+    for (;;) {
+        for (; scan_right < last; ++scan_right) {
+            if (precedes(records[equal_first], records[scan_right])) {
+                continue;
+            }
+            if (precedes(records[scan_right], records[equal_first])) {
+                break;
+            }
+            if (equal_last != scan_right) {
+                std::swap(records[equal_last], records[scan_right]);
+            }
+            ++equal_last;
+        }
+
+        for (; first < scan_left; --scan_left) {
+            const std::size_t candidate = scan_left - 1U;
+            if (precedes(records[candidate], records[equal_first])) {
+                continue;
+            }
+            if (precedes(records[equal_first], records[candidate])) {
+                break;
+            }
+            --equal_first;
+            if (equal_first != candidate) {
+                std::swap(records[equal_first], records[candidate]);
+            }
+        }
+
+        if (scan_left == first) {
+            if (scan_right == last) {
+                return {equal_first, equal_last};
+            }
+            if (equal_last != scan_right) {
+                std::swap(records[equal_last], records[scan_right]);
+            }
+            ++equal_last;
+            ++scan_right;
+        } else if (scan_right == last) {
+            --scan_left;
+            --equal_first;
+            if (scan_left != equal_first) {
+                std::swap(records[scan_left], records[equal_first]);
+            }
+            --equal_last;
+            if (equal_first != equal_last) {
+                std::swap(records[equal_first], records[equal_last]);
+            }
+        } else {
+            --scan_left;
+            std::swap(records[scan_right], records[scan_left]);
+            ++scan_right;
+        }
+    }
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_insertion_sort(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t last,
+    Precedes precedes) {
+    for (std::size_t next = first + 1U; next < last; ++next) {
+        Record value = records[next];
+        if (precedes(value, records[first])) {
+            for (std::size_t hole = next; hole > first; --hole) {
+                records[hole] = records[hole - 1U];
+            }
+            records[first] = value;
+            continue;
+        }
+
+        std::size_t hole = next;
+        while (precedes(value, records[hole - 1U])) {
+            records[hole] = records[hole - 1U];
+            --hole;
+        }
+        records[hole] = value;
+    }
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_push_heap(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t hole,
+    std::size_t top,
+    Record value,
+    Precedes precedes) {
+    while (top < hole) {
+        const std::size_t parent = (hole - 1U) / 2U;
+        if (!precedes(records[first + parent], value)) {
+            break;
+        }
+        records[first + hole] = records[first + parent];
+        hole = parent;
+    }
+    records[first + hole] = value;
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_pop_heap_hole(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t hole,
+    std::size_t bottom,
+    Record value,
+    Precedes precedes) {
+    const std::size_t top = hole;
+    const std::size_t last_parent = (bottom - 1U) / 2U;
+    while (hole < last_parent) {
+        std::size_t child = hole * 2U + 2U;
+        if (precedes(records[first + child],
+                     records[first + child - 1U])) {
+            --child;
+        }
+        records[first + hole] = records[first + child];
+        hole = child;
+    }
+    if (hole == last_parent && bottom % 2U == 0U) {
+        records[first + hole] = records[first + bottom - 1U];
+        hole = bottom - 1U;
+    }
+    snapshot_msvc_push_heap(
+        records, first, hole, top, value, precedes);
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_heap_sort(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t last,
+    Precedes precedes) {
+    const std::size_t count = last - first;
+    for (std::size_t hole = count / 2U; hole > 0U;) {
+        --hole;
+        const Record value = records[first + hole];
+        snapshot_msvc_pop_heap_hole(
+            records, first, hole, count, value, precedes);
+    }
+    for (std::size_t bottom = count; bottom > 1U;) {
+        --bottom;
+        const Record value = records[first + bottom];
+        records[first + bottom] = records[first];
+        snapshot_msvc_pop_heap_hole(
+            records, first, 0U, bottom, value, precedes);
+    }
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_sort_range(
+    std::vector<Record>& records,
+    std::size_t first,
+    std::size_t last,
+    std::size_t ideal,
+    Precedes precedes) {
+    for (;;) {
+        const std::size_t count = last - first;
+        if (count < 33U) {
+            if (count > 1U) {
+                snapshot_msvc_insertion_sort(
+                    records, first, last, precedes);
+            }
+            return;
+        }
+        if (ideal < 1U) {
+            snapshot_msvc_heap_sort(records, first, last, precedes);
+            return;
+        }
+
+        const SnapshotSortPartition partition =
+            snapshot_msvc_partition(records, first, last, precedes);
+        ideal = ideal / 2U + (ideal / 2U) / 2U;
+        if (partition.equal_first - first <
+            last - partition.equal_last) {
+            snapshot_msvc_sort_range(
+                records, first, partition.equal_first, ideal, precedes);
+            first = partition.equal_last;
+        } else {
+            snapshot_msvc_sort_range(
+                records, partition.equal_last, last, ideal, precedes);
+            last = partition.equal_first;
+        }
+    }
+}
+
+template <typename Record, typename Precedes>
+inline void snapshot_msvc_sort(
+    std::vector<Record>& records,
+    Precedes precedes) {
+    snapshot_msvc_sort_range(
+        records, 0U, records.size(), records.size(), precedes);
+}
+
+inline void snapshot_bpm_heap_sort(
+    std::vector<BpmScheduleRecord>& records,
+    std::size_t first,
+    std::size_t last) {
+    snapshot_msvc_heap_sort(
+        records, first, last, bpm_record_precedes);
+}
+
+inline void snapshot_bpm_sort(
+    std::vector<BpmScheduleRecord>& records) {
+    snapshot_msvc_sort(records, bpm_record_precedes);
 }
 
 struct QuantizedScheduleDelta {
@@ -1989,7 +2774,7 @@ inline void finalize_bpm_schedule(std::vector<BpmScheduleRecord>& records) {
         return;
     }
 
-    std::sort(records.begin(), records.end(), bpm_record_precedes);
+    snapshot_bpm_sort(records);
 
     ChartPosition previous_position{};
     float previous_bpm = records.front().beats_per_minute;
@@ -2030,19 +2815,263 @@ inline float schedule_at_chart_position(
     return 0.0F;
 }
 
+// claim.timing.projection-schedule-materialization
+//
+// STP, SFL, and SLP produce keyed intervals. STP and SFL use key zero;
+// SLP supplies its key explicitly. DCM records remain in source order in a
+// separate factor vector. CLK is retained here only to close the group-1
+// parser shape; its click schedule has no recovered gameplay consumer. SFE is
+// registered but deliberately has no group-1 handler case.
+enum class C2sProjectionCommandDisposition : std::uint8_t {
+    unrecognized,
+    recognized_but_rejected,
+    keyed_interval,
+    factor_interval,
+    presentation_click,
+};
+
+struct ProjectionScheduleInterval {
+    ChartPosition start{};
+    float start_milliseconds{};
+    std::uint32_t source_sequence{};
+    float factor{};
+    ChartPosition end{};
+    float end_milliseconds{};
+};
+
+struct ProjectionClickRecord {
+    ChartPosition position{};
+    float scheduled_milliseconds{};
+    std::uint32_t source_sequence{};
+};
+
+struct C2sProjectionSchedule {
+    std::map<std::int32_t, std::vector<ProjectionScheduleInterval>>
+        keyed_intervals;
+    std::vector<ProjectionScheduleInterval> factor_intervals;
+    std::vector<ProjectionClickRecord> presentation_clicks;
+
+    void reset() {
+        keyed_intervals.clear();
+        factor_intervals.clear();
+        presentation_clicks.clear();
+    }
+};
+
+inline C2sProjectionCommandDisposition apply_c2s_projection_command(
+    C2sProjectionSchedule& schedule,
+    std::string_view command,
+    std::span<const std::string_view> fields,
+    std::span<const BpmScheduleRecord> bpm_records,
+    std::uint32_t source_sequence,
+    std::int32_t resolution = 384) {
+    if (command == "SFE") {
+        return C2sProjectionCommandDisposition::recognized_but_rejected;
+    }
+
+    if (command == "CLK") {
+        const ChartPosition position = canonicalize_c2s_position(
+            parse_c2s_integer_field(fields, 0),
+            parse_c2s_integer_field(fields, 1),
+            resolution);
+        schedule.presentation_clicks.push_back({
+            position,
+            schedule_at_chart_position(position, bpm_records),
+            source_sequence,
+        });
+        return C2sProjectionCommandDisposition::presentation_click;
+    }
+
+    const bool is_stp = command == "STP";
+    const bool is_sfl = command == "SFL";
+    const bool is_slp = command == "SLP";
+    const bool is_dcm = command == "DCM";
+    if (!is_stp && !is_sfl && !is_slp && !is_dcm) {
+        return C2sProjectionCommandDisposition::unrecognized;
+    }
+
+    const std::int32_t major = parse_c2s_integer_field(fields, 0);
+    const std::int32_t minor = parse_c2s_integer_field(fields, 1);
+    const std::int32_t duration = parse_c2s_integer_field(fields, 2);
+    const ChartPosition start =
+        canonicalize_c2s_position(major, minor, resolution);
+    const ChartPosition end = canonicalize_c2s_position(
+        major, add_i32_wrapped(minor, duration), resolution);
+    const float factor =
+        is_stp ? 0.0F : parse_c2s_float_field(fields, 3);
+    const ProjectionScheduleInterval interval{
+        start,
+        schedule_at_chart_position(start, bpm_records),
+        source_sequence,
+        factor,
+        end,
+        schedule_at_chart_position(end, bpm_records),
+    };
+
+    if (is_dcm) {
+        schedule.factor_intervals.push_back(interval);
+        return C2sProjectionCommandDisposition::factor_interval;
+    }
+
+    const std::int32_t key =
+        is_slp ? parse_c2s_integer_field(fields, 4) : 0;
+    schedule.keyed_intervals[key].push_back(interval);
+    return C2sProjectionCommandDisposition::keyed_interval;
+}
+
+constexpr bool projection_interval_precedes(
+    const ProjectionScheduleInterval& left,
+    const ProjectionScheduleInterval& right) {
+    return chart_position_scalar(left.start) +
+               chart_position_compare_epsilon <
+           chart_position_scalar(right.start);
+}
+
+inline void finalize_c2s_projection_schedule(
+    C2sProjectionSchedule& schedule) {
+    for (auto& [key, intervals] : schedule.keyed_intervals) {
+        (void)key;
+        snapshot_msvc_sort(intervals, projection_interval_precedes);
+    }
+}
+
+// Materialization uses the source helper's forward-only mode. Missing keys and
+// a backwards query leave the target unchanged. Every overlapping interval
+// contributes independently, including overlaps with earlier intervals.
+inline float adjust_projection_target_milliseconds(
+    const C2sProjectionSchedule& schedule,
+    std::int32_t key,
+    float from_milliseconds,
+    float target_milliseconds) {
+    if (target_milliseconds < from_milliseconds) {
+        return target_milliseconds;
+    }
+    const auto found = schedule.keyed_intervals.find(key);
+    if (found == schedule.keyed_intervals.end()) {
+        return target_milliseconds;
+    }
+
+    float adjusted = target_milliseconds;
+    for (const auto& interval : found->second) {
+        if (!(interval.start_milliseconds < target_milliseconds)) {
+            break;
+        }
+        if (from_milliseconds < interval.end_milliseconds) {
+            const float overlap_start =
+                std::max(from_milliseconds, interval.start_milliseconds);
+            const float overlap_end =
+                std::min(target_milliseconds, interval.end_milliseconds);
+            if (overlap_start <= overlap_end) {
+                adjusted =
+                    (overlap_end - overlap_start) *
+                        (interval.factor - 1.0F) +
+                    adjusted;
+            }
+        }
+    }
+    return adjusted;
+}
+
+// DCM lookup intentionally preserves source order. The query is shifted by
+// exactly 1.0 millisecond; the first enclosing nonzero interval wins, a future
+// start stops the scan, and the fallback is 1.0.
+constexpr float projection_factor_at_milliseconds(
+    float query_milliseconds,
+    std::span<const ProjectionScheduleInterval> factor_intervals) {
+    const float shifted_query = query_milliseconds + 1.0F;
+    for (const auto& interval : factor_intervals) {
+        if (shifted_query < interval.start_milliseconds) {
+            break;
+        }
+        if (shifted_query < interval.end_milliseconds &&
+            interval.factor != 0.0F) {
+            return interval.factor;
+        }
+    }
+    return 1.0F;
+}
+
+// Compose parsed projection schedules with the exact far-path conversion used
+// by runtime materialization. The initial raw shortcut still precedes this
+// adjusted result when the returned probe is evaluated.
+inline RuntimeMaterializationProbe runtime_materialization_probe_from_schedule(
+    float scheduled_milliseconds,
+    std::int32_t projection_key,
+    float manager_position,
+    const C2sProjectionSchedule& schedule) {
+    const float scaled_target =
+        scheduled_milliseconds * chart_units_per_millisecond;
+    RuntimeMaterializationProbe probe{
+        scaled_target - manager_position,
+        scaled_target - manager_position,
+        1.0F,
+    };
+
+    if (projection_key >= 0) {
+        const float adjusted_target_milliseconds =
+            adjust_projection_target_milliseconds(
+                schedule,
+                projection_key,
+                manager_position * periodic_milliseconds_per_chart_unit,
+                scaled_target * periodic_milliseconds_per_chart_unit);
+        probe.adjusted_delta =
+            adjusted_target_milliseconds * chart_units_per_millisecond -
+            manager_position;
+    }
+    if (probe.adjusted_delta > 0.0F) {
+        const float factor_query =
+            (manager_position + probe.adjusted_delta) *
+            periodic_milliseconds_per_chart_unit;
+        probe.positive_delta_projection_factor =
+            projection_factor_at_milliseconds(
+                factor_query, schedule.factor_intervals);
+    }
+    return probe;
+}
+
 // AirHold, AirSlide, and HeavenHold select BPM by the already-computed
-// scheduled millisecond value. Valid gameplay charts have a nonempty BPM map;
-// the zero return is only a safe clean-room sentinel outside that source
-// invariant and must not be passed to the adaptive-step loop.
-constexpr float bpm_at_scheduled_position(
+// scheduled millisecond value. The source assumes a nonempty map and
+// dereferences its first record as the before-first fallback.
+enum class ScheduledBpmSelectionDisposition : std::uint8_t {
+    selected,
+    source_empty_map_dereference,
+};
+
+struct ScheduledBpmSelection {
+    ScheduledBpmSelectionDisposition disposition{
+        ScheduledBpmSelectionDisposition::source_empty_map_dereference};
+    float beats_per_minute{};
+};
+
+constexpr ScheduledBpmSelection evaluate_bpm_at_scheduled_position(
     float scheduled_milliseconds,
     std::span<const BpmScheduleRecord> records) {
     for (auto record = records.rbegin(); record != records.rend(); ++record) {
         if (record->scheduled_milliseconds <= scheduled_milliseconds) {
-            return record->beats_per_minute;
+            return {
+                ScheduledBpmSelectionDisposition::selected,
+                record->beats_per_minute,
+            };
         }
     }
-    return records.empty() ? 0.0F : records.front().beats_per_minute;
+    if (records.empty()) {
+        return {};
+    }
+    return {
+        ScheduledBpmSelectionDisposition::selected,
+        records.front().beats_per_minute,
+    };
+}
+
+// Convenience for callers that have already established the nonempty source
+// precondition. The zero value is a clean-room sentinel for an invalid empty
+// map, not a fallback present in the executable.
+constexpr float bpm_at_scheduled_position(
+    float scheduled_milliseconds,
+    std::span<const BpmScheduleRecord> records) {
+    return evaluate_bpm_at_scheduled_position(
+               scheduled_milliseconds, records)
+        .beats_per_minute;
 }
 
 // claim.timing.gameplay-substep-order
@@ -2252,31 +3281,108 @@ struct AirHoldGeneratedPathRecord {
     bool emission_enabled{};
 };
 
-// Valid chart positions are nonnegative and within the signed result domain.
-// The binary performs these operations in single precision before truncation.
+// The binary performs this operation in single precision and converts with
+// CVTTSS2SI. Malformed nonfinite/out-of-range positions become INT32_MIN.
 inline std::int32_t air_hold_grid_tick(const AirHoldPathPoint& point) {
-    return static_cast<std::int32_t>(
+    return cvttss2si_i32(
         (point.major + point.minor * 0.25F) * 384.0F + 0.5F);
 }
 
+enum class AirHoldPathGenerationDisposition : std::uint8_t {
+    no_anchors,
+    generated,
+    source_large_unsigned_span_expansion,
+};
+
+constexpr std::uint32_t air_path_unsigned_tick_delta(
+    std::int32_t start_tick,
+    std::int32_t end_tick) {
+    return static_cast<std::uint32_t>(end_tick) -
+           static_cast<std::uint32_t>(start_tick);
+}
+
+// Type-5 duration fields are signed and have no nonnegative parser check.
+// The producer forms its delta with wrapped i32 subtraction and compares it as
+// uint32. A delta with its high bit set enters the source's very large unsigned
+// generation domain regardless of the signed ordering of the endpoint ticks.
+constexpr AirHoldPathGenerationDisposition
+evaluate_air_hold_path_generation(
+    std::span<const AirHoldPathPoint> anchors) {
+    if (anchors.empty()) {
+        return AirHoldPathGenerationDisposition::no_anchors;
+    }
+    for (std::size_t index = 1; index < anchors.size(); ++index) {
+        const std::uint32_t delta = air_path_unsigned_tick_delta(
+            air_hold_grid_tick(anchors[index - 1U]),
+            air_hold_grid_tick(anchors[index]));
+        if (delta >
+            static_cast<std::uint32_t>(
+                std::numeric_limits<std::int32_t>::max())) {
+            return AirHoldPathGenerationDisposition::
+                source_large_unsigned_span_expansion;
+        }
+    }
+    return AirHoldPathGenerationDisposition::generated;
+}
+
 // Sampling begins at 384 ticks. Each time the tempo-map value is below four
-// times the parser reference, both the value and the integer step are doubled
-// and halved respectively. Positive tempo-map values are a parser invariant.
-constexpr std::int32_t air_hold_sample_step(float tempo_map_value,
-                                            float parser_reference) {
+// times the parser reference, the value is doubled and the integer step is
+// halved. The parser does not validate these floats. If a nonpositive value
+// enters the loop, doubling cannot make it reach a larger threshold and the
+// source loop does not terminate. An unordered comparison (NaN in either
+// operand) skips the loop.
+enum class AdaptiveAirStepDisposition : std::uint8_t {
+    produced,
+    source_loop_does_not_terminate,
+    source_path_cursor_does_not_advance,
+};
+
+struct AdaptiveAirStepEvaluation {
+    AdaptiveAirStepDisposition disposition{
+        AdaptiveAirStepDisposition::produced};
+    std::int32_t step{384};
+};
+
+constexpr AdaptiveAirStepEvaluation evaluate_air_hold_sample_step(
+    float tempo_map_value,
+    float parser_reference) {
     std::int32_t step = 384;
     const float threshold = parser_reference * 4.0F;
+    if (tempo_map_value < threshold && tempo_map_value <= 0.0F) {
+        return {
+            AdaptiveAirStepDisposition::source_loop_does_not_terminate,
+            step,
+        };
+    }
     while (tempo_map_value < threshold) {
         tempo_map_value += tempo_map_value;
         step /= 2;
     }
-    return step;
+    if (step == 0) {
+        return {
+            AdaptiveAirStepDisposition::source_path_cursor_does_not_advance,
+            step,
+        };
+    }
+    return {AdaptiveAirStepDisposition::produced, step};
+}
+
+// Callers that construct Air-family samples require both the tempo-doubling
+// loop to terminate and the resulting step to remain positive. Use the
+// evaluator before admitting malformed chart inputs; the raw helper preserves
+// the source's zero step for exact downstream nonprogress behavior.
+constexpr std::int32_t air_hold_sample_step(float tempo_map_value,
+                                            float parser_reference) {
+    return evaluate_air_hold_sample_step(
+               tempo_map_value, parser_reference)
+        .step;
 }
 
 // The input chain is root start, zero or more saved AHX anchors, then the saved
 // final endpoint. The binary appends a disabled boundary before every segment
 // after the first, disables the first generated sample of every segment, and
 // appends one disabled path-end record. Samples are strictly inside a segment.
+// Callers accepting malformed authored input must evaluate the span first.
 template <typename TempoAtSchedule,
           typename PointAtGridTick,
           typename ScheduleAtPoint>
@@ -2301,19 +3407,23 @@ std::vector<AirHoldGeneratedPathRecord> generate_air_hold_path_records(
         }
 
         const std::int32_t start_tick = air_hold_grid_tick(start);
-        const std::int32_t delta = air_hold_grid_tick(end) - start_tick;
+        const std::int32_t delta = subtract_i32_wrapped(
+            air_hold_grid_tick(end), start_tick);
         std::int32_t offset = air_hold_sample_step(
             tempo_at_schedule(end.scheduled), parser_reference);
         bool first_sample = true;
         while (static_cast<std::uint32_t>(offset) <
                static_cast<std::uint32_t>(delta)) {
-            AirHoldPathPoint point = point_at_grid_tick(start_tick + offset);
+            AirHoldPathPoint point = point_at_grid_tick(
+                add_i32_wrapped(start_tick, offset));
             point.scheduled = schedule_at_point(point);
             records.push_back({point, AirHoldGeneratedRecordKind::sample,
                                !first_sample});
             first_sample = false;
-            offset += air_hold_sample_step(
-                tempo_at_schedule(point.scheduled), parser_reference);
+            offset = add_i32_wrapped(
+                offset,
+                air_hold_sample_step(
+                    tempo_at_schedule(point.scheduled), parser_reference));
         }
     }
 
@@ -2360,10 +3470,10 @@ void filter_air_hold_path_emissions(
         if (filter_near_end) {
             const std::int32_t step = air_hold_sample_step(
                 tempo_at_schedule(record.point.scheduled), parser_reference);
-            const std::int32_t margin =
-                static_cast<std::int32_t>(
-                    static_cast<float>(step) * end_margin + 0.5F);
-            if (air_hold_grid_tick(record.point) + margin >= end_tick) {
+            const std::int32_t margin = cvttss2si_i32(
+                static_cast<float>(step) * end_margin + 0.5F);
+            if (add_i32_wrapped(
+                    air_hold_grid_tick(record.point), margin) >= end_tick) {
                 record.emission_enabled = false;
             }
         }
@@ -2514,8 +3624,59 @@ struct AirSlideGeneratedPathRecord {
 };
 
 inline std::int32_t air_slide_grid_tick(const AirSlidePathPoint& point) {
-    return static_cast<std::int32_t>(
+    return cvttss2si_i32(
         (point.major + point.minor * 0.25F) * 384.0F + 0.5F);
+}
+
+enum class AirSlideSegmentGenerationDisposition : std::uint8_t {
+    no_interior_samples,
+    generated,
+    source_path_cursor_does_not_advance,
+    source_cursor_wrap_expansion,
+};
+
+// AirSlide computes anchor+step with wrapped i32 arithmetic before its signed
+// cursor<end test. This evaluator classifies the first iteration of any root
+// or ASD-restart segment. Later dynamic steps use the same wrap/nonprogress
+// rules before each cursor update.
+constexpr AirSlideSegmentGenerationDisposition
+evaluate_air_slide_segment_generation(
+    std::int32_t anchor_tick,
+    std::int32_t end_tick,
+    std::int32_t step) {
+    const std::int32_t first_cursor =
+        add_i32_wrapped(anchor_tick, step);
+    if (!(first_cursor < end_tick)) {
+        return AirSlideSegmentGenerationDisposition::no_interior_samples;
+    }
+    if (step == 0) {
+        return AirSlideSegmentGenerationDisposition::
+            source_path_cursor_does_not_advance;
+    }
+    if (0 < step && first_cursor < anchor_tick) {
+        return AirSlideSegmentGenerationDisposition::
+            source_cursor_wrap_expansion;
+    }
+    return AirSlideSegmentGenerationDisposition::generated;
+}
+
+constexpr AirSlideSegmentGenerationDisposition
+evaluate_air_slide_cursor_advance(
+    std::int32_t cursor_tick,
+    std::int32_t end_tick,
+    std::int32_t step) {
+    if (!(cursor_tick < end_tick)) {
+        return AirSlideSegmentGenerationDisposition::no_interior_samples;
+    }
+    if (step == 0) {
+        return AirSlideSegmentGenerationDisposition::
+            source_path_cursor_does_not_advance;
+    }
+    if (0 < step && add_i32_wrapped(cursor_tick, step) < cursor_tick) {
+        return AirSlideSegmentGenerationDisposition::
+            source_cursor_wrap_expansion;
+    }
+    return AirSlideSegmentGenerationDisposition::generated;
 }
 
 // The generated cursor starts one adaptive step after the root. An ASD control
@@ -2537,10 +3698,10 @@ std::vector<AirSlideGeneratedPathRecord> generate_air_slide_path_records(
         return records;
     }
 
-    std::int32_t cursor_tick =
-        air_slide_grid_tick(root) +
+    std::int32_t cursor_tick = add_i32_wrapped(
+        air_slide_grid_tick(root),
         air_hold_sample_step(tempo_at_schedule(root.scheduled),
-                             parser_reference);
+                             parser_reference));
     bool suppress_next_sample = true;
 
     for (std::size_t index = 0; index < controls.size(); ++index) {
@@ -2550,10 +3711,10 @@ std::vector<AirSlideGeneratedPathRecord> generate_air_slide_path_records(
             records.push_back({restart,
                                AirSlideGeneratedRecordKind::segment_boundary,
                                false});
-            cursor_tick =
-                air_slide_grid_tick(restart) +
+            cursor_tick = add_i32_wrapped(
+                air_slide_grid_tick(restart),
                 air_hold_sample_step(tempo_at_schedule(restart.scheduled),
-                                     parser_reference);
+                                     parser_reference));
             suppress_next_sample = true;
         }
 
@@ -2564,8 +3725,10 @@ std::vector<AirSlideGeneratedPathRecord> generate_air_slide_path_records(
             records.push_back({point, AirSlideGeneratedRecordKind::sample,
                                !suppress_next_sample});
             suppress_next_sample = false;
-            cursor_tick += air_hold_sample_step(
-                tempo_at_schedule(point.scheduled), parser_reference);
+            cursor_tick = add_i32_wrapped(
+                cursor_tick,
+                air_hold_sample_step(
+                    tempo_at_schedule(point.scheduled), parser_reference));
         }
     }
 
@@ -2594,9 +3757,10 @@ void filter_air_slide_path_emissions(
         if (filter_near_end) {
             const std::int32_t step = air_hold_sample_step(
                 tempo_at_schedule(record.point.scheduled), parser_reference);
-            const std::int32_t margin = static_cast<std::int32_t>(
+            const std::int32_t margin = cvttss2si_i32(
                 static_cast<float>(step) * end_margin + 0.5F);
-            if (air_slide_grid_tick(record.point) + margin >= end_tick) {
+            if (add_i32_wrapped(
+                    air_slide_grid_tick(record.point), margin) >= end_tick) {
                 record.emission_enabled = false;
             }
         }
@@ -2803,6 +3967,13 @@ constexpr bool slide_command_uses_extended_profile(SlideCommandForm command) {
     return command == SlideCommandForm::sxd || command == SlideCommandForm::sxc;
 }
 
+// The second command-form field is also copied into generated path boundary
+// markers. D forms set it and C forms clear it.
+constexpr bool slide_command_sets_path_marker(SlideCommandForm command) {
+    return command == SlideCommandForm::sld ||
+           command == SlideCommandForm::sxd;
+}
+
 // claim.note.heaven-hold-judgement
 //
 // Parsed type 13 (HHD/HHX and retyped HLD-styled Slide) and ALD's exact
@@ -2853,10 +4024,38 @@ struct HeavenHoldGeneratedPathRecord {
     bool emission_enabled{};
 };
 
+// The type-13 parser accepts a signed duration token without a range gate. The
+// producer wraps endpoint-root at i32 width and compares the result as uint32.
+// A delta with its high bit set enters a very large unsigned generation range;
+// signed endpoint ordering alone is insufficient at the wrap boundary.
+enum class HeavenHoldPathGenerationDisposition : std::uint8_t {
+    no_generated_path,
+    generated,
+    source_large_unsigned_span_expansion,
+};
+
+constexpr HeavenHoldPathGenerationDisposition
+evaluate_heaven_hold_path_generation(
+    HeavenHoldCommand command,
+    const HeavenHoldPathPoint& root,
+    const HeavenHoldPathPoint& final_endpoint) {
+    if (!heaven_hold_generates_path_records(command)) {
+        return HeavenHoldPathGenerationDisposition::no_generated_path;
+    }
+    const std::uint32_t delta = air_path_unsigned_tick_delta(
+        air_hold_grid_tick(root), air_hold_grid_tick(final_endpoint));
+    return delta > static_cast<std::uint32_t>(
+                       std::numeric_limits<std::int32_t>::max())
+               ? HeavenHoldPathGenerationDisposition::
+                     source_large_unsigned_span_expansion
+               : HeavenHoldPathGenerationDisposition::generated;
+}
+
 // Type 13 samples a single root-to-final-end span. Cadence starts one adaptive
 // step after the root; ordinary samples default enabled and can only be cleared
 // by an enabled selector-0 open interval. The final record is always kind 1 and
-// enabled. The parser guarantees a nondecreasing endpoint.
+// enabled. Callers must use evaluate_heaven_hold_path_generation before this
+// producer when accepting malformed authored input.
 template <typename TempoAtSchedule,
           typename PointAtGridTick,
           typename ScheduleAtPoint>
@@ -2877,13 +4076,14 @@ generate_heaven_hold_path_records(
     }
 
     const std::int32_t start_tick = air_hold_grid_tick(root);
-    const std::int32_t delta =
-        air_hold_grid_tick(final_endpoint) - start_tick;
+    const std::int32_t delta = subtract_i32_wrapped(
+        air_hold_grid_tick(final_endpoint), start_tick);
     std::int32_t offset = air_hold_sample_step(
         tempo_at_schedule(root.scheduled), parser_reference);
     while (static_cast<std::uint32_t>(offset) <
            static_cast<std::uint32_t>(delta)) {
-        HeavenHoldPathPoint point = point_at_grid_tick(start_tick + offset);
+        HeavenHoldPathPoint point = point_at_grid_tick(
+            add_i32_wrapped(start_tick, offset));
         point.scheduled = schedule_at_point(point);
         const bool excluded =
             exclusion_filter_enabled &&
@@ -2891,8 +4091,10 @@ generate_heaven_hold_path_records(
                                            exclusion_intervals);
         records.push_back({point, HeavenHoldGeneratedRecordKind::sample,
                            !excluded});
-        offset += air_hold_sample_step(
-            tempo_at_schedule(point.scheduled), parser_reference);
+        offset = add_i32_wrapped(
+            offset,
+            air_hold_sample_step(
+                tempo_at_schedule(point.scheduled), parser_reference));
     }
 
     records.push_back({final_endpoint,
@@ -3087,6 +4289,231 @@ constexpr SlideWindowPhase combine_slide_window_phases(
                : left;
 }
 
+// The type-2 path builder selects one external five-float profile by clamped
+// width. The first value produces a lane-anchor offset; the remaining four are
+// relative window endpoints. Their values are runtime-loaded and therefore
+// stay explicit clean-room inputs.
+struct SlideEndpointProfile {
+    float lane_reference{};
+    std::array<float, 4> edge_offsets{};
+};
+
+struct SlidePathPoint {
+    float scheduled_position{};
+    std::int32_t lane{};
+    std::int32_t width{1};
+    bool marker{};
+};
+
+struct SlideGeneratedLaneWindow {
+    bool enabled{};
+    std::array<float, 4> edges{};
+};
+
+struct SlideGeneratedSegment {
+    float start_position{};
+    float end_position{};
+    bool final_segment{};
+    bool start_marker{};
+    bool end_marker{};
+    std::array<float, 4> edges{};
+    std::array<SlideGeneratedLaneWindow, 16> lane_windows{};
+};
+
+struct SlideGeneratedPath {
+    bool enabled{};
+    std::array<float, 4> edges{};
+    std::vector<SlideGeneratedSegment> segments{};
+};
+
+// SlideNote uses the parsed +0x84 key with the source map's checked lookup.
+// A missing key calls the standard out-of-range routine; there is no fallback
+// path container or disabled-path substitute.
+inline const SlideGeneratedPath& require_slide_generated_path(
+    const std::map<std::uint32_t, SlideGeneratedPath>& paths,
+    std::uint32_t key) {
+    const auto found = paths.find(key);
+    if (found == paths.end()) {
+        throw std::out_of_range("missing slide generated-path key");
+    }
+    return found->second;
+}
+
+constexpr std::size_t slide_endpoint_profile_index(std::int32_t width) {
+    const std::int32_t bounded = std::clamp(width, 1, 16);
+    return static_cast<std::size_t>(16 - bounded);
+}
+
+constexpr float slide_lane_anchor_offset(
+    const SlidePathPoint& point,
+    const std::array<SlideEndpointProfile, 16>& profiles) {
+    const auto& profile = profiles[slide_endpoint_profile_index(point.width)];
+    return (profile.lane_reference - static_cast<float>(point.lane)) * 0.5F;
+}
+
+constexpr std::array<float, 4> slide_point_window_edges(
+    const SlidePathPoint& point,
+    const std::array<SlideEndpointProfile, 16>& profiles,
+    float endpoint_correction) {
+    const auto& offsets =
+        profiles[slide_endpoint_profile_index(point.width)].edge_offsets;
+    return {
+        point.scheduled_position + offsets[0] + endpoint_correction,
+        point.scheduled_position + offsets[1] + endpoint_correction,
+        point.scheduled_position + offsets[2] + endpoint_correction,
+        point.scheduled_position + offsets[3] + endpoint_correction,
+    };
+}
+
+constexpr bool slide_lane_in_point_span(std::int32_t lane,
+                                        const SlidePathPoint& point) {
+    const std::int32_t bounded_width = std::clamp(point.width, 1, 16);
+    return point.lane <= lane &&
+           lane < add_i32_wrapped(point.lane, bounded_width);
+}
+
+constexpr bool slide_lane_in_swept_span(std::int32_t lane,
+                                        const SlidePathPoint& start,
+                                        const SlidePathPoint& end) {
+    const std::int32_t start_end =
+        add_i32_wrapped(start.lane, std::clamp(start.width, 1, 16));
+    const std::int32_t end_end =
+        add_i32_wrapped(end.lane, std::clamp(end.width, 1, 16));
+    return (start.lane <= lane || end.lane <= lane) &&
+           (lane < start_end || lane < end_end);
+}
+
+constexpr SlideGeneratedLaneWindow build_slide_lane_window(
+    std::int32_t lane,
+    const SlidePathPoint& start,
+    const SlidePathPoint& end,
+    const std::array<SlideEndpointProfile, 16>& profiles,
+    float endpoint_correction) {
+    SlideGeneratedLaneWindow result{};
+    if (!slide_lane_in_swept_span(lane, start, end)) {
+        return result;
+    }
+
+    result.enabled = true;
+    const auto start_edges =
+        slide_point_window_edges(start, profiles, endpoint_correction);
+    const auto end_edges =
+        slide_point_window_edges(end, profiles, endpoint_correction);
+    result.edges = {start_edges[0], start_edges[1],
+                    end_edges[2], end_edges[3]};
+
+    const bool in_start = slide_lane_in_point_span(lane, start);
+    const bool in_end = slide_lane_in_point_span(lane, end);
+    if (in_start && in_end) {
+        return result;
+    }
+
+    const float center = static_cast<float>(lane) + 0.5F;
+    const float start_offset = slide_lane_anchor_offset(start, profiles);
+    const float end_offset = slide_lane_anchor_offset(end, profiles);
+    const std::int32_t start_end_lane =
+        add_i32_wrapped(start.lane, std::clamp(start.width, 1, 16));
+    const std::int32_t end_end_lane =
+        add_i32_wrapped(end.lane, std::clamp(end.width, 1, 16));
+
+    const bool use_lower_boundaries = lane < start_end_lane;
+    const float start_anchor =
+        use_lower_boundaries
+            ? static_cast<float>(start.lane) - start_offset
+            : static_cast<float>(start_end_lane) + start_offset;
+    const float end_anchor =
+        use_lower_boundaries
+            ? static_cast<float>(end.lane) - end_offset
+            : static_cast<float>(end_end_lane) + end_offset;
+    const float start_distance = std::fabs(center - start_anchor);
+    const float end_distance = std::fabs(center - end_anchor);
+    const float inverse_total = 1.0F / (start_distance + end_distance);
+    const float start_weight = inverse_total * end_distance;
+    const float end_weight = inverse_total * start_distance;
+    const float interpolated_position =
+        end_weight * end.scheduled_position +
+        start_weight * start.scheduled_position;
+    const auto& start_offsets =
+        profiles[slide_endpoint_profile_index(start.width)].edge_offsets;
+    const auto& end_offsets =
+        profiles[slide_endpoint_profile_index(end.width)].edge_offsets;
+
+    if (!in_start) {
+        result.edges[0] =
+            end_offsets[0] * end_weight +
+            start_offsets[0] * start_weight +
+            endpoint_correction + interpolated_position;
+        result.edges[1] =
+            end_offsets[1] * end_weight +
+            start_offsets[1] * start_weight +
+            endpoint_correction + interpolated_position;
+    }
+    if (!in_end) {
+        result.edges[2] =
+            start_offsets[2] * start_weight +
+            end_offsets[2] * end_weight +
+            endpoint_correction + interpolated_position;
+        result.edges[3] =
+            start_offsets[3] * start_weight +
+            end_offsets[3] * end_weight +
+            endpoint_correction + interpolated_position;
+    }
+    return result;
+}
+
+inline SlideGeneratedPath build_slide_generated_path(
+    const SlidePathPoint& root,
+    std::span<const SlidePathPoint> controls,
+    const std::array<SlideEndpointProfile, 16>& profiles,
+    float endpoint_correction) {
+    SlideGeneratedPath result{};
+    if (controls.empty()) {
+        return result;
+    }
+
+    result.enabled = true;
+    const auto root_edges =
+        slide_point_window_edges(root, profiles, endpoint_correction);
+    const auto final_edges =
+        slide_point_window_edges(controls.back(), profiles,
+                                 endpoint_correction);
+    result.edges = {root_edges[0], root_edges[1],
+                    final_edges[2], final_edges[3]};
+    result.segments.reserve(controls.size());
+
+    SlidePathPoint start = root;
+    start.marker = true;
+    for (std::size_t index = 0; index < controls.size(); ++index) {
+        const auto& end = controls[index];
+        SlideGeneratedSegment segment{
+            .start_position = start.scheduled_position,
+            .end_position = end.scheduled_position,
+            .final_segment = index + 1U == controls.size(),
+            .start_marker = start.marker,
+            .end_marker =
+                index + 1U == controls.size() ? true : end.marker,
+            .edges = {
+                slide_point_window_edges(start, profiles,
+                                         endpoint_correction)[0],
+                slide_point_window_edges(start, profiles,
+                                         endpoint_correction)[1],
+                slide_point_window_edges(end, profiles,
+                                         endpoint_correction)[2],
+                slide_point_window_edges(end, profiles,
+                                         endpoint_correction)[3],
+            },
+        };
+        for (std::int32_t lane = 0; lane < 16; ++lane) {
+            segment.lane_windows[static_cast<std::size_t>(lane)] =
+                build_slide_lane_window(lane, start, end, profiles,
+                                        endpoint_correction);
+        }
+        result.segments.push_back(segment);
+        start = end;
+    }
+    return result;
+}
+
 // Early and late path phases preserve the same two-bank arming state as HOLD,
 // but only a center phase can make a bank active and write its continuation
 // marker. Leaving the participating phases clears both bank arrays.
@@ -3209,6 +4636,21 @@ constexpr SlideCheckpointDecision update_slide_checkpoints(
 // selected tutorial-step flag writes mode 2, and its clear form writes 0.
 constexpr std::int32_t tutorial_forced_result_mode(bool step_flag) {
     return step_flag ? 2 : 0;
+}
+
+// Whole-binary owner/write and address-escape closure leaves only reset mode 0
+// and tutorial mode 2 reachable in this exact snapshot. The other switch cases
+// below are reconstructed executable interfaces, not reachable gameplay modes.
+constexpr bool forced_result_mode_has_snapshot_producer(std::int32_t mode) {
+    return mode == 0 || mode == 2;
+}
+
+// The companion selector field is reset to zero and has no other write or
+// address escape in the NotesManager owner. Its selector therefore returns
+// zero while disabled and one whenever the enable byte is set.
+constexpr std::uint8_t select_reachable_forced_result_companion(
+    bool enabled) {
+    return enabled ? 1 : 0;
 }
 
 constexpr std::uint8_t select_forced_result_byte(bool enabled,
@@ -3416,6 +4858,34 @@ constexpr bool ordinary_periodic_progress_accepts(
     return kind == OrdinaryAggregateSnapshotKind::periodic && runtime_active;
 }
 
+// A contribution unit can be marked one-shot. The evaluator tests the unit's
+// source-order index in a bit vector, then attempts to mark it regardless of
+// the previous value. A previously set valid bit rejects the unit. An
+// out-of-range index reads false and cannot be marked, so it remains eligible
+// on every call rather than being treated as consumed.
+inline bool ordinary_rule_one_shot_allows(
+    bool one_shot,
+    std::uint32_t unit_index,
+    std::span<std::uint32_t> consumed_words,
+    std::uint32_t& consumed_count) {
+    if (!one_shot) {
+        return true;
+    }
+
+    const std::size_t word_index = unit_index >> 5U;
+    if (word_index >= consumed_words.size()) {
+        return true;
+    }
+
+    const std::uint32_t mask = 1U << (unit_index & 31U);
+    const bool was_consumed = (consumed_words[word_index] & mask) != 0U;
+    if (!was_consumed) {
+        consumed_words[word_index] |= mask;
+        ++consumed_count;
+    }
+    return !was_consumed;
+}
+
 // claim.judgement.ordinary-terminal-end-threshold
 //
 // A nonzero PlayOptionTrackSkipID enables the ordinary end-threshold
@@ -3566,9 +5036,9 @@ constexpr OrdinaryTerminalSummary produce_ordinary_terminal_summary(
 // A kind-2 evaluation starts from the retained value, adds the already
 // evaluated common-rule contribution, then permits the common promotion
 // vector to raise it. Configured terminal rules are kind-1-only, but the later
-// end-threshold producer remains eligible. External rule fields, predicates,
-// and random choices are represented by the supplied values rather than
-// guessed here.
+// end-threshold producer remains eligible. External rule fields and evaluated
+// predicates are represented by the supplied values rather than guessed here;
+// one-shot eligibility is reconstructed separately above.
 constexpr OrdinaryTerminalSummary apply_ordinary_periodic_aggregate(
     double retained_value,
     double periodic_rule_contribution,

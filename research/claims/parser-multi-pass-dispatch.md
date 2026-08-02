@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.header`, `parser.events`, `state.ownership`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -60,22 +60,28 @@ registered by `FUN_00528b60`/`FUN_011cc1b0`.
 
 ## Unknowns
 
-- Per-command algorithms remain open only for unclosed event families.
+- Group-3 temporary storage and its mandatory overwrite before parser return
+  are closed by `claim.parser.derived-command-overwrite`.
 - `claim.parser.header-default-dispatch` closes mode 1 as the 20-line metadata
   scan and closes unknown/malformed/partial-field behavior for group 0.
   `claim.parser.event-token-fallback` closes the corresponding shared event
   missing/extra/malformed-field behavior; family-specific matching remains in
   the note/event claims.
 - `claim.timing.tempo-measure-schedule` closes special ID `0x0d` as the BPM
-  pre-pass. Remaining group-1 and group-2 command algorithms are tracked by
-  their coverage rows.
+  pre-pass. `claim.timing.projection-schedule-materialization` closes the
+  gameplay-relevant group-1 schedule commands. The group-2 family switch,
+  association/default/error behavior, generated records, factories, and
+  outcome consumers are closed by the event-family and note claims referenced
+  from `parser.events`.
 
 ## Consequences
 
 - Ghidra mutations: none in the live project; temporary analysis only.
-- Spec sections: structural note in `spec/c2s.md`.
-- Reconstruction code: none.
-- Tests: none until handler behavior becomes normative.
+- Spec sections: normative staging and family routing in `spec/c2s.md`.
+- Reconstruction code: the staged parser components in
+  `include/chart/reconstruction.hpp`.
+- Tests: `tests/c2s_header_test.cpp`, `tests/derived_command_test.cpp`,
+  `tests/aso_parser_test.cpp`, and the family-focused parser tests.
 
 ## Verification
 
@@ -83,5 +89,5 @@ The exact postparse call order was rewalked independently from the dispatcher,
 and the first rewrite's type-2 predicate was traced back through its field-8
 string table. The final summary producer, its dormant compatibility reader,
 and the successful loader's ignored output were independently bounded.
-Per-family handler algorithms remain independently covered by their note/event
-claims.
+Per-family handler algorithms are independently covered by their note/event
+claims and focused tests.

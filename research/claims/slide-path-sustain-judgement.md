@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.events`, `input.logical_state`, `input.buffering`, `matching.candidates`, `judgement.types`, `judgement.windows`, `judgement.miss`, `note.slide`, `state.ownership`, `config.external`, `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -25,6 +25,7 @@ field-8 style `HLD` is the pre-generation exception specified by
 - `game.exe @ RAM:00da1492, FUN_00da06c0 dispatch tail, parsed-type runtime-builder switch`
 - `game.exe @ RAM:00b267f0, FUN_00b267f0, type-2 path-container allocation and keyed insertion`
 - `game.exe @ RAM:00b25510, FUN_00b25510, parsed control-point to runtime path/window construction`
+- `game.exe @ RAM:00b1f0f0, FUN_00b1f0f0, complete 0x78-byte generated-record copy`
 - `game.exe @ RAM:00b23590, FUN_00b23590, runtime path-container lookup`
 - `game.exe @ RAM:00b28cc0, FUN_00b28cc0, type-2 SlideNote factory case`
 - `game.exe @ RAM:00c0c720, FUN_00c0c720, SlideNote constructor and component resets`
@@ -34,6 +35,7 @@ field-8 style `HLD` is the pre-generation exception specified by
 - `game.exe @ RAM:00c0dae0, FUN_00c0dae0, candidate clearing and start-candidate construction`
 - `game.exe @ RAM:00c0ea40, FUN_00c0ea40, shared TAP start gate and start result`
 - `game.exe @ RAM:00c0de10, FUN_00c0de10, path windows, source continuation, gap update, and checkpoints`
+- `game.exe @ RAM:00c1b800, FUN_00c1b800, generated-marker feedback-only consumer`
 - `game.exe @ RAM:00c0fdc0, FUN_00c0fdc0, two-component terminal predicate`
 - `game.exe @ RAM:00c10ed0, FUN_00c10ed0, start/path/finalization update order`
 - `game.exe @ RAM:00c0cb80, FUN_00c0cb80, path-resource and owned-vector destruction`
@@ -58,6 +60,34 @@ field-8 style `HLD` is the pre-generation exception specified by
   with per-lane `0x14`-byte windows, and inserts the container into a map keyed
   by parsed field `+0x84`. Lookup is checked and takes the out-of-range path if
   the key is absent; the note does not silently construct a replacement.
+- The builder selects one five-float runtime-loaded profile by
+  `16 - clamp(width, 1, 16)` from the active configuration object's block at
+  `+0x730`. The first float produces `(profile_value - lane) * 0.5`; the
+  remaining four are endpoint offsets. A separately selected runtime
+  correction is added to every endpoint. The values themselves are not
+  embedded in this executable and remain explicit reconstruction inputs.
+- The path container's global window is enabled. Its first two endpoints are
+  the root scheduled position plus the root profile's first two offsets and
+  the correction. Its final two endpoints use the saved end position and the
+  final control's last two profile offsets and the same correction.
+- Every adjacent root/control or control/control pair creates one generated
+  segment. Its global window takes the first point's first two endpoints and
+  the second point's last two. A logical lane receives a nested window exactly
+  when it lies in the swept half-open corridor: it is at or beyond either
+  point's lane origin and before either point's lane-plus-bounded-width end.
+  This deliberately fills lanes between disjoint endpoint spans.
+- A lane inside both endpoint spans keeps the segment-global endpoints. A lane
+  outside the start span interpolates the first two endpoints; a lane outside
+  the end span interpolates the last two. The builder uses lane center
+  `lane + 0.5`, the two profile-derived lane anchors, absolute distances, and
+  normalized distance weights to blend scheduled positions and matching
+  profile offsets.
+- The parser's second command-form field is one for `SLD`/`SXD` and zero for
+  `SLC`/`SXC`. Generated segment `+0x34` carries the preceding boundary marker
+  and `+0x35` the ending marker. The root boundary is forced to one, and the
+  final ending marker is forced to one regardless of the last authored form;
+  nonfinal boundaries retain the authored marker. The separate final-segment
+  byte at `+0x20` is set only on the last generated record.
 - The runtime factory allocates `0x294` bytes for type 2 and calls the class
   constructor. RTTI names the class `projView::SlideNote`. Construction sets
   start phase `+0xe8` and path phase `+0xec` to zero; no other gameplay update
@@ -100,7 +130,14 @@ field-8 style `HLD` is the pre-generation exception specified by
   the result wrapper, but gap reset and removal still occur when the flag is
   clear. Exactly one `0x20` entry is removed per call.
 - Empty checkpoints set path phase 4 immediately after adjusted start; path
-  presentation records do not add an implicit result or terminal checkpoint.
+  records do not add an implicit shared result or terminal checkpoint.
+  When a due generated record has its end marker or final-segment byte set,
+  it reads the ordinary/forced gap grade once and forwards category 2 only to
+  `FUN_00c1b800`. That consumer performs bounded feedback/resource lookup and
+  never calls the shared result dispatcher, active-result remap, note-result
+  wrapper, or gap reset. Each record's consumed byte prevents repeat feedback.
+  Generated markers therefore affect feedback timing but not judgement output
+  or the authored checkpoint queue.
   The terminal predicate requires both start phase 4 and path phase 4. The main
   wrapper runs start first, path second, then requests base state 2 through the
   shared deferred finalizer. This ordering also means a same-substep start
@@ -134,35 +171,46 @@ not merely path proximity, as the active input to inactive-gap grading.
 - The player-facing meanings of the two `SLD/SXD/SLC/SXC` command fields, the
   `HLD` rewrite's code-10 discriminator, result bytes, source categories, and
   phases 2/3 remain unresolved.
-- Generated path endpoint values depend on external configuration, including
-  the width-indexed block beginning at `+0x730`; those values, units, defaults,
-  ordering guarantees, and owning schema are unavailable.
-- The exact resource/presentation interpretation of generated path-record
-  flags remains outside scope after confirming those paths do not submit an
-  additional note result or alter component completion.
-- The source-bank device meanings and complete sustain-marker producer audit
-  remain open. The checked-map malformed-runtime path terminates through the
-  standard out-of-range routine; no clean-room recovery behavior is inferred.
+- The numerical contents, units, defaults, and player-facing schema of the
+  runtime-loaded `+0x730` endpoint-profile block remain unavailable. Its exact
+  selection and use are closed and parameterized.
+- The exact feedback/resource interpretation of generated boundary markers
+  remains outside scope after confirming their producer, one-shot lifetime,
+  and lack of shared judgement or gap-state mutation.
+- The physical labels of the two source banks remain unassigned, but their
+  complete snapshot synthesis and sustain-marker ownership are closed by
+  `claim.input.snapshot-profile-synthesis` and
+  `claim.input.hold-source-continuation`.
+- A missing parsed path key calls the standard out-of-range routine. The
+  clean-room checked lookup raises `std::out_of_range`; no fallback path is
+  invented.
 
 ## Consequences
 
-- Ghidra mutations: none in the live project because GhidraMCP was unavailable;
-  temporary-clone function discovery only.
+- Ghidra mutations: none.
 - Spec sections: `spec/c2s.md`, `spec/input.md`, `spec/matching.md`,
   `spec/judgement.md`, `spec/configuration.md`, `spec/notes/slide.md`.
-- Reconstruction code: `SlideWindowPhase`, `classify_slide_window`,
-  `update_slide_lane_sources`, `SlideCheckpointProgress`,
-  `update_slide_checkpoints`, and related slide helpers in
-  `include/chart/reconstruction.hpp`.
+- Reconstruction code: `SlideEndpointProfile`, `SlideGeneratedPath`,
+  `require_slide_generated_path`, `build_slide_generated_path`,
+  `SlideWindowPhase`, `classify_slide_window`, `update_slide_lane_sources`,
+  `SlideCheckpointProgress`, `update_slide_checkpoints`, and related slide
+  helpers in `include/chart/reconstruction.hpp`.
 - Tests: `tests/slide_path_test.cpp`.
 
 ## Verification
 
-Parser construction, type postprocessing, keyed lookup, factory/RTTI, load,
-candidate virtual, start update, path update, shared gap helpers, result wrapper,
-component predicate, deferred finalizer, and destructor were traced
-independently. Direct instruction inspection confirmed the ambiguous source
-array clear and all four window endpoints. Focused tests cover boundaries,
-overlap priority, source arming/activity, forced activity, category mapping,
-one-front consumption, emission-independent reset/removal, component phases,
-and terminal conjunction.
+Parser construction, type postprocessing, keyed lookup, complete generated
+builder/copy, factory/RTTI, load, candidate virtual, start update, path update,
+feedback-only marker consumer, shared gap helpers, result wrapper, component
+predicate, deferred finalizer, and destructor were traced independently.
+Function hashes include `00b25510 =
+a3a0ba09ade07133f23b8d78260d159511afc37d2d821c8ab595c7ef382f025d`,
+`00b1f0f0 =
+63c657283aca4b2d4ce0258891182556173b23cfffce87de08f44e24aca5bc0d`,
+and `00c0de10 =
+c1a647d7e4bb755159362c03cbaaa2002ef443d71f6d0b911ecc80089bd7a3cc`.
+Focused tests cover profile selection, global and swept-lane endpoint
+construction, marker propagation/final override, window boundaries, overlap
+priority, source arming/activity, forced activity, category mapping, one-front
+consumption, emission-independent reset/removal, component phases, and terminal
+conjunction.

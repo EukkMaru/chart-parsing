@@ -65,11 +65,18 @@ Evidence: `claim.judgement.tap-adjacent-window-adjustment`; reconstruction:
 ## Detailed anonymous result code
 
 The static metadata assigns provisional coarse tiers 0 through 4 and side codes
-1 or 2. Before detailed conversion, active result-control state can replace the
-provisional tier with 0. The replacement occurs exactly when the control record
-is active, both tier and threshold are below the runtime result-type count, and
-`tier <= threshold`. Evidence: `claim.judgement.active-tier-zeroing`;
-reconstruction: `chart::reconstruction::apply_active_result_threshold`.
+1 or 2. Before detailed conversion, a loaded skill profile's change-result
+control can replace the provisional tier with 0. The remap requires a
+nonnegative loaded profile ID, a nonempty control vector, and a present source
+record in the vector's first unit. Later units are ignored. Both tier and that
+first threshold must be below the runtime result-type count, and
+`tier <= threshold`.
+
+This check does not call the separate temporary-effect lifetime predicate used
+by other skill consumers. Its boundary is profile load/reset, not the
+temporary-effect timer. Evidence: `claim.judgement.active-tier-zeroing`;
+reconstruction:
+`chart::reconstruction::apply_loaded_active_result_controls`.
 
 The downstream conversion of the post-remap tier is:
 
@@ -85,6 +92,25 @@ These are deliberately anonymous internal codes. The code reaches the shared
 result owner as event data, but no player-facing judgement name is normative.
 
 ## Shared result category and two-stage dispatch boundary
+
+Before category mapping, the note selects its result-component identifier:
+
+| Source result category | Identifier slot |
+| ---: | --- |
+| 0, 1 | primary |
+| 2 through 6 | middle/end |
+| 7 through 13 | attached secondary |
+| other | primary default |
+
+The parser assigns those slots from a pass-local source-order counter and
+runtime loading preserves them unchanged. The selected identifier becomes
+field zero of the retained result event. It does not control result-byte
+validity, contribution, or category mapping. Exact reconstruction:
+`allocate_c2s_root_result_identifiers`,
+`attach_c2s_secondary_result_identifier`, and
+`select_note_result_identifier`; evidence:
+`claim.judgement.result-component-identifier-flow`; tests:
+`tests/result_identifier_test.cpp`.
 
 Before result-owner dispatch, the source category selects a dispatch record as
 follows:
@@ -192,7 +218,7 @@ Kind 2 has deliberately different rule eligibility:
 
 - the common contribution vector remains active; external rule fields can add
   a value, update linked rule-record state, and enable two kind-2 progress
-  checks;
+  checks; a marked one-shot unit succeeds only on its first valid indexed use;
 - the event-only negative-adjustment vector cannot return an adjustment;
 - the common promotion vector can still raise the computed value after its
   external gates pass;
@@ -202,10 +228,11 @@ Kind 2 has deliberately different rule eligibility:
 Consequently the ordinary terminal route can latch on an update that contains
 no new note result. Since reevaluation follows the note pass, it affects later
 result dispatches and the gameplay-state exit predicate, not a result already
-processed in the same update. External rule values, probabilities, and the
-resulting periodic contribution/promotion remain parameters. Structural
-reconstruction is `apply_ordinary_periodic_aggregate` and the
-`OrdinaryAggregateSnapshotKind` predicates. Evidence:
+processed in the same update. External rule values and the resulting periodic
+contribution/promotion remain parameters; no random predicate participates.
+Structural reconstruction is `apply_ordinary_periodic_aggregate`,
+`ordinary_rule_one_shot_allows`, and the `OrdinaryAggregateSnapshotKind`
+predicates. Evidence:
 `claim.judgement.periodic-aggregate-reevaluation`; tests:
 `tests/shared_result_test.cpp`.
 
@@ -396,12 +423,18 @@ selector instead of retained-gap classification at checkpoints and its
 once-only end path. The selector's second source argument is ignored in this
 snapshot.
 
-The only recovered nonzero producer writes mode 2 from an indexed tutorial-step
-flag, so the observed in-binary tutorial override selects byte 3. Other selector
-cases remain part of the executable interface but do not have a recovered
-nonzero producer.
+The closed exact-snapshot producer set contains only reset/teardown mode 0 and
+tutorial mode 2. The tutorial callback writes mode 2 from an indexed step flag,
+so the only reachable active override selects byte 3. Modes 1 and 3 through 6
+remain part of the selector implementation but are unreachable: the manager
+field has no further writer or address escape. Therefore the cycling counter
+and RNG cases describe dormant code, not gameplay variability in this
+snapshot. The distinct companion field is fixed at zero, so its enabled
+selector result is always 1.
 
-Exact reconstruction: `chart::reconstruction::select_forced_result_byte`.
+Exact reconstruction: `chart::reconstruction::select_forced_result_byte`,
+`forced_result_mode_has_snapshot_producer`, and
+`select_reachable_forced_result_companion`.
 Evidence: `claim.judgement.forced-result-mode`; tests:
 `tests/forced_result_test.cpp`.
 

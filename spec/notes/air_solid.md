@@ -35,6 +35,9 @@ For ordinary finite values in the integer domain, each anonymous property is:
 integer_property = trunc_toward_zero(float_property * 10.0 + 0.5)
 ```
 
+The final conversion is the snapshot's `CVTTSS2SI`: NaN, infinity, and values
+outside the signed 32-bit range produce integer-indefinite `INT32_MIN`.
+
 The semantic names and authored domains of these four properties are not
 established. They must remain structural parameters.
 
@@ -45,6 +48,9 @@ clamped widths:
 ```text
 mirrored_lane = 16 - lane - endpoint_width
 ```
+
+The duration addition and both mirror subtractions wrap at signed 32-bit width
+before position normalization or lane storage.
 
 The color/style table maps the following exact strings to codes 0 through 15
 in order:

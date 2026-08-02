@@ -2,11 +2,11 @@
 
 - ID: `claim.matching.tap-equal-candidate-fanout`
 - State: active
-- Maturity: supported
+- Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `matching.priority`, `interactions.cross_note`, `note.tap`
-- Last reviewed: 2026-07-20
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -53,8 +53,8 @@ mode branches, and terminal state.
 
 ## Unknowns
 
-- Cross-family equal-time behavior can differ through virtual update paths and
-  remains open.
+- Cross-family equal-time behavior is closed by
+  `claim.interactions.cross-family-candidate-result-order`.
 - A result-owner terminal flag does not stop later TAP input acceptance or note
   finalization, but it observer-routes later result events instead of aggregating
   them. That separate order effect is covered by
@@ -67,12 +67,12 @@ mode branches, and terminal state.
 - Ghidra mutations: none in the live project; temporary analysis only.
 - Spec sections: `spec/matching.md`, `spec/notes/tap.md`.
 - Reconstruction code: none; no consumption primitive is required for TAP.
-- Tests: result-route ordering is covered by `tests/shared_result_test.cpp`; a
-  full reconstructed manager fan-out harness remains pending.
+- Tests: `tests/candidate_interaction_test.cpp` and
+  `tests/shared_result_test.cpp`.
 
 ## Verification
 
 The candidate reduction, full update pass, input helper, TAP gate, result
 handler callees, terminal observer branch, and deferred removal pass were
-audited independently. Other note-family virtual paths remain a required
-contradiction check.
+audited independently. A focused manager-fanout reconstruction now covers both
+TAP ties and the cross-family extension.

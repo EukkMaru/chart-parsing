@@ -35,7 +35,9 @@ terminal routing even when no note submitted a new result in that update.
 - `game.exe @ RAM:00b96120, FUN_00b96120, kind-2 snapshot construction`
 - `game.exe @ RAM:00b96b30, FUN_00b96b30, shared aggregate evaluator and terminal latches`
 - `game.exe @ RAM:00b92640, FUN_00b92640, ordered rule-vector and end-threshold evaluation`
-- `game.exe @ RAM:00b93180, FUN_00b93180, common contribution and kind-2 progress branches`
+- `game.exe @ RAM:00b93180, FUN_00b93180, common contribution and kind-2 progress branches, hash d26d8367132b48ad03a297b58bb0ac2112bfb80c49e7be2259ce8665bfa4445e`
+- `game.exe @ RAM:00b94420, FUN_00b94420, one-shot bit test, hash 641c57076a69a5979fecb92570b400e6a62552d629b64137bbd4677645779b28`
+- `game.exe @ RAM:00b949e0, FUN_00b949e0, one-shot bit mark, hash 9f3d38aa66db1d298a4615eb49214eb8d06b902762dfea098b0bd8a2f30d9011`
 - `game.exe @ RAM:00b92d30, FUN_00b92d30, kind-1-only negative adjustment`
 - `game.exe @ RAM:00b92ff0, FUN_00b92ff0, kind-1-only configured terminal rule`
 - `game.exe @ RAM:00b922b0, FUN_00b922b0, linked rule-record accumulator update`
@@ -68,9 +70,11 @@ terminal routing even when no note submitted a new result in that update.
   Exact field meanings and configured values are unavailable.
 - A matching first-vector record either contributes to the current aggregate
   computation or, for one configured subtype, accumulates the value into a
-  linked rule record through `FUN_00b922b0`. The evaluator can also consult a
-  runtime random predicate, so the clean-room boundary treats the resulting
-  contribution and record mutation as externally evaluated inputs.
+  linked rule record through `FUN_00b922b0`. A source flag instead selects a
+  deterministic one-shot gate: test the unit's source-order index in a retained
+  bit vector, attempt to mark it, and reject only when the valid bit was already
+  set. An out-of-range bit reads clear and cannot be marked, so malformed state
+  remains repeatable. No random or probability predicate participates.
 - The second-vector evaluator can inspect common predicates for kind 2, but
   every path that returns a negative adjustment requires kind 1. The
   fourth-vector configured-terminal evaluator rejects every kind other than 1
@@ -107,8 +111,8 @@ subsequent result dispatch and to the enclosing gameplay-state exit predicate.
   remain external. Their evaluated contribution/promotion is parameterized.
 - The semantic names of the retained kind-2 snapshot fields are not assigned
   beyond the statically closed converted-position field.
-- The runtime random source and externally loaded rule probabilities are not
-  reconstructed here.
+- There is no runtime random/probability source on this evaluator path; the
+  earlier interpretation is superseded by the exact bit-test/bit-mark trace.
 - Exceptional conversion behavior for non-finite or out-of-range manager
   positions is outside the recovered valid gameplay domain.
 
@@ -118,15 +122,18 @@ subsequent result dispatch and to the enclosing gameplay-state exit predicate.
   temporary project clone.
 - Spec sections: `spec/judgement.md`, `spec/timing.md`.
 - Reconstruction code: `OrdinaryAggregateSnapshotKind`,
-  `periodic_aggregate_position_tick`, rule-kind predicates, and
-  `apply_ordinary_periodic_aggregate` in `include/chart/reconstruction.hpp`.
+  `periodic_aggregate_position_tick`, rule-kind predicates,
+  `ordinary_rule_one_shot_allows`, and `apply_ordinary_periodic_aggregate` in
+  `include/chart/reconstruction.hpp`.
 - Tests: `tests/shared_result_test.cpp` covers conversion precision, kind
   eligibility, contribution/promotion order, and periodic end termination.
 
 ## Verification
 
 The outer caller, position conversion, both owner setters, synthetic builder,
-common evaluator, four vector families, linked-record sink, external vector
-loader, terminal latch, and reset were inspected independently. Thunk-xref
-enumeration confirmed that the synthetic builder chain is owned only by the
-outer update.
+common evaluator, four vector families, linked-record sink, one-shot bit
+owner, external vector loader, terminal latch, and reset were inspected
+independently. Thunk-xref enumeration confirmed that the synthetic builder
+chain is owned only by the outer update. Focused tests cover first use, repeat
+rejection, word boundaries, disabled gating, and malformed out-of-range
+repeatability.

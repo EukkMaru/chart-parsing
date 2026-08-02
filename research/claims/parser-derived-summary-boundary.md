@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.compatibility`, `state.ownership`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -39,6 +39,12 @@ category totals directly from the finalized parsed-record vector.
   temporary dynamic state is a deque of twelve-byte position records, which is
   destroyed before return. It does not mutate the parsed-record vector or any
   runtime-note, result, input, or clock owner.
+- The first 45 integers in that range temporarily receive the recognized
+  group-3 `T_REC_*`, `T_NOTE_*`, `T_NUM_*`, `T_CHRTYPE_*`, `T_LEN_*`, and
+  `T_JUDGE_*` values during main dispatch. The summary producer's initial clear
+  overwrites all 45 without reading them before any derived computation.
+  Exact grammar and malformed behavior are closed by
+  `claim.parser.derived-command-overwrite`.
 - Earlier in the same successful postprocess tail, `FUN_011bd360` resets two
   retained position triples. The first scan selects the latest applicable
   gameplay-record position: root positions for instantaneous families,

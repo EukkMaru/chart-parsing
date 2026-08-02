@@ -1,6 +1,7 @@
 #include "chart/reconstruction.hpp"
 
 #include <cassert>
+#include <limits>
 #include <stdexcept>
 #include <string_view>
 
@@ -32,8 +33,36 @@ int main() {
     assert(mirrored.start.lane == 11);
     assert(mirrored.end.lane == 5);
 
+    const std::string_view wrapped_fields[]{
+        "0", "2147483647", "-2147483648", "16", "nan", "inf",
+        "1", "-2147483648", "16", "-inf", "1e30", "DEF",
+    };
+    const C2sAsoSegment wrapped =
+        parse_c2s_aso_record(wrapped_fields, true);
+    assert(wrapped.start.lane == std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.end.lane == std::numeric_limits<std::int32_t>::min());
+    const auto expected_wrapped_end =
+        chart::reconstruction::canonicalize_c2s_position(
+            0, std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.end.position.major == expected_wrapped_end.major);
+    assert(wrapped.end.position.minor == expected_wrapped_end.minor);
+    assert(wrapped.start.property_a_tenths ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.start.property_b_tenths ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.end.property_a_tenths ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.end.property_b_tenths ==
+           std::numeric_limits<std::int32_t>::min());
+
     assert(quantize_c2s_aso_property(0.05F) == 1);
     assert(quantize_c2s_aso_property(-0.05F) == 0);
+    assert(quantize_c2s_aso_property(
+               std::numeric_limits<float>::quiet_NaN()) ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(quantize_c2s_aso_property(
+               std::numeric_limits<float>::infinity()) ==
+           std::numeric_limits<std::int32_t>::min());
     assert(parse_c2s_color_style_code("DEF") == 0);
     assert(parse_c2s_color_style_code("NON") == 15);
     assert(parse_c2s_color_style_code("non") == 0);

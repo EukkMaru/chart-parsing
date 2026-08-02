@@ -109,8 +109,9 @@ category 18, candidate absence, completion ordering, and lifetime.
   other than exact `NON` are not assigned.
 - The external completion threshold, retained-profile windows/corrections,
   values, units, defaults, and selection mode remain parameters.
-- Full physical synthesis of derived profile 7 and player-facing identity of
-  source category 18/result bytes remain open.
+- `claim.input.snapshot-profile-synthesis` closes physical profile-7
+  production and history ownership. Player-facing identity of source category
+  18 and result bytes is not assigned.
 - The special zero/`NON` HeavenHold gameplay path is reconstructed separately
   by `claim.note.heaven-hold-judgement`.
 

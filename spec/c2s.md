@@ -104,16 +104,15 @@ records and the BPM map at their actual consumer boundaries.
 
 Evidence: `claim.pipeline.parser-derived-summary-boundary`.
 
-## Mapped parser structure (not yet normative)
+## Normative parser structure
 
 The reader has a descriptor-driven, multi-pass organization described by
 `claim.parser.command-descriptor-schema` and
 `claim.parser.multi-pass-dispatch`. Whole-load failure propagation and
-record-handler rejection are specified above. Group-0 field handling is now
-normative below. Shared group-2 missing/malformed-field behavior is also
-normative below. Family-specific association and domain checks remain owned by
-their event claims; no complete event grammar should be inferred from the
-structural map alone.
+record-handler rejection are specified above. Group-0 field handling and
+shared group-2 missing/malformed-field behavior are normative below.
+Family-specific association and domain checks are normative in their linked
+event claims and note specifications.
 
 ## Shared event token behavior
 
@@ -123,13 +122,17 @@ handler disable its descriptor field-count/presence validator. A recognized
 event is therefore not rejected solely for missing or extra fields.
 
 The descriptor registry is exactly 91 case- and length-sensitive spellings
-with IDs `0x00` through `0x5a`. The backward-compatible corpus also contains
-twenty `T_PROG_00`, `T_PROG_05`, ..., `T_PROG_95` records in every chart.
-Those spellings exist in a separate initialized name table but are absent from
-the descriptor registry. They fail lookup and are discarded before every
-parser pass; their values do not populate group-3 derived storage and cannot
-select gameplay behavior. Evidence:
-`claim.parser.legacy-t-prog-command-exclusion`.
+with IDs `0x00` through `0x5a`. The corpus uses 87 of them; registered `SFE`,
+`ASO`, `HHD`, and `HHX` are absent and remain covered by exact-binary
+structural tests.
+
+Every chart also contains 24 backward-compatible spellings absent from the
+registry: `T_FIRST_MSEC`, `T_FIRST_RES`, `T_FINAL_MSEC`, `T_FINAL_RES`, and
+`T_PROG_00`, `T_PROG_05`, ..., `T_PROG_95`. Their literals exist in one
+contiguous executable data block, but exact descriptor lookup rejects them and
+the line loader discards them before every parser pass. Their values cannot
+populate group-3 storage or select gameplay behavior. Evidence:
+`claim.parser.legacy-metadata-command-exclusion`.
 
 Each family reads the indices it needs. Missing, empty, out-of-range-index, or
 descriptor-incompatible numeric fields become zero. Accessed nonempty numeric
@@ -139,6 +142,32 @@ through the gameplay load chain as exceptions. Extra fields are ignored unless
 a family branch explicitly reads their index. Later family-specific matching
 can still skip a record without failing the tokenized load. Evidence:
 `claim.parser.event-token-fallback`.
+
+## Derived group-3 commands
+
+Descriptor IDs `0x2e` through `0x5a` form 45 case-sensitive group-3 commands,
+each with one integer-compatible argument:
+
+- `T_REC_` and `T_NOTE_`: TAP, CHR, FLK, MNE, HLD, SLD, AIR, AHD, ALL;
+- `T_NUM_`: TAP, CHR, FLK, MNE, HLD, SLD, AIR, AHD, AAC;
+- `T_CHRTYPE_`: UP, DW, CE, RC, LC, RS, LS, BS;
+- `T_LEN_`: HLD, SLD, AHD, ALL; and
+- `T_JUDGE_`: TAP, HLD, SLD, AIR, FLK, ALL.
+
+The main pass temporarily stores each value in exact ID order; later duplicate
+records replace earlier values. Missing or empty fields become zero, numeric
+prefixes are accepted, no-conversion/range failures escape, and extras are
+ignored.
+
+These are not gameplay configuration in this snapshot. Before ordinary parsing
+returns, the mandatory derived-summary pass clears the complete 45-integer
+destination without reading it, then rebuilds unrelated counts and position
+statistics from finalized parsed records. Gameplay setup independently scans
+that record vector. Header-only mode skips both group-3 dispatch and the
+summary. Evidence: `claim.parser.derived-command-overwrite` and
+`claim.pipeline.parser-derived-summary-boundary`. Reconstruction:
+`C2sDerivedCommandStorage` and `apply_c2s_derived_command`; focused test:
+`tests/derived_command_test.cpp`.
 
 ## Header commands
 
@@ -199,32 +228,81 @@ BPM_DEF statistics have no recovered judgement consumer. Evidence:
 The gameplay parse has a normative timing pre-pass. `BPM` (ID 13) parses
 integer major/minor plus a float BPM into the authoritative schedule vector;
 all BPM records are finalized before ordinary timing and note commands.
+Missing numeric fields become zero, numeric prefixes are accepted,
+conversion/range failures escape, and no positive/finite validation follows.
+Duplicate-position precedence is the exact compiled sort, not a parser
+last-wins rule; see `spec/timing.md`.
 `MET` (ID 14) parses integer major/minor plus two integer meter fields only in
-the subsequent ordinary pass. `PROGJUDGE_BPM` (header ID 10) supplies the
-adaptive Air cadence reference. `RESOLUTION` (header ID 8) is recognized by
-the descriptor/tokenizer but has no header-handler case in this binary, so the
-reset value 384 remains in force. Exact normalization, scheduling, defaults,
-and malformed-domain limits are specified in `spec/timing.md`. Evidence:
-`claim.timing.tempo-measure-schedule`.
+the subsequent ordinary pass.
+
+That pass also recognizes these exact group-1 forms:
+
+| Command | Arguments after command | Stored behavior |
+|---|---|---|
+| `STP` | integer major, minor, duration | keyed interval, factor 0, key 0 |
+| `SFL` | integer major, minor, duration; float factor | keyed interval, key 0 |
+| `SFE` | same descriptor shape as SFL | recognized, then rejected because the handler has no case |
+| `SLP` | integer major, minor, duration; float factor; integer key | keyed interval |
+| `DCM` | integer major, minor, duration; float factor | source-order factor interval |
+| `CLK` | integer major, minor | separate scheduled click record |
+
+Start is normalized from `(major, minor)` and end from
+`(major, minor + duration)`. Both scheduled millisecond fields use the
+already-finalized BPM map. Missing accessed values use the shared numeric zero
+fallback, numeric prefixes are accepted, conversion/range failures escape, and
+extras are ignored. `SFE` accesses no fields. Chart reset clears the keyed
+map, DCM vector, and click vector.
+
+`PROGJUDGE_BPM` (header ID 10) supplies the adaptive Air cadence reference.
+`RESOLUTION` (header ID 8) is recognized by the descriptor/tokenizer but has no
+header-handler case in this binary, so the reset value 384 remains in force.
+Exact normalization, scheduling, projection algorithms, defaults, and
+malformed-domain limits are specified in `spec/timing.md`. Evidence:
+`claim.timing.tempo-measure-schedule` and
+`claim.timing.projection-schedule-materialization`. Reconstruction:
+`apply_c2s_projection_command` and `C2sProjectionSchedule`; focused test:
+`tests/projection_schedule_test.cpp`.
 
 ## Event-family type mapping
 
 The group-2 event parser resolves named note families to parsed-record types as
 specified by `claim.parser.event-family-type-map`. `TAP` resolves to type 0,
-which is independently connected to the runtime TAP object. Shared types do not
-yet imply identical behavior: family-specific fields and later subtypes remain
-open. `FLK` resolves to type 6, independently connected to the runtime
+which is independently connected to the runtime TAP object. Commands sharing a
+parsed type can still select distinct family-specific fields or later subtypes;
+those distinctions are specified in the linked note-family sections. `FLK`
+resolves to type 6, independently connected to the runtime
 `FlickNote` and its motion judgement by
 `claim.note.flick-motion-judgement`. `CHR` resolves to type 4 and constructs the
 TAP-derived `CharaTapNote`, whose result-category distinction is specified by
-`claim.note.chara-tap-result-category`. This mapping is structural and is not
-yet a complete event grammar.
+`claim.note.chara-tap-result-category`. Together with common geometry,
+event-token fallback, and the linked family claims, this mapping defines the
+gameplay-reaching event grammar.
+
+For common root-note geometry, field 3 is the authored lane and field 4 is
+width. Missing integer fields default to zero; lane remains unbounded while
+width clamps to 1 through 16 and is stored as `width - 1`. Runtime loading
+decodes that fixed index and bounds coverage to the logical 16-lane domain as
+specified in `spec/notes/tap.md`. Evidence:
+`claim.parser.common-lane-width-encoding`; focused reconstruction:
+`parse_c2s_common_lane_geometry` and `bounded_note_lane_extent`.
+
+Each event pass also starts a 32-bit result-component identifier counter at
+zero. Accepted roots reserve one or two source-ordered identifiers, and the
+first compatible attached AIR-family component lazily reserves a third.
+Runtime result submission selects among those slots as specified in
+`spec/judgement.md`. Evidence:
+`claim.judgement.result-component-identifier-flow`; reconstruction:
+`allocate_c2s_root_result_identifiers` and
+`attach_c2s_secondary_result_identifier`.
 
 `MNE` resolves to parsed type 11 and is independently connected through the
 runtime factory and RTTI to `projView::MineNote`. Its gameplay behavior is
 specified in `spec/notes/mine.md` and
-`claim.note.mine-contact-aggregate-judgement`; this does not yet establish every parsed
-field or malformed-record rule for the event family.
+`claim.note.mine-contact-aggregate-judgement`. Its descriptor has only the
+four common integer geometry fields, so `claim.parser.common-lane-width-encoding`
+and `claim.parser.event-token-fallback` also close its defaults, extra fields,
+and malformed numeric behavior. Focused coverage is in
+`tests/mine_contact_test.cpp` and `tests/c2s_header_test.cpp`.
 
 `AIR`, `AUR`, `AUL`, `ADW`, `ADR`, and `ADL` resolve to secondary type 3.
 Unlike root event families, their handler searches for a compatible existing
@@ -239,6 +317,20 @@ record by matching its last point and connection field. The normative
 continuation predicates, command-field pairs, manager-owned path conversion,
 and runtime behavior are in `spec/notes/slide.md`. Evidence:
 `claim.note.slide-path-sustain-judgement`.
+
+`HLD` and `HXD` both resolve to type 1. Their first five integer fields are
+major, minor, lane, width, and duration. Start is canonicalized from
+`(major, minor)` and end from `(major, minor + duration)`; optional mirroring
+uses the clamped width in `16 - lane - width`. The duration addition and both
+mirror subtractions wrap at signed 32-bit width. HXD additionally reads an
+optional sixth string and always marks the record as extended. The exact,
+case-sensitive subtype order is `UP`, `DW`, `CE`, `RC`, `LC`, `RS`, `LS`,
+`BS`; missing, empty, and unknown values map to index zero. HLD remains
+nonextended with subtype zero. The extended form selects a different external
+judgement-checker profile as specified in `spec/notes/hold.md`. Evidence:
+`claim.note.hold-extended-profile-selection`; reconstruction:
+`parse_c2s_hold_command_variant`; focused test:
+`tests/hold_variant_test.cpp`.
 
 Before type-specific generated-path construction, exact field-8 style `HLD`
 (style code 1) changes any completed Slide chain from type 2 to type 13 and
@@ -289,6 +381,8 @@ duration in minor-position units, and an anonymous integer tag.
 Width is clamped to 1 through 16. Mirrored parsing replaces the lane with
 `16 - lane - width`. Start position is normalized from `(major, minor)` and
 end position from `(major, minor + duration)` at the fixed resolution 384.
+The mirror subtractions and duration addition use wrapped signed 32-bit
+arithmetic before normalization.
 
 For an integer-lane query, add `1/192` to its chart-position scalar. An SLA
 matches exactly when:
@@ -299,17 +393,26 @@ region_lane <= query_lane
 query_lane + query_width <= region_lane + region_width
 ```
 
+Both lane-end additions are wrapped signed 32-bit operations. AirLadder's
+float-span form converts the wrapped region-lane end to float before applying
+its right-edge tolerance.
+
 The scan starts from tag zero and retains only strictly greater matching tags,
 so overlap selects the greatest positive tag. AirLadder's interpolated float-
 lane query uses the same time and maximum rules with `-0.00001F` left and
 `+0.00001F` right containment tolerances.
 
-The parser assigns selected tags to note roots/endpoints and path records, but
-the runtime factory has no type-12 case. Downstream tag readers select a
-tag-keyed scroll-position transform for projected presentation state. The
-authoritative scheduled position, manager clock, candidate/input gates,
-classification, results, and terminal state do not read the tag. SLA therefore
-has no recovered gameplay-generation or judgement effect. Evidence:
-`claim.parser.sla-region-selection`. Reconstruction: `C2sSlaRegion`,
-`parse_c2s_sla_record`, and `select_c2s_sla_tag`. Focused test:
-`tests/sla_region_test.cpp`.
+The parser assigns selected tags to note roots/endpoints and path records. The
+runtime factory still has no type-12 case, so an SLA directive never becomes a
+note itself. However, the pending-record materialization gate reads the
+assigned root/end tags on its far path and uses each nonnegative tag as an
+exact key into the STP/SFL/SLP schedule map. That transform can make another
+record remain pending or construct during the current outer update, changing
+the first later substep on which it can reach candidates, input, and
+judgement. SLA does not rewrite the manager clock or the note's judgement
+windows; its gameplay effect is through construction timing.
+
+Evidence: `claim.parser.sla-materialization-selection`. Reconstruction:
+`C2sSlaRegion`, `parse_c2s_sla_record`, both tag selectors, and
+`runtime_materialization_probe_from_schedule`. Focused tests:
+`tests/sla_region_test.cpp` and `tests/projection_schedule_test.cpp`.

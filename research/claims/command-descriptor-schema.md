@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.header`, `parser.events`
-- Last reviewed: 2026-07-20
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -28,7 +28,7 @@ codes; negative type-code slots terminate the meaningful argument list.
   AIR, and FLK.
 - Its descriptor-constructor thunk has exactly 91 call xrefs, all within this
   initializer. Exact fixed-array lookup is closed by
-  `claim.parser.legacy-t-prog-command-exclusion`.
+  `claim.parser.legacy-metadata-command-exclusion`.
 - `FUN_011cc1b0` stores the ID, two strings, group selector, and twelve signed
   codes. It computes the total field count as one command token plus the number
   of nonnegative codes.
@@ -59,18 +59,22 @@ the corpus argument arity.
 
 ## Unknowns
 
-- The semantic mapping for type-code values used outside the recovered header,
-  SLA, and established event families is not yet closed.
-- The separate legacy `T_PROG_*` name table has no executable reader; its
+- Type-code labels with no gameplay handler consumer are intentionally not
+  assigned editor-facing semantics. Every descriptor field actually accessed
+  by group 0, group 1, group 2, SLA, or group 3 is closed by the linked parser
+  and family claims.
+- The separate 24-name legacy metadata table has no executable reader; its
   historical non-gameplay purpose remains unassigned.
 
 ## Consequences
 
 - Ghidra mutations: recovered the missing initializer function at
   `RAM:00528b60` and added a plate comment.
-- Spec sections: structural note in `spec/c2s.md`.
-- Reconstruction code: none until type-code and validation behavior are closed.
-- Tests: corpus arity comparison performed read-only; no normative parser test.
+- Spec sections: normative descriptor and dispatch rules in `spec/c2s.md`.
+- Reconstruction code: shared numeric token accessors and the family-specific
+  parsers in `include/chart/reconstruction.hpp`.
+- Tests: `tests/c2s_header_test.cpp`, `tests/derived_command_test.cpp`, and
+  family-focused parser tests.
 
 ## Verification
 

@@ -16,19 +16,20 @@ bool near(float left, float right, float tolerance = 0.000001F) {
 int main() {
     using chart::reconstruction::C2sHeader;
     using chart::reconstruction::apply_c2s_header_record;
-    using chart::reconstruction::c2s_command_is_ignored_legacy_progress;
+    using chart::reconstruction::c2s_command_is_ignored_legacy_metadata;
     using chart::reconstruction::c2s_header_only_line_limit;
-    using chart::reconstruction::ignored_legacy_progress_commands;
+    using chart::reconstruction::ignored_legacy_metadata_commands;
 
     C2sHeader header;
     assert(c2s_header_only_line_limit == 20);
-    for (const auto command : ignored_legacy_progress_commands) {
-        assert(c2s_command_is_ignored_legacy_progress(command));
+    for (const auto command : ignored_legacy_metadata_commands) {
+        assert(c2s_command_is_ignored_legacy_metadata(command));
     }
-    assert(!c2s_command_is_ignored_legacy_progress("T_PROG_01"));
-    assert(!c2s_command_is_ignored_legacy_progress("T_PROG_100"));
-    assert(!c2s_command_is_ignored_legacy_progress("t_prog_00"));
-    assert(!c2s_command_is_ignored_legacy_progress("T_JUDGE_ALL"));
+    assert(!c2s_command_is_ignored_legacy_metadata("T_FIRST"));
+    assert(!c2s_command_is_ignored_legacy_metadata("T_PROG_01"));
+    assert(!c2s_command_is_ignored_legacy_metadata("T_PROG_100"));
+    assert(!c2s_command_is_ignored_legacy_metadata("t_prog_00"));
+    assert(!c2s_command_is_ignored_legacy_metadata("T_JUDGE_ALL"));
     assert(header.music == 0);
     assert(header.sequence_id == 0);
     assert(header.difficulty.empty());

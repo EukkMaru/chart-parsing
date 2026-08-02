@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `note.tap`, `state.ownership`, `audit.indirect_calls`
-- Last reviewed: 2026-07-20
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -58,19 +58,19 @@ consumed by TAP candidate and input loops.
 
 ## Unknowns
 
-- The encoded-width table is structurally recovered, but compatibility paths
-  that could alter it are not yet closed.
-- Other fields copied during loading include identifiers whose full ownership
-  and gameplay effect remain open.
+- None for the common TAP construction fields. Externally loaded checker
+  values remain parameters under their owning configuration claims.
 
 ## Consequences
 
 - Ghidra mutations: none in the live project; temporary analysis only.
 - Spec sections: `spec/notes/tap.md`, `spec/timing.md`.
-- Reconstruction code: `make_note_scheduled_position` in
-  `include/chart/reconstruction.hpp`.
+- Reconstruction code: `make_note_scheduled_position`,
+  `parse_c2s_common_lane_geometry`, `decode_c2s_note_width`, and
+  `bounded_note_lane_extent` in `include/chart/reconstruction.hpp`.
 - Tests: `tests/play_clock_test.cpp` covers positive and negative parsed
-  positions using the direct scale.
+  positions using the direct scale; `tests/common_lane_width_test.cpp` covers
+  the fixed width tables and bounded lane extent.
 
 ## Verification
 
@@ -78,3 +78,8 @@ The start lane, width, scheduled position, and embedded checker are independentl
 consumed along the per-tick judgement path in
 `claim.note.tap-candidate-judgement-gate`. The scale matches the independently
 recovered manager clock scale in `claim.timing.gameplay-clock-reconstruction`.
+Table immutability and all width-domain edges are independently closed by
+`claim.parser.common-lane-width-encoding`.
+The three copied result-component identifiers and their only gameplay consumer
+are independently closed by
+`claim.judgement.result-component-identifier-flow`.

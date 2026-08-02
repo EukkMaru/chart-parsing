@@ -2,20 +2,30 @@
 
 #include <array>
 #include <cassert>
+#include <map>
+#include <stdexcept>
 
 int main() {
     using chart::reconstruction::HoldGapState;
     using chart::reconstruction::HoldLaneSourceState;
     using chart::reconstruction::SlideCheckpointProgress;
+    using chart::reconstruction::SlideEndpointProfile;
+    using chart::reconstruction::SlideGeneratedPath;
+    using chart::reconstruction::SlidePathPoint;
     using chart::reconstruction::SlidePathPhase;
     using chart::reconstruction::SlideStartPhase;
     using chart::reconstruction::SlideWindowPhase;
     using chart::reconstruction::classify_slide_window;
+    using chart::reconstruction::build_slide_generated_path;
     using chart::reconstruction::combine_slide_window_phases;
+    using chart::reconstruction::slide_command_sets_path_marker;
+    using chart::reconstruction::SlideCommandForm;
+    using chart::reconstruction::slide_endpoint_profile_index;
     using chart::reconstruction::slide_checkpoint_source_category;
     using chart::reconstruction::slide_exposes_candidate;
     using chart::reconstruction::slide_gap_active;
     using chart::reconstruction::slide_is_terminal;
+    using chart::reconstruction::require_slide_generated_path;
     using chart::reconstruction::update_hold_gap;
     using chart::reconstruction::update_slide_checkpoints;
     using chart::reconstruction::update_slide_lane_sources;
@@ -46,6 +56,76 @@ int main() {
     assert(combine_slide_window_phases(SlideWindowPhase::late,
                                        SlideWindowPhase::center) ==
            SlideWindowPhase::center);
+
+    assert(slide_command_sets_path_marker(SlideCommandForm::sld));
+    assert(slide_command_sets_path_marker(SlideCommandForm::sxd));
+    assert(!slide_command_sets_path_marker(SlideCommandForm::slc));
+    assert(!slide_command_sets_path_marker(SlideCommandForm::sxc));
+    assert(slide_endpoint_profile_index(-10) == 15);
+    assert(slide_endpoint_profile_index(1) == 15);
+    assert(slide_endpoint_profile_index(16) == 0);
+    assert(slide_endpoint_profile_index(99) == 0);
+
+    std::array<SlideEndpointProfile, 16> profiles{};
+    for (auto& profile : profiles) {
+        profile.lane_reference = 2.0F;
+        profile.edge_offsets = {-2.0F, -1.0F, 1.0F, 2.0F};
+    }
+    const SlidePathPoint root{
+        .scheduled_position = 10.0F,
+        .lane = 0,
+        .width = 2,
+        .marker = false,
+    };
+    const std::array controls{
+        SlidePathPoint{
+            .scheduled_position = 20.0F,
+            .lane = 2,
+            .width = 2,
+            .marker = false,
+        },
+        SlidePathPoint{
+            .scheduled_position = 30.0F,
+            .lane = 2,
+            .width = 2,
+            .marker = false,
+        },
+    };
+    const auto generated =
+        build_slide_generated_path(root, controls, profiles, 0.5F);
+    assert(generated.enabled);
+    assert(generated.edges ==
+           (std::array<float, 4>{8.5F, 9.5F, 31.5F, 32.5F}));
+    assert(generated.segments.size() == 2);
+    assert(generated.segments[0].start_marker);
+    assert(!generated.segments[0].end_marker);
+    assert(!generated.segments[0].final_segment);
+    assert(!generated.segments[1].start_marker);
+    assert(generated.segments[1].end_marker);
+    assert(generated.segments[1].final_segment);
+
+    const std::map<std::uint32_t, SlideGeneratedPath> paths{{7U, generated}};
+    assert(&require_slide_generated_path(paths, 7U) == &paths.at(7U));
+    bool missing_key_threw = false;
+    try {
+        (void)require_slide_generated_path(paths, 8U);
+    } catch (const std::out_of_range&) {
+        missing_key_threw = true;
+    }
+    assert(missing_key_threw);
+
+    // A move from lanes [0,2) to [2,4) generates the full swept corridor.
+    const auto& first = generated.segments[0];
+    assert(first.lane_windows[0].enabled);
+    assert(first.lane_windows[1].enabled);
+    assert(first.lane_windows[2].enabled);
+    assert(first.lane_windows[3].enabled);
+    assert(!first.lane_windows[4].enabled);
+    assert(first.lane_windows[0].edges[0] == 8.5F);
+    assert(first.lane_windows[3].edges[3] == 22.5F);
+    assert(first.lane_windows[2].edges[0] == 11.0F);
+    assert(19.0F < first.lane_windows[1].edges[2]);
+    assert(first.lane_windows[1].edges[2] < 21.0F);
 
     HoldLaneSourceState sources;
     std::array<bool, 2> marker{};

@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.events`, `matching.candidates`, `note.other_variants`, `audit.indirect_calls`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-08-03
 
 ## Statement
 
@@ -45,8 +45,10 @@ gameplay path.
   replaces each endpoint lane with `16 - lane - endpoint_width`.
 - The end chart position is formed from `(major, minor + duration)`. Each
   anonymous float is converted to an integer by `int(value * 10.0F + 0.5F)`.
-  Direct scalar inspection establishes 10.0 and 0.5; the properties' semantic
-  names are not established.
+  Duration addition and both mirror subtractions wrap at signed 32-bit width.
+  Direct scalar inspection establishes 10.0 and 0.5, and the final
+  `CVTTSS2SI` maps NaN, infinities, and out-of-range values to `INT32_MIN`;
+  the properties' semantic names are not established.
 - The final string is compared case-sensitively against `DEF`, `RED`, `ORN`,
   `YEL`, `LIM`, `GRN`, `AQA`, `CYN`, `DGR`, `BLU`, `PPL`, `VLT`, `PNK`, `GRY`,
   `BLK`, and `NON`, yielding codes 0 through 15. Empty or unknown strings yield
@@ -110,8 +112,6 @@ judged note despite its presence in the active runtime-note vector.
 - Presentation resource identities, geometry semantics, and the reason the
   end predicate is retained despite its discarded observed return are outside
   the gameplay mission.
-- Invalid float-to-integer conversion behavior for non-finite or out-of-range
-  anonymous properties is not reconstructed.
 
 ## Consequences
 
@@ -129,10 +129,12 @@ The initialized 10.0/0.5 scalars and all 16 style strings were checked
 independently of decompiler type recovery. The parser branch, continuation
 comparison, source-sequence producer, setup switch, configuration insertion
 and lookup, factory/RTTI/vtable, scheduled callback, candidate manager,
-no-op manager slot, uncalled end-comparison slot, inherited result handler, active-vector deletion
-predicate, and destructor were followed separately. Focused tests cover field
-order, tenths conversion, width clamps, mirroring, missing fields, prefix
-conversion, malformed conversion, exact style lookup, and continuation
+no-op manager slot, uncalled end-comparison slot, inherited result handler,
+active-vector deletion predicate, and destructor were followed separately.
+Focused tests cover field order, tenths conversion including integer-indefinite
+nonfinite/range behavior, width clamps, wrapped mirror/duration arithmetic,
+missing fields, prefix conversion, malformed conversion, exact style lookup,
+and continuation
 mismatches.
 
 ## Revision note

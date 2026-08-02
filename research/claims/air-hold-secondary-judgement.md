@@ -10,7 +10,7 @@
   `judgement.windows`, `judgement.miss`, `note.other_variants`,
   `state.ownership`, `config.external`, `interactions.cross_note`,
   `audit.indirect_calls`
-- Last reviewed: 2026-07-26
+- Last reviewed: 2026-08-03
 
 ## Statement
 
@@ -91,10 +91,20 @@ start stream and the combined path/checkpoint stream to finish.
   type-6 boundary record, and the chain ends with one disabled type-7 record.
   The type values are structural producer tags; the gameplay consumer uses the
   scheduled value and emission byte.
+- Grid conversion uses `CVTTSS2SI`: NaN, infinity, and out-of-range values
+  become `INT32_MIN`. Tick subtraction/addition wraps at 32 bits. A wrapped
+  segment delta above `INT32_MAX` selects the source's very large unsigned
+  generation range; a signed endpoint crossing from near `INT32_MAX` to near
+  `INT32_MIN` can instead have an ordinary small wrapped delta. An adaptive
+  step that reaches zero cannot advance the source cursor. The clean-room
+  evaluator reports both unsafe source-loop dispositions without executing
+  them.
 - Postprocessing can only clear additional emission bytes. When the final
   command is AHD and the end-margin input is nonnegative, a record is disabled
   when `record_grid_tick + round(sample_step * end_margin)` reaches or passes
-  the final endpoint. Final AHX bypasses this filter. A separate enabled key-0
+  the final endpoint. Grid/margin conversion uses `CVTTSS2SI` integer-
+  indefinite behavior and tick addition wraps at 32 bits; NaN/negative margins
+  bypass the filter. Final AHX bypasses this filter. A separate enabled key-0
   interval table disables a record only when its scheduled value is strictly
   inside an interval whose selector is zero; both interval endpoints are open.
 - Gameplay considers only the generated vector front and consumes at most one
@@ -144,6 +154,12 @@ maximum-gap reset conditions, and the terminal conjunction.
   `claim.parser.header-default-dispatch` closes `+0xc8` as
   `PROGJUDGE_AER` with reset bits `0x3f7fbe77` and `+0xcc` as the positive
   predicate of `TUTORIAL`; exclusion interval contents remain explicit.
+- Type-5 durations are signed and unvalidated. The producer compares a wrapped
+  offset with the wrapped segment delta as unsigned. Any delta above
+  `INT32_MAX` creates the pathological large-span generation class shared with
+  type 13; signed ordering alone does not determine it. The clean-room domain
+  evaluator reports this and zero-step cursor nonprogress without running an
+  unsafe source loop.
 - External timing endpoints, AirHold offset `+0x87c`, four thresholds
   `+0x888..+0x894`, corrections, defaults, and units remain parameters.
 - `claim.input.snapshot-profile-synthesis` closes profiles 6 and 7 and their
@@ -172,7 +188,9 @@ AHD end-margin filtering, key-0 interval filtering, start profile, both
 derived-input reads, gap update/classify/reset, generated-vector consumer,
 authored checker construction and categories, terminal predicate, deferred
 transition, and shared category routing were checked independently. Focused
-tests cover AHX-only counting, grid/cadence rules, segment emission flags, both
-filters, all supported root profiles, admission latching,
+tests cover AHX-only counting, grid/CVTTSS2SI/cadence rules, wrapped
+small-boundary and large-span segment classification, zero-step nonprogress,
+segment emission flags, both filters including indefinite end-margin
+conversion, all supported root profiles, admission latching,
 ordinary/disabled/forced gap reset, path completion, terminal conjunction,
 candidate absence, and category routing.

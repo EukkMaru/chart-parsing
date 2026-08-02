@@ -82,8 +82,10 @@ It measures each anchor on a single-precision grid:
 
 `grid_tick = trunc((major + minor * 0.25F) * 384.0F + 0.5F)`
 
-Thus one major unit is 384 ticks and one minor unit is 96 ticks. For every
-adjacent anchor pair, select an initial sample step of 384 ticks. While the BPM
+Thus one major unit is 384 ticks and one minor unit is 96 ticks. NaN,
+infinity, or an out-of-range converted grid value produces `INT32_MIN`
+through `CVTTSS2SI`. All later tick subtraction/addition wraps at 32 bits.
+For every adjacent anchor pair, select an initial sample step of 384 ticks. While the BPM
 selected at the segment endpoint's scheduled milliseconds is below four times
 the `PROGJUDGE_BPM` header, double that BPM and integer-halve the step. Start at one
 step after the segment start and append samples only while the unsigned step
@@ -92,6 +94,16 @@ the step from the BPM selected at that sample's scheduled value. The
 authoritative BPM schedule and position conversion are specified in
 `spec/timing.md`; clean-room note generation composes those helpers with the
 separate path interpolation interface.
+
+The type-5 duration accessor is signed and the parser does not reject extreme
+endpoints. The segment length is wrapped `end_tick - start_tick`, then compared
+with the wrapped offset as unsigned. A delta above `INT32_MAX` therefore enters
+a very large source generation range; this is not equivalent to signed
+`end < start` at the wrap boundary. The clean-room API reports
+`source_large_unsigned_span_expansion` through
+`evaluate_air_hold_path_generation`. A zero adaptive step is separately
+reported as source cursor nonprogress; callers do not attempt either unsafe
+source allocation/loop.
 
 Generated records follow these exact flag rules:
 
@@ -112,13 +124,17 @@ Two postprocessor filters can only clear more emission bytes:
   disable a record when
   `record_grid_tick + round(sample_step * end_margin) >= final_grid_tick`.
   Final AHX bypasses this end filter. The parameter is the `PROGJUDGE_AER`
-  header and resets from float bits `0x3f7fbe77`.
+  header and resets from float bits `0x3f7fbe77`. The rounding conversion is
+  `CVTTSS2SI`, so positive infinity/out-of-range produces `INT32_MIN`; the
+  record-tick addition then wraps before the signed comparison. NaN and
+  negative margins bypass the filter through the ordered nonnegative test.
 - When the parser's exclusion filter is enabled by positive `TUTORIAL`, select
   its key-0 interval
   vector and disable a record only when `start < scheduled < end` and that
   interval's selector equals zero. Both interval boundaries are strict.
 
-Reconstruction: `air_hold_grid_tick`, `air_hold_sample_step`,
+Reconstruction: `air_hold_grid_tick`,
+`evaluate_air_hold_path_generation`, `air_hold_sample_step`,
 `generate_air_hold_path_records`, `air_hold_in_exclusion_interval`, and
 `filter_air_hold_path_emissions`.
 

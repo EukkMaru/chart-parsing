@@ -45,6 +45,16 @@ membership in a key-zero selector-zero open interval clears an interior
 record's emission flag. The final endpoint is appended as enabled kind 1 and
 is not interval-filtered.
 
+The duration token used to form the type-13 final endpoint is signed, and the
+parser performs no range check. Grid conversion uses `CVTTSS2SI`; tick
+subtraction/addition wraps at 32 bits. The wrapped endpoint delta and sampling
+offset are compared as unsigned. A delta above `INT32_MAX` creates a very large
+source range regardless of signed endpoint ordering; a zero adaptive step can
+also leave the loop unable to progress. The clean-room API reports
+`source_large_unsigned_span_expansion` plus the shared zero-step disposition
+and does not attempt those unsafe source loops. Reconstruction:
+`evaluate_heaven_hold_path_generation`.
+
 Grid and schedule conversion plus BPM selection are specified in
 `spec/timing.md`; path interpolation remains an explicit interface. Reconstruction:
 `generate_heaven_hold_path_records`; tests:

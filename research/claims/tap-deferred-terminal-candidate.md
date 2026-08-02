@@ -89,8 +89,9 @@ manager path because its byte remains at the constructor's zero value.
 - A computed-address or untraced external framework write to tick-guard byte
   `+0x65` would falsify the recovered-path absence result; no such producer is
   statically supported in the resolved note callback graph.
-- Other note families use different virtual candidate/update paths and need
-  independent lifecycle audits.
+- The different candidate/update lifecycles for HOLD, Slide/HeavenHold, FLK,
+  Mine, and attached Air families are closed by their family claims and
+  `claim.interactions.cross-family-candidate-result-order`.
 
 ## Consequences
 

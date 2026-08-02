@@ -2,17 +2,21 @@
 
 ## Snapshot
 
-- Phase: all 28 coverage rows are mapped. Exact-binary paths now include live
+- Phase: all 28 gameplay coverage rows are verified. Exact-binary paths include live
   command-descriptor vocabulary, parser/factory/lifecycle boundaries, all
   runtime note families, TouchSlider/photo-sensor framing, complete input
   snapshot/profile synthesis and history ownership, gameplay clock/tick
   conversion, result routing, active/post-active updates, teardown, and final
-  result persistence. External values remain parameters where the executable
-  only selects resource fields. Independent contradiction audit is still open.
+  result persistence. Every concrete blocker from the failed independent
+  review was reproduced and corrected; external values remain parameters
+  where the executable only selects resource fields. A fresh read-only
+  post-fix review passed all twelve gates in `docs/COMPLETION.md`; its dedicated
+  record is `claim.audit.independent-post-fix-closure-review`.
 - Binary: `game.exe`, SHA-256 `4e492489fb8e63c5b3ffad5267e78b02fcf8d74a261b058fc296a7e968516520`
 - Ghidra project: local project `chart`
 - Current Ghidra writer: none
-- Grand-goal status: open
+- Grand-goal status: complete for this exact snapshot at apparent tick
+  granularity
 
 ## Established findings
 
@@ -58,6 +62,13 @@
   first common tick, while attached secondaries never enter candidate reduction.
   The apparent scan/scene-exit bypass byte is fixed at zero by construction and
   gameplay-state entry and has no nonzero writer or address escape.
+- The far-path materialization speed is no longer an anonymous input. Gameplay
+  setup starts from `PlayOptionSpeedID`; the first selected `SkillBefore` unit
+  of type 6 can replace it only with a valid `PlayOptionSpeedTable` ID. The
+  selected record double narrows to float and clamps to at least `0.1F`.
+  Projection base offset is `[OFFSET] DRAW`, whose executable descriptor
+  default is `0.0F`; reset and successful setup copy its finalized value into
+  the materialization manager.
 - The inherited state-action selector after the registered gameplay callback
   is dormant for runtime notes. Its exact factory and fallback callable map are
   constructed empty, and all twelve concrete constructors and load callbacks
@@ -74,9 +85,11 @@
   no-conversion/range errors escape the load chain.
 - `SLA` maps to parsed type 12 and defines a normalized half-open time/lane
   region with an integer tag. Overlaps select the greatest positive tag after
-  the shared `1/192` query shift. Type 12 has no runtime factory case; its tag
-  only keys projected scroll-position/resource paths and does not reach the
-  gameplay clock, candidates, input classification, or results.
+  the shared `1/192` query shift. Type 12 has no runtime factory case, but its
+  selected root/end tag keys the STP/SFL/SLP transform in far-path note
+  materialization. It can therefore advance or delay when another note first
+  exists for candidates, input, and judgement, without rewriting that note's
+  clock or windows.
 - `ASO` maps to parsed type 10 and chains twelve-field two-endpoint paths.
   Widths clamp independently, mirroring uses each endpoint span, four anonymous
   floats become integer tenths with `int(value * 10 + 0.5)`, and the final
@@ -160,6 +173,15 @@
   compare the selected BPM against named header `PROGJUDGE_BPM`. `MET` consumes
   this schedule to build meter/grid vectors but does not alter note time or Air
   cadence; missing measure zero is synthesized from `MET_DEF`.
+- BPM duplicate positions are ordered by the snapshot's compiled three-way
+  introsort with no source-sequence tie-breaker; the clean-room sort reproduces
+  its insertion, median/equal partition, and heap-fallback paths. Missing BPM
+  fields become zero and no positive/finite validation follows. IEEE
+  zero/negative/infinite/NaN schedule behavior is retained. Adaptive Air
+  explicitly reports the source's invalid empty-map dereference boundary, the
+  nonterminating doubling loop reached by a nonpositive selected BPM below its
+  threshold, and downstream path nonprogress when a positive/infinite-
+  reference case halves the integer step to zero.
 - `ASD` and `ASC` attach secondary type 8 and construct a candidate-free
   RTTI-identified `projView::AirSlideNote`. The executable command table fixes
   ASD as the control marker: ASD controls restart generated sampling and own
@@ -198,6 +220,13 @@
   root-to-end span but bypasses type 9, so exceptional ALD intentionally has no
   generated queue. HeavenHold becomes terminal only after both start and path
   phases reach 4; adjusted-end grading is feedback-only.
+- Type-13 duration is signed and has no nonnegative parser check. The producer
+  wraps endpoint-minus-root at 32 bits and compares the delta as unsigned. A
+  high-bit delta expands toward a pathological very large sampling range,
+  while a signed wrap-boundary crossing can still have a small wrapped delta;
+  signed endpoint ordering alone is insufficient. The reconstruction reports
+  that source failure domain and zero-step cursor nonprogress instead of
+  allocating or looping through either.
 - `SLD`, `SXD`, `SLC`, and `SXC` construct chained parsed type-2 control-point
   records. Postprocessing converts each chain to a manager-owned keyed path
   container, and the factory constructs RTTI-identified
@@ -236,9 +265,12 @@
   distances. Shared TAP/HOLD checker initialization uses those distances to
   tighten early/late interval sides within external caps; adjusted aggregate
   eligibility bounds are recomputed before gameplay.
-- Active `SkillChangeJudgeResultData` control state can demote a provisional
-  TAP tier to tier 0 before detailed-code conversion. The runtime result-table
-  count and skill threshold remain explicit external inputs.
+- A loaded skill profile's first `SkillChangeJudgeResultData` control can
+  demote a provisional tier to tier 0 before detailed-code conversion. Later
+  controls are ignored. The rule is bounded by profile load/reset and does not
+  consult the temporary-effect lifetime predicate used by other skill
+  consumers. The runtime result-table count and thresholds remain explicit
+  external inputs.
 - Equal selected TAPs can independently observe the same unconsumed rising
   edge. A completed TAP requests terminal state and remains current-state 1 for
   the rest of that manager pass; if still timing-eligible, it participates in
@@ -260,11 +292,13 @@
   checkpoint phases must reach 4 before terminal state is requested.
 - Manager forced-result state can bypass physical start input, force HOLD
   sustain active, and supply fixed bytes or manager-wide cycling/random
-  sequences. Reset, selector cases, and cross-note cycle ownership are
-  reconstructed. The only recovered nonzero producer is the RTTI-identified
-  tutorial controller: an indexed tutorial-step flag writes mode 2, selecting
-  anonymous byte 3 when the separately initialized enable is active. Other
-  nonzero modes have no statically recovered producer.
+  sequences in its selector implementation. Reset, selector cases, and
+  cross-note cycle ownership are reconstructed. Whole-binary owner/write and
+  address-escape closure proves that the exact snapshot can select only reset
+  mode 0 or RTTI-identified tutorial mode 2. Thus byte 3 is the only reachable
+  forced result when the separately initialized enable is active; cycling and
+  RNG cases are dormant. The distinct companion field is fixed at zero and
+  returns metadata value 1 whenever enabled.
 - The shared result handler first converts 19 source categories into one of 14
   dispatch categories. Each dispatch record independently maps into one of five
   progress categories and one of nine aggregate categories. All fixed records
@@ -290,6 +324,13 @@
   threshold remain eligible. Periodic rule work can therefore change the
   aggregate and latch terminal routing without a new note result; because it
   follows the note pass, later dispatch or scene-exit logic observes the latch.
+  Its optional source flag is a deterministic one-shot bit test/mark by
+  source-order unit index, not the previously inferred random predicate.
+- Contribution, promotion, negative-adjustment, configured-terminal, and
+  result-remap controls all come from one selected `SkillBefore` record. A
+  changed three-integer identity resets every vector before map lookup; the
+  middle ID selects the record, a missing record leaves the vectors empty, and
+  source unit types 0, 1, 2, 3, and 5 route in order while type 4 is ignored.
 - The registered active-gameplay callback completes that outer update and an
   ordinary report attempt before checking scene exit. Result-count completion
   is enabled only for a nonzero expected total and uses unsigned
@@ -387,37 +428,33 @@
 
 ## Active question
 
-Have a fresh investigator repeat the closure review required by
-`docs/COMPLETION.md`. The same-investigator adversarial pass found no active
-claim contradiction or omitted representative indirect edge, but it cannot
-satisfy the independent gate. All gameplay rows are mapped; reopen a row only
-when the independent review finds a concrete conflicting edge, writer,
-selector, reset path, or corpus invariant.
+None. The fresh independent post-fix review passed. Reopen the exact affected
+coverage row only if new binary evidence exposes a conflicting edge, writer,
+selector, reset path, malformed domain, corpus invariant, indirect target, or
+gameplay-affecting external value that bypasses the reconstructed interfaces.
 
 ## Tooling handoff
 
 - The live Ghidra MCP connection is healthy for project `chart`, program
-  `game.exe`. This session used it for all input audits, saved the program, and
-  left no writer ownership active.
-- New persistent comments cover the outer-update boundary, parser vocabulary,
-  music cursor/timer and scan-counter domains, TouchSlider/photo-sensor
-  framing, input configuration/reset, and complete snapshot synthesis.
+  `game.exe`, and no writer ownership remains active.
+- The final persistent mutation creates and renames the static initializer at
+  `RAM:004b8fe0` to `InitializeSoundControllerArray` and records why its 51
+  fixed wrappers and sole embedded `sound::Sound` vtable make the HOLD
+  adjusted-end branch feedback/audio-only.
 - Follow `docs/GHIDRA.md` and run `python3 scripts/harness.py doctor` before
-  taking Ghidra write ownership in a later session.
+  any later exact-snapshot re-audit.
 
 ## Blockers
 
-- Exact external judgement configuration values are absent. Their selection
-  and consumers are recovered where gameplay uses them, but values must remain
-  parameters.
-- Grand-goal completion is blocked only by the required fresh independent
-  contradiction audit, not by a known open gameplay path.
+- None under `docs/COMPLETION.md`.
+
+Externally absent judgement/profile values remain parameters. Their selection,
+defaults where executable-owned, lifetime, and consumers are reconstructed, so
+their absence is not itself a completion blocker.
 
 ## Next handoff
 
-Start a fresh investigation with the workspace contract, read the latest
-session handoff, and claim `audit.closure` before any Ghidra mutation. Repeat
-the entry-to-exit, indirect-call, state/reset, cross-note, corpus, and
-contradiction checks without relying on the current investigator's conclusions.
-If the result agrees, raise `audit.closure` only as permitted by
-`docs/COMPLETION.md`; otherwise reopen the exact contradicted coverage rows.
+Preserve the verified ledger and independent closure report. If the binary or
+corpus changes, treat it as a new snapshot and rerun identity, parser/corpus,
+entry-to-exit, indirect-call, state/reset, interaction, contradiction, and
+full test gates rather than carrying this verdict across versions.

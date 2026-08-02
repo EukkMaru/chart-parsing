@@ -200,14 +200,11 @@ def command_validate(_: argparse.Namespace) -> int:
         status = row.get("status")
         if status in {"reconstructed", "verified"}:
             for field in ("evidence", "spec"):
-                value = row.get(field, "-")
-                if value in {"", "-"}:
+                values = ledger_paths(row.get(field, "-"))
+                if not values:
                     errors.append(f"coverage line {line}: {status} row lacks {field}")
-                elif not (ROOT / value).exists():
-                    errors.append(f"coverage line {line}: {field} path does not exist: {value}")
         if status == "verified":
-            value = row.get("tests", "-")
-            if value in {"", "-"}:
+            if not ledger_paths(row.get("tests", "-")):
                 errors.append(f"coverage line {line}: verified row lacks an existing test path")
         if status == "investigating" and row.get("owner") in {"", "-"}:
             errors.append(f"coverage line {line}: investigating row has no owner")
@@ -266,7 +263,13 @@ def command_next(args: argparse.Namespace) -> int:
     candidates = active or [row for row in rows if row["status"] in {"unknown", "mapped"}]
     candidates.sort(key=priority_key)
     if not candidates:
-        print("No open row. Run the closure audit before claiming completion.")
+        closure = next(
+            (row for row in rows if row["id"] == "audit.closure"), None)
+        if (closure is not None and closure["status"] == "verified" and
+                all(row["status"] in {"verified", "excluded"} for row in rows)):
+            print("No open row. Coverage and closure audit are verified.")
+        else:
+            print("No open row. Run the closure audit before claiming completion.")
         return 0
     label = "Continue active ownership" if active else "Suggested bounded targets"
     print(label + ":")

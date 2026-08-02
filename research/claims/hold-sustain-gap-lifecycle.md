@@ -92,7 +92,8 @@ phase tests establish the terminal condition independently of visual updates.
 - Values, units, ordering guarantees, and load source for configuration fields
   `+0x708` and `+0x710` through `+0x71c` remain unavailable.
 - The authoritative player-facing names for result bytes and checkpoint
-  categories remain open.
+  categories are unassigned; their numeric routing and interactions are
+  closed.
 - The once-only end-bound helper is closed as a feedback-resource path without
   result submission or phase mutation by
   `claim.note.hold-end-feedback-boundary`.

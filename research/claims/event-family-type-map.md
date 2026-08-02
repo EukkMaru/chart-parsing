@@ -58,7 +58,7 @@ maps to type 0.
   family branch.
 - Type 12 (`SLA`) is intentionally absent from the runtime-note factory. It is
   a region directive whose tag propagation is reconstructed by
-  `claim.parser.sla-region-selection`.
+  `claim.parser.sla-materialization-selection`.
 
 ## Reasoning
 
@@ -88,8 +88,9 @@ only to display metadata.
 - Ghidra mutations: added a complete parsed-type case-set plate comment at
   `RAM:011c8870`.
 - Spec sections: `spec/c2s.md`, `spec/notes/tap.md`, `spec/notes/slide.md`.
-- Reconstruction code: type-12 region parsing/selection is implemented; the
-  full map is not yet a complete parser API.
+- Reconstruction code: type-12 region parsing/selection and all gameplay-
+  reaching family parsers are implemented in
+  `include/chart/reconstruction.hpp`.
 - Tests: `tests/sla_region_test.cpp` covers the type-12 directive boundary.
 
 ## Verification

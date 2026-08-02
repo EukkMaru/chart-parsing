@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `judgement.types`, `note.other_variants`, `state.ownership`, `config.external`, `audit.indirect_calls`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-08-03
 
 ## Statement
 
@@ -53,6 +53,16 @@ generated queue. Only both component phases reaching 4 makes the note terminal.
   from every generated sample. Ordinary samples have kind 0 and default
   enabled; enabled key-zero selector-zero open intervals can clear them. The
   final endpoint has kind 1 and remains enabled.
+- The type-13 duration accessor returns a signed integer, the parser adds it to
+  the start position without a range check, and grid conversion uses
+  `CVTTSS2SI`. Tick subtraction/addition wraps at 32 bits before the producer
+  compares offset and delta as unsigned. A delta with its high bit set expands
+  toward a very large sampling range regardless of signed endpoint ordering.
+  Depending on adaptive cursor progress, source execution performs
+  pathological vector growth, reaches the vector length failure, or does not
+  reach the unsigned bound; a zero adaptive step is a separate nonprogress
+  domain. The clean-room evaluators report these cases without running unsafe
+  loops.
 - The factory always sends type 13 to the `0x348`-byte HeavenHold class. Type 9
   reaches the same constructor only for selector zero and style code 15
   (`NON`). Load copies parsed primary vector `+0x158` to runtime `+0x168`.
@@ -116,13 +126,10 @@ authoritative result dispatcher.
 - The player-facing meanings of the HHX extra table field, the runtime input
   variant that chooses the member of each profile pair, and result resources
   remain unresolved.
-- Malformed decreasing type-13 endpoints are outside the observed parser
-  invariant and were not assigned clean-room behavior.
 
 ## Consequences
 
-- Ghidra mutations: none; GhidraMCP remained unavailable, so analysis used the
-  temporary static project clone.
+- Ghidra mutations: none.
 - Spec sections: `spec/notes/heaven_hold.md`, `spec/c2s.md`, `spec/input.md`,
   `spec/timing.md`, `spec/judgement.md`, `spec/configuration.md`.
 - Reconstruction code: `HeavenHold*`, `generate_heaven_hold_path_records`,
@@ -134,7 +141,12 @@ authoritative result dispatcher.
 The parsed-record constructor and every postprocessor primary-vector branch
 were checked independently of the factory/load path. The start and path result
 calls were compared with the shared source-category map and the feedback-only
-helper. Corpus aggregation independently confirmed six current-schema
-zero/`NON` ALD lines, 10,638 one-short legacy ALD lines, no HHD/HHX lines, and
-two SXD/HLD lines in one chart. The focused reconstruction test and complete
-27-test suite pass.
+helper. The type-13 parse branch was rechecked against the generated-record
+loop to prove that signed negative durations reach the unsigned comparison.
+Corpus aggregation independently confirmed six current-schema zero/`NON` ALD
+lines, 10,638 one-short legacy ALD lines, no HHD/HHX lines, and two SXD/HLD
+lines in one chart. Focused tests cover the wrapped small-boundary delta,
+high-bit large-span expansion, zero-step nonprogress, CVTTSS2SI grid behavior,
+and exceptional type-9 empty-queue path in addition to normal generated-record
+and judgement behavior. Full-suite verification is tracked by the current
+session handoff.

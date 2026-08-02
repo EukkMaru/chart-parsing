@@ -41,9 +41,13 @@ configured pivot into distinct early- and late-side internal results.
   `1,1,1,1,0,2,2,2,2`.
 - Coarse-to-detailed mapping returns code 11 for tier 0; codes 3/9, 4/8, and
   5/7 for early/other sides of tiers 1, 2, and 3; and code 6 for tier 4.
-- Window endpoints are filled from an external configuration database selected
-  by note/input mode. The executable contains a `JudgeTiming.ini` load path,
-  but this workspace does not contain the source values.
+- Window endpoints are filled from an external configuration record selected
+  by the exact parsed-type/extended-form table reconstructed in
+  `claim.note.hold-extended-profile-selection`: TAP selects record 0, FLK
+  selects 6, CHR and extended HOLD/Slide/HeavenHold select 4, MNE selects 11,
+  and other supported ordinary forms select 0. The executable contains a
+  `JudgeTiming.ini` load path, but this workspace does not contain the record
+  values.
 - Before runtime classification, chart postprocessing can trim the early and
   late sides per lane using distances to nearby overlapping records. This
   initialization-time dependency is reconstructed separately by
@@ -74,8 +78,8 @@ constants that should be guessed from common rhythm-game behavior.
 
 - Player-facing names for internal, coarse, detailed, and table codes remain
   unassigned.
-- Exact endpoint, pivot, adjacent-cap/threshold values, selection defaults,
-  units, and any resource version variation remain unavailable.
+- Exact endpoint, pivot, adjacent-cap/threshold values, units, and any resource
+  version variation remain unavailable. Record selection itself is closed.
 - NaN/non-finite configuration behavior is not specified as a supported input.
 
 ## Consequences

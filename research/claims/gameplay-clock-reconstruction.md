@@ -95,8 +95,8 @@ authoritative judgement position.
 
 - The player-facing meaning of the alternate-mode global is not named. The
   paired ViewTimingManager bypass flags have no recovered nonzero producer.
-- External correction values and PlayOptionSet player-facing identities remain
-  open; the reconstruction therefore keeps records as inputs.
+- External correction values remain explicit reconstruction inputs, and
+  PlayOptionSet player-facing identities are intentionally unassigned.
 - Music-cursor/rate combinations whose scaled double exceeds the unsigned
   64-bit conversion domain, NaN, infinity, and non-default floating-point
   environment behavior are not claimed beyond the finite gameplay domain.

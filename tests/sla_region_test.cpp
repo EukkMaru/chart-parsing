@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <limits>
 #include <stdexcept>
 #include <string_view>
 
@@ -22,6 +23,19 @@ int main() {
 
     const C2sSlaRegion mirrored = parse_c2s_sla_record(complete, true);
     assert(mirrored.lane == 9);
+
+    // Parser additions/subtractions use native 32-bit wrapping in the
+    // snapshot, including malformed authored extremes.
+    const std::string_view wrapped_fields[]{
+        "0", "2147483647", "-2147483648", "16", "1", "5"};
+    const C2sSlaRegion wrapped =
+        parse_c2s_sla_record(wrapped_fields, true);
+    assert(wrapped.lane == std::numeric_limits<std::int32_t>::min());
+    const auto expected_wrapped_end =
+        chart::reconstruction::canonicalize_c2s_position(
+            0, std::numeric_limits<std::int32_t>::min());
+    assert(wrapped.end.major == expected_wrapped_end.major);
+    assert(wrapped.end.minor == expected_wrapped_end.minor);
 
     const std::string_view narrow[]{"0", "0", "2", "0", "1", "3",
                                     "ignored"};
@@ -56,6 +70,35 @@ int main() {
     assert(select_c2s_sla_tag({1.0F, 0.5F}, 2, 4, regions) == 0);
     assert(select_c2s_sla_tag({1.0F, 0.5F}, 5, 3, regions) == 0);
     assert(select_c2s_sla_tag({1.0F, 1.0F}, 4, 2, regions) == 0);
+
+    const C2sSlaRegion wrapped_lane_region{
+        {1.0F, 0.0F},
+        {1.0F, 1.0F},
+        std::numeric_limits<std::int32_t>::max() - 1,
+        1,
+        55,
+    };
+    assert(select_c2s_sla_tag(
+               {1.0F, 0.5F},
+               std::numeric_limits<std::int32_t>::max() - 1,
+               2,
+               std::span<const C2sSlaRegion>(&wrapped_lane_region, 1)) ==
+           55);
+
+    const C2sSlaRegion wrapped_float_region{
+        {1.0F, 0.0F},
+        {1.0F, 1.0F},
+        std::numeric_limits<std::int32_t>::max(),
+        1,
+        56,
+    };
+    assert(select_c2s_sla_tag_for_float_span(
+               {1.0F, 0.5F},
+               static_cast<float>(
+                   std::numeric_limits<std::int32_t>::max()),
+               0.0F,
+               std::span<const C2sSlaRegion>(&wrapped_float_region, 1)) ==
+           0);
 
     const float half_grid = 1.0F / 192.0F;
     assert(select_c2s_sla_tag({0.0F, 4.0F - half_grid}, 4, 2, regions) ==

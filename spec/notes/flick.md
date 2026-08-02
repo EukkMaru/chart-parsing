@@ -3,7 +3,7 @@
 ## Construction and timing state
 
 Parsed record type 6 constructs RTTI-identified `projView::FlickNote`. Shared
-loading provides table-decoded width, raw and bounded lane extent, and scheduled
+loading provides the fixed table-decoded width, raw and bounded lane extent, and scheduled
 time. The note owns two timing checkers:
 
 - the primary start checker uses the shared TAP initializer, including

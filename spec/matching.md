@@ -96,25 +96,34 @@ At runtime, `SlideNote` exposes the shared TAP-style candidates only until its
 start component reaches phase 4. Its later path contact and checkpoints do not
 expose candidates. Evidence: `claim.note.slide-path-sustain-judgement`.
 
-## Equal TAP candidates
+## Equal cross-family candidates and result order
 
-Equal TAP candidates do not select a single winner. Candidate preparation and
+Equal candidates do not select a single winner. Candidate preparation and
 minimum reduction finish before any active-note input update. During the later
-full-vector pass, TAP reads the selected candidate and rising edge without
+full-vector pass, the selected candidate and rising edge are read without
 clearing either, and completed objects are removed only after that pass.
-Consequently, every ordinary still-active TAP that shares the selected value
-can independently accept the same lane edge if its own checker accepts.
-Evidence: `claim.matching.tap-equal-candidate-fanout`.
+Consequently every locally accepting TAP, CHR, unresolved HOLD, unresolved
+Slide, and unresolved HeavenHold start that shares the selected value can
+independently accept the same lane edge. FLK can also accept because its edge
+path ignores selected-candidate equality; ordinary FLK only starts motion on
+that substep and emits no result yet.
 
-This rule is currently limited to TAP-to-TAP input acceptance. A result can set
-shared terminal-route state during the same full-vector pass. Later tied TAPs
-still observe the edge, complete, and finalize, but their result events invoke a
-result observer instead of updating the authoritative aggregate while that
-route remains active. Storage order therefore matters at this downstream
-outcome boundary. Evidence:
-`claim.interactions.result-terminal-short-circuit`; reconstruction and focused
-ordering test: `tests/shared_result_test.cpp`. Other virtual note paths remain
-open.
+The update pass preserves active-vector storage order. Existing objects precede
+newly materialized ones; one pending scan appends supported roots in pending
+index order and each attached secondary immediately after its root. Objects
+constructed on earlier outer updates remain earlier even if their parsed index
+is later. A factory-default record contributes no object.
+
+Same-pass results therefore dispatch in that dynamic storage order. A result
+can activate shared terminal routing; later tied notes still observe input,
+complete locally, and invoke the observer, but their later result events do not
+update the authoritative aggregate while that route is active. Evidence:
+`claim.matching.tap-equal-candidate-fanout`,
+`claim.interactions.cross-family-candidate-result-order`, and
+`claim.interactions.result-terminal-short-circuit`; reconstruction/tests:
+`evaluate_lane_candidate_fanout`, `append_runtime_factory_events`,
+`tests/candidate_interaction_test.cpp`, and
+`tests/shared_result_test.cpp`.
 
 ## Deferred terminal candidate
 

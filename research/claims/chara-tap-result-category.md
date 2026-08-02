@@ -90,8 +90,10 @@ judgement or manager state.
 
 ## Unknowns
 
-- Player-facing meaning of the distinct mapped category and category-specific
-  externally loaded terminal rules remains unresolved.
+- Player-facing meaning of the distinct mapped category is unassigned.
+  Category mapping, configured-rule selection, periodic reevaluation, and
+  terminal observer interaction are closed by the shared result and terminal
+  claims; unavailable rule values remain parameters.
 - Exact type-4 timing/adjacency configuration values are absent and remain
   parameters.
 - Resource identities selected by the CHR-only callbacks are outside scope

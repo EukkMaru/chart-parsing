@@ -30,8 +30,11 @@ AirLadder. The exceptional path is normative in
 
 AirLadder load creates one 0x88-byte runtime record for each parsed control
 point. Every record owns the shared retained-profile timing checker initialized
-with derived input profile 7. The input's physical meaning and external timing
-windows remain unresolved; the fixed profile index is normative.
+with derived input profile 7. Profile 7 is the inclusive externally configured
+scalar range synthesized from the six photo-sensor inputs and retained in the
+301-snapshot history. Its numeric range and timing windows remain external
+parameters; the physical source framing, synthesis, and fixed profile index
+are normative.
 
 AirLadder exposes no lane candidate. It neither constrains nor reads the active
 manager's lane-candidate reduction.

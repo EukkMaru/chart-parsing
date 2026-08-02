@@ -58,7 +58,8 @@ E < -0.25                 Q = S + floor(2*E + 1.5) * 0.5
 
 When a paired runtime flag condition is active, the quantizer and correction
 are bypassed and `S` advances by `1.0` in ordinary mode or `0.5` in alternate
-mode. The flags' player-facing meaning is not yet assigned.
+mode. The flags' player-facing labels are intentionally unassigned; their
+gameplay branch and reachable producer state are closed.
 
 Outside that bypass, if `abs(Q - raw)` is strictly greater than the initialized
 threshold `0.1`, `Q` moves toward raw by the initialized step `0.01`; the inner
@@ -130,13 +131,27 @@ canonical_major = floor(grid * 0.25F)
 canonical_minor = grid - canonical_major * 4.0F
 ```
 
-`BPM` is command ID 13 with integer major/minor and float BPM. The parser scans
-all BPM commands in a dedicated pre-pass, then sorts their 0x14-byte records
-before parsing MET or any note event. Ordering uses:
+`BPM` is command ID 13 with integer major/minor and float BPM. Missing or empty
+accessed fields become zero, a valid numeric prefix is accepted, and
+no-conversion or range failure escapes through the load chain. There is no
+positive/finite validation; `strtof`-accepted infinity and NaN are stored.
+
+The parser scans all BPM commands in a dedicated pre-pass, then sorts their
+0x14-byte records before parsing MET or any note event. Ordering uses:
 
 ```text
 left_scalar + 1/192 < right_scalar
 ```
+
+Source sequence is not a tie-breaker. The exact snapshot uses its compiled
+32-bit MSVC three-way introsort: insertion sort below 33 records, median
+partitioning with an equal region above that cutoff, and heap fallback after
+repeated unbalanced partitions. The clean-room `snapshot_bpm_sort` reproduces
+that algorithm. Consequently, comparator-equivalent records are not governed
+by a general first-wins or last-wins rule. The two-record insertion case
+preserves source order, while larger mixed partitions follow the explicit sort
+algorithm. The local corpus's eight duplicate positions carry identical BPM
+values, so their internal order cannot alter gameplay.
 
 Let `P[-1] = 0`, let `B[-1]` be the first sorted record's BPM, and let
 `T[-1] = 0`. For record `i`, the finalizer rounds the scalar delta on its
@@ -158,6 +173,12 @@ It returns that record's cumulative milliseconds plus the rounded position
 delta times `60000 / record_BPM`. An empty vector or a target before every
 qualifying record returns zero. BPM changes do not retroactively affect the
 preceding interval.
+
+IEEE single-precision arithmetic is not guarded: zero can produce infinity or
+NaN, negative BPM can make cumulative time decrease, infinity contributes zero
+duration, and NaN taints the affected cumulative calculation. Reverse scheduled
+BPM selection treats unordered comparisons as false and falls back to the
+first record if none compare at or before the query.
 
 `MET` is command ID 14 with integer major/minor and two integer meter fields.
 It is parsed only after BPM finalization and receives its scheduled value from
@@ -264,10 +285,22 @@ resets to four 150.0 values and a present record replaces all four, but it does
 not synthesize a missing BPM record. A full parse with BPM records later
 replaces the binary's internal BPM_DEF fields with derived tempo statistics;
 the authoritative schedule and gameplay loader continue to read the finalized
-BPM vector. Valid Air-bearing gameplay charts
-must therefore have a nonempty positive BPM map; the executable has no safe
-adaptive-Air fallback for an empty map, and no positive-BPM validation was
-recovered. Evidence: `claim.timing.tempo-measure-schedule` and
+BPM vector.
+
+Adaptive Air selection assumes that vector is nonempty and dereferences its
+first record for the before-first fallback; an empty map is an invalid source
+domain, not a zero-BPM fallback. Its cadence loop repeatedly doubles the
+selected BPM while halving the step. If a nonpositive selected BPM initially
+compares below the threshold, that loop cannot terminate. NaN in either
+comparison operand makes the comparison false and returns the initial
+384-tick step; positive infinity does the same. A positive value can require
+enough halvings to reduce the integer step to zero before the comparison
+fails (for example BPM 1 against reference 240), and a finite BPM against an
+infinite reference does likewise. The doubling loop then ends, but downstream
+AirHold/HeavenHold offsets or the AirSlide cursor no longer advance. The clean-
+room evaluators distinguish empty-map, nonterminating doubling, and zero-step
+path nonprogress. Valid local Air-bearing charts avoid those domains. Evidence:
+`claim.timing.tempo-measure-schedule` and
 `claim.parser.header-default-dispatch`.
 
 ## Recovered TAP comparison boundary
@@ -286,6 +319,13 @@ major-unit grid. In source float operation order:
 ```text
 grid_tick = trunc((major + minor * 0.25F) * 384.0F + 0.5F)
 ```
+
+The final conversion is `CVTTSS2SI`: unordered, infinite, and out-of-range
+values become `INT32_MIN`. Tick deltas, cursor positions, and cursor advances
+then use wrapped 32-bit ADD/SUB exactly as the source. AirHold and HeavenHold
+compare wrapped deltas/offsets as unsigned; AirSlide compares its wrapped
+cursor and endpoint as signed. The family specifications define the resulting
+large-span, wrap-expansion, and zero-step nonprogress dispositions.
 
 Its sampling cadence starts at 384 ticks. The parser scans the finalized BPM
 vector backward by cumulative scheduled milliseconds, using the latest BPM at
@@ -449,16 +489,49 @@ above, an optional nonnegative chart-region key first transforms the scheduled
 position, producing `adjusted_delta`. This ordering is intentional: the region
 transform does not affect the strict `30.0F` shortcut.
 
-For the far path, `projection_factor` is selected from the chart-owned schedule
-only when `adjusted_delta > 0`; otherwise it is `1.0F`. The source-order float
-calculation is:
+The chart-region transform is fully defined by STP/SFL/SLP intervals. STP and
+SFL use key zero; SLP supplies an integer key, including keys selected from SLA
+regions. Each key's intervals are sorted by
+`left_start_scalar + 1/192 < right_start_scalar` using the snapshot's compiled
+32-byte-record MSVC three-way introsort. Equivalent and unordered-NaN
+comparisons follow that exact insertion/partition/heap algorithm rather than
+host-library `std::sort`. Authored `minor + duration` uses wrapped signed
+32-bit addition before position normalization. Materialization converts the
+manager and raw target from chart units to milliseconds using `16.666666F`.
+For a forward query, start with the target milliseconds and visit every sorted
+interval whose scheduled start is strictly before target. When `from` is
+strictly before the interval end, add:
+
+```text
+(min(target, interval_end) - max(from, interval_start))
+    * (interval_factor - 1)
+```
+
+when the overlap endpoints are ordered. Every overlapping interval
+contributes; this is not last-wins. A missing key or backwards materialization
+query leaves the target unchanged. Convert the result back with `0.06F` before
+subtracting manager position to obtain `adjusted_delta`.
+
+For a positive adjusted delta, query DCM at
+`(manager_position + adjusted_delta) * 16.666666F`. DCM intervals remain in
+source order. Shift the query by exactly `1.0F`, stop at the first interval
+whose start is later than the shifted value, and return the first nonzero
+factor whose end is strictly later. The fallback is `1.0F`. Nonpositive
+adjusted deltas use `1.0F` without consulting DCM.
+
+The source-order projected-position calculation is:
 
 ```text
 projected = -65.0F
           - 1.5F * (projection_base_offset + adjusted_delta)
                  * runtime_speed * projection_factor
-eligible = -550.0F <= projected && projected <= 550.0F
 ```
+
+The executable enters this far path only when the ordered comparison
+`30.0F <= raw_delta` succeeds. It rejects only when
+`projected < -550.0F || 550.0F < projected`; otherwise it accepts. Therefore
+either an unordered-NaN raw delta or an unordered-NaN projected value is
+eligible. This source-shaped comparison behavior is normative.
 
 If the start fails, primary parsed types 1, 2, 9, 10, 12, and 13 retry with
 their endpoint and separate region key. Types 0, 1, 2, 4, 6, 9, 10, 11, and
@@ -469,8 +542,21 @@ New primaries append in scan/index order, with an attached secondary appended
 immediately after its root. Because the manager has already completed all
 substeps for that outer call, new objects cannot expose candidates, consume
 input, submit results, or request terminal state until the following outer
-update. Runtime speed and projection base offset remain explicit inputs; their
-player-facing configuration identities are not assigned.
+update. Runtime speed is the float-narrowed, `0.1F`-clamped value from the
+`PlayOptionSpeedTableRecord` selected by the current `PlayOptionSpeedID`, after
+the first `SkillBefore` type-6 override when valid. Projection base offset is
+configuration float `[OFFSET] DRAW`, default `0.0F`. Their external resource
+values remain explicit inputs. Because SLA-selected keys feed this predicate,
+an SLA directive can alter the construction update and therefore later
+gameplay participation even though type 12 itself has no runtime object.
+
+Existing active objects remain ahead of every new append. Across outer updates,
+active-vector order is therefore dynamic construction order; within one scan
+it is pending-index order with each secondary immediately after its root. The
+later candidate and note-update passes preserve this order. Candidate reduction
+itself is a minimum and has no order tie-break, while simultaneous result
+dispatch does use this order. Evidence:
+`claim.interactions.cross-family-candidate-result-order`.
 
 Every factory-reachable primary and attached-secondary class then follows the
 same three-state dispatch. Construction leaves `current = -1` and
@@ -505,8 +591,11 @@ transition, and destruction paths contain no writer or setter. Every manager
 tick on a live runtime note therefore reaches the transition/callback sequence;
 there is no recovered per-note pause mode.
 
-Evidence:
-`claim.pipeline.runtime-note-materialization-order`; focused test:
-`tests/runtime_materialization_test.cpp`. Shared state dispatch evidence:
+Evidence: `claim.pipeline.runtime-note-materialization-order`,
+`claim.timing.projection-schedule-materialization`, and
+`claim.parser.sla-materialization-selection`, with producer selection in
+`claim.configuration.runtime-materialization-input-producers`; focused tests:
+`tests/runtime_materialization_test.cpp` and
+`tests/projection_schedule_test.cpp`. Shared state dispatch evidence:
 `claim.pipeline.runtime-note-dispatch`; focused test:
 `tests/runtime_note_dispatch_test.cpp`.

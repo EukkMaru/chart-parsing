@@ -1,26 +1,26 @@
 # Claim: legacy T_PROG commands are discarded before parser dispatch
 
 - ID: `claim.parser.legacy-t-prog-command-exclusion`
-- State: active
+- State: superseded
 - Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.events`, `parser.compatibility`
-- Last reviewed: 2026-07-26
+- Last reviewed: 2026-07-27
 
 ## Statement
 
-The snapshot's command descriptor set contains exactly 91 entries with IDs
-`0x00` through `0x5a`. The twenty literal commands `T_PROG_00`,
-`T_PROG_05`, ..., `T_PROG_95` are not descriptors. Command lookup compares
-the complete token exactly against those 91 entries and returns failure when
-none matches, so the line loader discards every `T_PROG_*` record before
-header, timing, event, or derived-summary dispatch.
+This claim is superseded by
+`claim.parser.legacy-metadata-command-exclusion`. Its exact-lookup and
+`T_PROG_*` rejection findings remain correct, but its corpus-vocabulary
+conclusion was incomplete: four `T_FIRST_*`/`T_FINAL_*` spellings are rejected
+by the same path, while registered SFE, ASO, HHD, and HHX are absent from the
+corpus.
 
 ## Anchors
 
 - `game.exe @ RAM:00528b60, FUN_00528b60, complete descriptor initializer,
-  hash 54735bc60f982c215b7583f4259cb02e42f6f9c15291f39c40e6bcc2c79152c8`
+  hash 75169f04d17368b9a9e109d2139f11160db1abd0f64796fc9d59d9d467b1ec37`
 - `game.exe @ RAM:00439716, thunk_FUN_011cc1b0, complete 91-call constructor
   xref set`
 - `game.exe @ RAM:011cc2f0, FUN_011cc2f0, exact descriptor lookup,
@@ -49,18 +49,18 @@ header, timing, event, or derived-summary dispatch.
   table; the complete instruction search found no executable reference to the
   table or literals. Literal presence is not descriptor registration.
 - Aggregate corpus inventory finds all twenty commands exactly once in each
-  of the 7,752 local charts. The corpus vocabulary is therefore the 91 live
-  descriptor spellings plus these 20 backward-compatible ignored spellings,
-  not evidence for a second executable parser version.
+  of the 7,752 local charts. The original inference that the other 91 corpus
+  spellings were all registered was false and is corrected by the superseding
+  claim.
 
 ## Reasoning
 
 The complete descriptor-constructor set bounds the only live registry, and
 the exact fixed-length lookup bounds how command tokens enter the parser.
 Because the append gate rejects the negative lookup result, no later parser
-or gameplay owner can observe the legacy progress values. The separate string
-table explains their presence in the binary without creating an ingestion
-edge.
+or gameplay owner can observe the legacy progress values. This narrower
+reasoning remains valid; the superseding claim applies it to the complete
+24-spelling rejected corpus set.
 
 ## Alternatives and falsifiers
 
@@ -81,11 +81,10 @@ edge.
 
 - Ghidra mutations: recovered the missing function at `RAM:00528b60`; added
   plate comments at `RAM:00528b60` and `RAM:011cc2f0`.
-- Spec sections: `spec/c2s.md`.
-- Reconstruction code: `ignored_legacy_progress_commands` and
-  `c2s_command_is_ignored_legacy_progress` in
-  `include/chart/reconstruction.hpp`.
-- Tests: `tests/c2s_header_test.cpp`.
+- Superseded by: `claim.parser.legacy-metadata-command-exclusion`.
+- Spec sections: corrected in `spec/c2s.md`.
+- Reconstruction code and tests: replaced by the complete 24-command inventory
+  in the superseding claim.
 
 ## Verification
 

@@ -69,21 +69,26 @@ therefore establishes automatic terminal completion for an expired TAP.
 
 - Equal TAP candidates are covered by
   `claim.matching.tap-equal-candidate-fanout`; FLK cross-family asymmetry is
-  covered by `claim.matching.flick-candidate-asymmetry`. Remaining candidate-
-  producing family interactions and creation order remain open.
+  covered by `claim.matching.flick-candidate-asymmetry`. Every other
+  candidate-producing family, dynamic construction order, equal-edge fanout,
+  and same-pass result order are closed by
+  `claim.interactions.cross-family-candidate-result-order`.
 - Snapshot selector 0's bit is resolved as a derived rising edge by
-  `claim.input.tap-rising-edge-snapshot`; its physical source remains open.
+  `claim.input.tap-rising-edge-snapshot`; both physical banks and their logical
+  folding are closed by `claim.input.touch-photo-input-framing` and
+  `claim.input.snapshot-profile-synthesis`.
 - Forced-result selection is covered by
-  `claim.judgement.forced-result-mode`; its external activation identity,
-  and exact terminal player-facing judgement name remain open. Adjacent-window
+  `claim.judgement.forced-result-mode`; its exact source and reachable lifetime
+  are closed, while player-facing labels remain unassigned. Adjacent-window
   adjustment is covered by `claim.judgement.tap-adjacent-window-adjustment`.
   Shared result ownership and terminal routing are covered by
   `claim.judgement.shared-result-two-stage-routing` and
   `claim.interactions.result-terminal-short-circuit`.
   Per-substep center widening is covered by
   `claim.judgement.tap-center-window-adjustment`.
-- The authoritative clock cadence is closed; runtime mode/rate/correction
-  producers remain open.
+- The authoritative clock cadence, mode branches, dormant optional rate owner,
+  PlayOption correction selector, and external-table interface are closed by
+  the timing ownership claims.
 
 ## Consequences
 

@@ -10,7 +10,7 @@
   `judgement.types`, `judgement.windows`, `judgement.miss`,
   `note.other_variants`, `state.ownership`, `config.external`,
   `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-07-26
+- Last reviewed: 2026-08-03
 
 ## Statement
 
@@ -86,9 +86,15 @@ generated-record, and authored-checkpoint work is complete.
   emitted sample selects the step used to advance to the next cursor.
 - A final ASC, not a final ASD, enables the nonnegative end-margin filter. It
   clears emission when
-  `record_tick + round(adaptive_step * end_margin) >= final_tick`. The enabled
-  key-0 open-interval lookup can clear more emission bytes. Neither filter can
-  re-enable a record.
+  `record_tick + round(adaptive_step * end_margin) >= final_tick`. The margin
+  conversion uses `CVTTSS2SI` and record-plus-margin wraps at 32 bits; NaN or
+  negative margins bypass it. The enabled key-0 open-interval lookup can clear
+  more emission bytes. Neither filter can re-enable a record.
+- Grid conversion maps nonfinite/out-of-range values to `INT32_MIN`. Cursor
+  initialization/restart/advance wraps at 32 bits before the signed end test.
+  Ordinary decreasing controls append no samples, while positive-to-negative
+  cursor wrap can expand path generation and a zero step can prevent progress;
+  both are explicit clean-room dispositions.
 - Sustain contact reads derived profile 7 followed by profile 6 and uses the
   same admission latch and inactive-gap tracker as AirHold. Generated records
   are front-only and at most one is consumed per substep. In ordinary mode the
@@ -132,10 +138,19 @@ disabled-record reset from AirHold's emission-gated reset.
 - External start windows, AirSlide gap gate/floor/end, thresholds
   `+0x888..+0x894`, corrections, defaults, and units remain parameters.
 - `claim.input.snapshot-profile-synthesis` closes profiles 6 and 7 and their
-  history. External synthesis thresholds/range and player-facing names for
-  result bytes and the three result streams remain open.
+  history. External synthesis thresholds/range remain parameters;
+  player-facing names for result bytes and the three result streams are
+  unassigned, while their numeric routing is closed.
 - Geometry/resource fields in the 0xac-byte runtime control record are not part
   of this gameplay claim unless a later traced consumer reaches judgement.
+- Generated sampling compares its already wrapped cursor and control endpoint
+  as signed integers. In the ordinary nonwrapping domain, a decreasing control
+  adds no interior sample and the final control is still appended as the
+  disabled type-7 end record. At the signed wrap boundary, however, a wrapped
+  positive-to-negative cursor advance can enter a very large source loop; a
+  zero adaptive step can also prevent cursor progress. The clean-room segment
+  and advance evaluators report both exceptional dispositions without running
+  the unsafe source loop.
 
 ## Consequences
 
@@ -158,5 +173,8 @@ ASD-only checker indexing, generated cursor/restart rules, both filters,
 contact reads, gap classify/reset order, result categories, completion
 conjunction, candidate absence, and shared routing were checked independently.
 Focused tests cover marker/reference identity, continuous and restarted cadence,
-record flags, both filters, ASD counting/categories, profile/contact selection,
-disabled/forced reset behavior, terminal conjunction, and category mapping.
+grid CVTTSS2SI behavior, wrapped cursor initialization/advance, ordinary
+decreasing segments, wrap expansion and zero-step dispositions, record flags,
+both filters including indefinite end-margin conversion, ASD
+counting/categories, profile/contact selection, disabled/forced reset behavior,
+terminal conjunction, and category mapping.

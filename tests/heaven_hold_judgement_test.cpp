@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cassert>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -48,6 +49,35 @@ int main() {
 
     const HeavenHoldPathPoint root{0.0F, 0.0F, 0.0F};
     const HeavenHoldPathPoint end{2.0F, 0.0F, 20.0F};
+    const HeavenHoldPathPoint decreasing_end{-1.0F, 0.0F, -10.0F};
+    assert(evaluate_heaven_hold_path_generation(
+               HeavenHoldCommand::ald_zero_non, root, decreasing_end) ==
+           HeavenHoldPathGenerationDisposition::no_generated_path);
+    assert(evaluate_heaven_hold_path_generation(
+               HeavenHoldCommand::hhd, root, end) ==
+           HeavenHoldPathGenerationDisposition::generated);
+    assert(evaluate_heaven_hold_path_generation(
+               HeavenHoldCommand::hhd, root, decreasing_end) ==
+           HeavenHoldPathGenerationDisposition::
+               source_large_unsigned_span_expansion);
+    const HeavenHoldPathPoint near_tick_ceiling{
+        5592405.0F, 0.0F, 0.0F};
+    const HeavenHoldPathPoint indefinite_tick{
+        std::numeric_limits<float>::infinity(), 0.0F, 1.0F};
+    assert(evaluate_heaven_hold_path_generation(
+               HeavenHoldCommand::hhd,
+               near_tick_ceiling,
+               indefinite_tick) ==
+           HeavenHoldPathGenerationDisposition::generated);
+    const HeavenHoldPathPoint near_tick_floor{
+        -5592405.0F, 0.0F, 0.0F};
+    assert(evaluate_heaven_hold_path_generation(
+               HeavenHoldCommand::hhd,
+               near_tick_floor,
+               near_tick_ceiling) ==
+           HeavenHoldPathGenerationDisposition::
+               source_large_unsigned_span_expansion);
+
     const auto constant_tempo = [](float) { return 4.0F; };
     const auto point_at_tick = [](std::int32_t tick) {
         return HeavenHoldPathPoint{
@@ -73,6 +103,19 @@ int main() {
     assert(records[0].emission_enabled);
     assert(records[1].kind == HeavenHoldGeneratedRecordKind::path_end);
     assert(records[1].emission_enabled);
+
+    const HeavenHoldPathPoint indefinite{
+        std::numeric_limits<float>::infinity(), 0.0F, 0.0F};
+    const auto indefinite_records = generate_heaven_hold_path_records(
+        HeavenHoldCommand::hhd, indefinite, indefinite, 1.0F, false,
+        std::span<const AirHoldExclusionInterval>{}, constant_tempo,
+        point_at_tick, schedule_at_point);
+    assert(air_hold_grid_tick(indefinite) ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(indefinite_records.size() == 1);
+    assert(indefinite_records.front().kind ==
+           HeavenHoldGeneratedRecordKind::path_end);
+    assert(indefinite_records.front().emission_enabled);
 
     const std::array<AirHoldExclusionInterval, 1> intervals{{
         {5.0F, 15.0F, 0},

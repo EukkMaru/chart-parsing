@@ -28,6 +28,16 @@ if(PROJECT_IS_TOP_LEVEL)
         add_test(NAME chart.runtime_materialization
                  COMMAND runtime_materialization_test)
 
+        add_executable(projection_schedule_test
+                       tests/projection_schedule_test.cpp)
+        target_link_libraries(projection_schedule_test PRIVATE chart_logic)
+        add_test(NAME chart.projection_schedule
+                 COMMAND projection_schedule_test)
+
+        add_executable(hold_variant_test tests/hold_variant_test.cpp)
+        target_link_libraries(hold_variant_test PRIVATE chart_logic)
+        add_test(NAME chart.hold_variant COMMAND hold_variant_test)
+
         add_executable(runtime_note_dispatch_test
                        tests/runtime_note_dispatch_test.cpp)
         target_link_libraries(runtime_note_dispatch_test PRIVATE chart_logic)
@@ -43,6 +53,20 @@ if(PROJECT_IS_TOP_LEVEL)
         add_executable(c2s_header_test tests/c2s_header_test.cpp)
         target_link_libraries(c2s_header_test PRIVATE chart_logic)
         add_test(NAME chart.c2s_header COMMAND c2s_header_test)
+
+        add_executable(common_lane_width_test
+                       tests/common_lane_width_test.cpp)
+        target_link_libraries(common_lane_width_test PRIVATE chart_logic)
+        add_test(NAME chart.common_lane_width COMMAND common_lane_width_test)
+
+        add_executable(result_identifier_test
+                       tests/result_identifier_test.cpp)
+        target_link_libraries(result_identifier_test PRIVATE chart_logic)
+        add_test(NAME chart.result_identifier COMMAND result_identifier_test)
+
+        add_executable(derived_command_test tests/derived_command_test.cpp)
+        target_link_libraries(derived_command_test PRIVATE chart_logic)
+        add_test(NAME chart.derived_command COMMAND derived_command_test)
 
         add_executable(sla_region_test tests/sla_region_test.cpp)
         target_link_libraries(sla_region_test PRIVATE chart_logic)

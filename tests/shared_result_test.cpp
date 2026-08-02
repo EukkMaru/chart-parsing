@@ -23,16 +23,43 @@ int main() {
     using chart::reconstruction::ordinary_configured_terminal_accepts;
     using chart::reconstruction::ordinary_negative_adjustment_accepts;
     using chart::reconstruction::ordinary_periodic_progress_accepts;
+    using chart::reconstruction::ordinary_rule_one_shot_allows;
     using chart::reconstruction::ordinary_terminal_end_threshold_reached;
     using chart::reconstruction::periodic_aggregate_position_tick;
     using chart::reconstruction::produce_ordinary_terminal_summary;
+    using chart::reconstruction::route_skill_before_gameplay_unit;
     using chart::reconstruction::route_shared_result;
     using chart::reconstruction::saturating_result_count_increment;
+    using chart::reconstruction::skill_before_control_lookup_key;
+    using chart::reconstruction::skill_before_controls_require_rebuild;
+    using chart::reconstruction::SkillBeforeControlIdentity;
+    using chart::reconstruction::SkillBeforeGameplayControlRoute;
     using chart::reconstruction::tap_variant_source_category;
 
     assert(tap_variant_source_category(false, false) == 0);
     assert(tap_variant_source_category(true, false) == 1);
     assert(tap_variant_source_category(true, true) == 0);
+
+    const SkillBeforeControlIdentity loaded{1, 20, 3};
+    assert(!skill_before_controls_require_rebuild(loaded, loaded));
+    assert(skill_before_controls_require_rebuild(loaded, {2, 20, 3}));
+    assert(skill_before_controls_require_rebuild(loaded, {1, 21, 3}));
+    assert(skill_before_controls_require_rebuild(loaded, {1, 20, 4}));
+    assert(skill_before_control_lookup_key(loaded) == 20);
+    assert(route_skill_before_gameplay_unit(0) ==
+           SkillBeforeGameplayControlRoute::gauge_assist);
+    assert(route_skill_before_gameplay_unit(1) ==
+           SkillBeforeGameplayControlRoute::gauge_keep);
+    assert(route_skill_before_gameplay_unit(2) ==
+           SkillBeforeGameplayControlRoute::damage_guard);
+    assert(route_skill_before_gameplay_unit(3) ==
+           SkillBeforeGameplayControlRoute::death_penalty);
+    assert(route_skill_before_gameplay_unit(5) ==
+           SkillBeforeGameplayControlRoute::change_judge_result);
+    assert(route_skill_before_gameplay_unit(4) ==
+           SkillBeforeGameplayControlRoute::ignored);
+    assert(route_skill_before_gameplay_unit(99) ==
+           SkillBeforeGameplayControlRoute::ignored);
 
     assert(map_shared_result_category(0) == 0);
     assert(map_shared_result_category(1) == 4);
@@ -176,6 +203,30 @@ int main() {
         OrdinaryAggregateSnapshotKind::periodic, false));
     assert(ordinary_periodic_progress_accepts(
         OrdinaryAggregateSnapshotKind::periodic, true));
+
+    std::uint32_t consumed_words[2]{};
+    std::uint32_t consumed_count{};
+    assert(ordinary_rule_one_shot_allows(
+        false, 3, consumed_words, consumed_count));
+    assert(consumed_count == 0);
+    assert(ordinary_rule_one_shot_allows(
+        true, 3, consumed_words, consumed_count));
+    assert(consumed_words[0] == (1U << 3U));
+    assert(consumed_count == 1);
+    assert(!ordinary_rule_one_shot_allows(
+        true, 3, consumed_words, consumed_count));
+    assert(consumed_count == 1);
+    assert(ordinary_rule_one_shot_allows(
+        true, 33, consumed_words, consumed_count));
+    assert(consumed_words[1] == (1U << 1U));
+    assert(consumed_count == 2);
+    // The source helper reports an out-of-range bit as clear, while its marker
+    // cannot write it. Such malformed state therefore remains repeatable.
+    assert(ordinary_rule_one_shot_allows(
+        true, 64, consumed_words, consumed_count));
+    assert(ordinary_rule_one_shot_allows(
+        true, 64, consumed_words, consumed_count));
+    assert(consumed_count == 2);
 
     const OrdinaryTerminalSummary periodic_contribution =
         apply_ordinary_periodic_aggregate(10.0, 2.5, false, 0.0, false);

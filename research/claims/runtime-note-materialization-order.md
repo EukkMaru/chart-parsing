@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.discovery`, `parser.events`, `timing.clock`, `state.ownership`, `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-07-27
 
 ## Statement
 
@@ -65,10 +65,13 @@ record is consumed without creating an object.
 - Let raw delta be `record_start_milliseconds * 0.06F - manager_position`.
   A raw delta strictly below `30.0F` is immediately eligible. Otherwise, a
   nonnegative keyed-region index can replace the scheduled position through
-  `FUN_011c6720`; this adjustment occurs after the strict raw-delta test.
+  `FUN_011c6720`; this adjustment occurs after the strict raw-delta test. The
+  index is the SLA-selected root or endpoint tag, and its STP/SFL/SLP producer
+  is reconstructed by `claim.timing.projection-schedule-materialization`.
 - For the far path, a positive adjusted delta selects a chart-owned projection
-  factor at the adjusted target position; a zero or negative adjusted delta
-  uses `1.0F`. In source multiplication order, the tested position is:
+  factor from the source-order DCM schedule at the adjusted target position; a
+  zero or negative adjusted delta uses `1.0F`. In source multiplication order,
+  the tested position is:
 
   ```text
   projected = -65.0F
@@ -76,9 +79,13 @@ record is consumed without creating an object.
                    * runtime_speed * projection_factor
   ```
 
-  The probe is eligible at either inclusive bound and between them. Runtime
-  speed resets to `1.0F` and has a direct setter; the fixed multiplier resets
-  to `1.5F`; the base offset is copied from caller-owned setup state.
+  The source enters this far path only when the ordered comparison
+  `30.0F <= raw_delta` succeeds and rejects only when
+  `projected < -550.0F || 550.0F < projected`. The probe is therefore eligible
+  at either inclusive bound, between them, and whenever raw or projected is
+  unordered by NaN. Runtime speed resets to `1.0F` and has a direct setter; the
+  fixed multiplier resets to `1.5F`; the base offset is copied from caller-
+  owned setup state.
 - If the start probe fails, primary parsed types 1, 2, 9, 10, 12, and 13 repeat
   the same predicate using the record endpoint and its separate keyed-region
   index. Other primary types have no endpoint fallback in this gate.
@@ -115,8 +122,9 @@ possible type-specific update to the second manager substep after construction,
 not merely to an unspecified point in the next outer call. The queue's erase
 placement also separates eligibility from factory support: SLA can be consumed
 without a runtime note, while supported roots append objects. Independent
-constant reads and helper traces close the strict threshold, optional region
-adjustment, endpoint fallback, projection bounds, and factory type set. The
+constant reads and helper traces close the strict threshold, SLA-selected
+keyed adjustment, DCM factor, endpoint fallback, projection bounds, and factory
+type set. The
 guard's full initializer/read/write set rules out a hidden session mode that
 would invalidate this once-per-outer-update ordering.
 
@@ -137,32 +145,38 @@ would invalidate this once-per-outer-update ordering.
 
 ## Unknowns
 
-- Player-facing names and complete producers for runtime speed and projection
-  base offset remain open. They are explicit reconstruction inputs.
-- The chart-owned region transform and projection-factor schedules are
-  structurally recovered but are not yet exposed as complete clean-room
-  container APIs. The pure predicate accepts their resulting adjusted delta
-  and factor.
-- Allocation failure and nonfinite floating-point behavior are not claimed
-  beyond the source branches observed in the normal finite domain.
+- External `PlayOptionSpeedTable` rows and deployed `[OFFSET] DRAW` values are
+  unavailable. Their complete setup producers are closed by
+  `claim.configuration.runtime-materialization-input-producers`.
+- Allocation failure is outside the successful finite-allocation path.
+  Nonfinite arithmetic through the materialization comparisons and keyed
+  schedule sort is explicitly reconstructed by the linked projection claim
+  and focused tests.
 
 ## Consequences
 
-- Ghidra mutations: none; GhidraMCP remained unavailable, so this audit used
-  the temporary static project clone only.
+- Ghidra mutations: the independent follow-up audit created the missed
+  comparator function boundary at `RAM:011c3c60`; no semantic rename was made.
 - Superseded claim: `claim.pipeline.c2s-load-failure-lifecycle`; its reset and
   teardown evidence is retained here, while its immediate-factory statement is
   withdrawn.
 - Spec sections: `spec/c2s.md`, `spec/timing.md`, `spec/configuration.md`.
 - Related dispatch claim: `claim.pipeline.runtime-note-dispatch`.
+- Schedule producer claims:
+  `claim.timing.projection-schedule-materialization` and
+  `claim.parser.sla-materialization-selection`.
+- Runtime-input producer claim:
+  `claim.configuration.runtime-materialization-input-producers`.
 - Reconstruction code: `GameplayChartLoadAttempt`,
   `runtime_materialization_probe_is_eligible`,
+  `runtime_materialization_probe_from_schedule`,
   `should_materialize_runtime_record`, and
   `runtime_factory_constructs_primary` in
   `include/chart/reconstruction.hpp`.
-- Tests: `tests/chart_load_lifecycle_test.cpp` and
-`tests/runtime_materialization_test.cpp` and
-`tests/runtime_note_dispatch_test.cpp`.
+- Tests: `tests/chart_load_lifecycle_test.cpp`,
+  `tests/runtime_materialization_test.cpp`,
+  `tests/projection_schedule_test.cpp`, and
+  `tests/runtime_note_dispatch_test.cpp`.
 
 ## Verification
 

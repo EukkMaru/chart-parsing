@@ -4,17 +4,34 @@
 
 The pending-record materialization gate uses executable constants `30.0F`,
 `-65.0F`, `1.5F`, and inclusive `[-550.0F, 550.0F]` together with two runtime
-inputs: a speed multiplier and a projection base offset. Speed resets to
-`1.0F` and has a direct setter; the base offset is copied from caller-owned
-setup state. A chart-owned keyed-region transform can replace the far-path
-scheduled position, and a separate chart-owned schedule supplies a factor only
-for positive adjusted deltas.
+inputs: a speed multiplier and a projection base offset.
 
-The player-facing identities and complete producers of the speed and base
-offset remain open, so clean-room code accepts them, the adjusted delta, and
-the positive-delta factor as parameters. Exact predicate order is normative in
-`spec/timing.md`. Evidence:
-`claim.pipeline.runtime-note-materialization-order`.
+Gameplay setup starts with the current `PlayOptionSpeedID`, which is zero after
+fresh construction. It scans the selected `SkillBefore` record's units in
+source order. The first unit of type 6 is decisive: a proposed ID below the
+`PlayOptionSpeedTable` count replaces the current ID; an invalid proposed ID
+leaves the current ID unchanged and stops the scan. Setup reads the selected
+0x38-byte `PlayOptionSpeedTableRecord`'s double at `+0x10`, narrows it to
+float, and applies the snapshot's `MAXSS` clamp against `0.1F`. Thus values at
+or below `0.1F`, invalid IDs, and NaN become `0.1F`; larger values and positive
+infinity survive. The result is the sole non-reset write to the manager speed
+consumed by materialization.
+
+The base offset is configuration float `[OFFSET] DRAW`. Its executable
+descriptor default is exactly `0.0F`; configuration finalization copies it to
+field `+0xafc`, and manager reset and successful chart setup copy that field
+to the materialization owner. Deployed table rows and configuration values are
+absent, so clean-room code accepts those resource contents as parameters while
+preserving the recovered selection, clamp, and default.
+
+A chart-owned keyed-region transform can replace the far-path scheduled
+position, and a separate chart-owned schedule supplies a factor only for
+positive adjusted deltas. Those values are reconstructed from
+STP/SFL/SLP/DCM containers and an SLA-selected key. Exact container lookup,
+conversion, and predicate order are normative in `spec/timing.md`. Evidence:
+`claim.pipeline.runtime-note-materialization-order`,
+`claim.timing.projection-schedule-materialization`, and
+`claim.configuration.runtime-materialization-input-producers`.
 
 ## TAP timing-window interface
 
@@ -29,7 +46,10 @@ The loader path names `JudgeTiming.ini`, and the runtime initializer selects
 window data based on note and input/player modes before applying additional
 global and per-record timing adjustments. The source configuration is absent
 from this workspace, so endpoint values, defaults, units, and mode variants
-must remain parameters. Evidence: `claim.judgement.tap-window-classification`.
+must remain parameters. Parsed HXD records select extended HOLD profile 4
+instead of ordinary HOLD profile 0; the two external profile contents must not
+be assumed equal. Evidence: `claim.judgement.tap-window-classification` and
+`claim.note.hold-extended-profile-selection`.
 
 The same initialization consumes chart-postprocessed per-lane flags and
 distances for nearby preceding/following records. Runtime groups select which
@@ -47,18 +67,22 @@ ordering and effect are normative in `spec/judgement.md`. Evidence:
 
 ## Active result-control threshold
 
-The result pipeline can hold a `SkillChangeJudgeResultData` control unit with a
-coarse-tier threshold. It does not change timing intervals; after classification
-it replaces any valid provisional tier less than or equal to the threshold with
-tier 0. Construction initializes the dedicated unit vector empty, skill setup
-can populate it, and result-controller reset destroys the units and empties the
-vector.
+The result pipeline can hold ordered `SkillChangeJudgeResultData` control units
+with coarse-tier thresholds. It does not change timing intervals; after
+classification it replaces any valid provisional tier less than or equal to
+the first unit's threshold with tier 0. Later units do not participate.
+
+Construction initializes the dedicated unit vector empty. A changed skill
+identity resets the prior controller state, copies the new nonnegative profile
+ID, and appends matching units in source order. Reset stores profile ID `-1`,
+destroys the units, and empties the vector. The remap requires the loaded ID,
+the first unit, and that unit's source record, but does not call the separate
+temporary-effect lifetime predicate used by other skill consumers.
 
 The validity bound is the count of a runtime-loaded
-`NotesJudgeResultTableRecord` table. Its values and the skill threshold remain
-unavailable, so the reconstruction accepts activation, threshold, and count as
-explicit inputs. Detailed activation duration and multiple-unit precedence are
-open. Evidence: `claim.judgement.active-tier-zeroing`.
+`NotesJudgeResultTableRecord` table. Its values and skill thresholds remain
+unavailable, so the reconstruction accepts profile ID, ordered units, and count
+as explicit inputs. Evidence: `claim.judgement.active-tier-zeroing`.
 
 ## HOLD inactive-gap interface
 
@@ -83,6 +107,16 @@ parameters and does not invent defaults. Evidence:
 `claim.note.slide-path-sustain-judgement`; tests:
 `tests/slide_path_test.cpp`.
 
+The shared TAP-style checker selects external judgement-window records by
+parsed type and extended form. Ordinary TAP/HOLD/Slide/HeavenHold selects
+record 0; CHR selects 4; FLK selects 6; MNE selects 11; and an extended
+HOLD/Slide/HeavenHold overrides its ordinary selector with 4. HXD is therefore
+gameplay-distinct from HLD even when its optional subtype is missing. The
+external record values remain parameters, but the selector table, extended
+override, and legacy defaults are exact. Evidence:
+`claim.note.hold-extended-profile-selection`; tests:
+`tests/hold_variant_test.cpp`.
+
 ## Forced-result mode interface
 
 The gameplay manager owns an enable byte, a mode integer, a companion selector,
@@ -97,12 +131,17 @@ mode 0 otherwise. This produces anonymous byte 3 when the separately initialized
 manager enable is active. Gameplay setup, teardown, controller destruction,
 and manager reset clear the mode.
 
-The enable byte and its companion are copied from caller-supplied setup state
-only after a runtime validator accepts it. Their upstream semantic names remain
-unresolved. No nonzero in-binary producer was found for modes 1 and 3 through 6
-or companion selector `+0x360`; those cases remain supported interfaces rather
-than assumed reachable modes. Mode 6's RNG is external to the pure
-reconstruction, so its generated integer remains an input. Evidence:
+The enable byte is the current setup state's inner byte at `+0x24` and is
+copied only after chart validation succeeds. Its upstream player-facing
+semantic name remains unresolved, but its producer path is closed. A
+whole-binary write and address-escape audit closes modes 1 and 3 through 6 as
+unreachable in this exact snapshot: only reset/teardown mode 0 and tutorial
+mode 2 can reach the manager field. The mode-6 RNG branch is consequently not
+a gameplay input. The distinct companion selector at `+0x360` is reset to zero
+and has no other writer or address escape, so its selector returns 1 whenever
+the enable is active. Unsupported-at-runtime cases remain documented because
+they exist in the selector implementation, not because gameplay can select
+them. Evidence:
 `claim.judgement.forced-result-mode`; tests: `tests/forced_result_test.cpp`.
 
 ## Alternate terminal-meter setup interface
@@ -141,6 +180,16 @@ external and must remain parameters. Evidence:
 
 ## Configured ordinary terminal-rule interface
 
+All ordinary gameplay control vectors come from one selected `SkillBefore`
+record. The result owner caches a three-integer identity. Any changed component
+resets all five vectors and their retained progress before looking up the
+identity's middle ID in the ordered record map; exact identity equality retains
+current progress. A missing record leaves every vector empty. Found source
+units route in order as type 0 contribution, type 1 promotion, type 2 negative
+adjustment, type 3 terminal, and type 5 result-remap controls. Type 4 and
+unknown types are ignored. Evidence:
+`claim.configuration.skill-before-gameplay-control-loading`.
+
 Type-3 rule records externally supply enable flags and thresholds for a
 computed-value floor, first-bucket/event-count limit, aggregate-metric limit,
 result-byte ceiling plus cumulative-weight threshold, and mode-2 zero-gauge
@@ -164,16 +213,20 @@ fields `+0x68` and `+0x6c` enable two persistent progress checks: one advances
 from the converted signed-64 position tick through a configured interval, and
 the other advances bounded buckets derived from the relationship between two
 retained snapshot fields. Matching records can contribute to the aggregate or
-accumulate into a linked persistent rule record. The same vector can consult a
-runtime random predicate. A separate common promotion vector can also raise
-the kind-2 computed value to an externally supplied record value after its
-own gates pass.
+accumulate into a linked persistent rule record. A unit marked one-shot tests
+and sets its source-order index in a retained bit vector; an already set valid
+bit rejects the unit. A malformed out-of-range index reads clear but cannot be
+marked and therefore remains repeatable. A separate common promotion vector
+can also raise the kind-2 computed value to an externally supplied record value
+after its own gates pass.
 
-Record values, probabilities, units, labels, and the full external source
-schema are unavailable and remain parameters. In particular, callers must not
+Record values, units, labels, and the full external source schema are
+unavailable and remain parameters. There is no random/probability decision on
+this path. In particular, callers must not
 substitute guessed cadence or promotion constants. Exact rule-family ordering
 and kind eligibility are normative in `spec/judgement.md`. Evidence:
-`claim.judgement.periodic-aggregate-reevaluation`; reconstruction:
+`claim.judgement.periodic-aggregate-reevaluation` and
+`claim.configuration.skill-before-gameplay-control-loading`; reconstruction:
 `apply_ordinary_periodic_aggregate`.
 
 ## FLK motion interface

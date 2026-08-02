@@ -7,11 +7,57 @@ loading supplies start lane, table-decoded width, bounded coverage in logical
 lanes 0 through 15, and start time scaled by `0.06`. HOLD-specific loading also
 scales record field `+0x3c` as end time, applies the same selected runtime offset
 to both endpoints, and copies a vector of `0x20`-byte checkpoint records.
-Evidence: `claim.note.hold-construction-start-gate`.
+The common width clamp, fixed encoding/decoding tables, and exact bounded-
+extent calculation are normative in `spec/notes/tap.md`. Evidence:
+`claim.parser.common-lane-width-encoding` and
+`claim.note.hold-construction-start-gate`.
+
+The first five HLD/HXD integers are major, minor, lane, width, and duration.
+Start position is canonicalized from `(major, minor)` and end position from
+`(major, minor + duration)`. Mirroring changes lane to
+`16 - lane - clamped_width`. The duration addition and both mirror
+subtractions wrap at signed 32-bit width. The parsed end triple begins at
+`+0x34`; its scheduled-millisecond member at `+0x3c` supplies runtime end time, while the
+full end position plus decoded lane extent selects the SLA endpoint tag.
+Reconstruction: `parse_c2s_hold_geometry`; tests:
+`tests/hold_variant_test.cpp`; evidence:
+`claim.note.hold-construction-start-gate`.
+
+The two command forms share those five integer fields. `HLD` stores ordinary
+form with subtype zero. `HXD` always stores extended form and reads an optional
+sixth exact string through this index table:
+
+| String | Index |
+|---|---:|
+| `UP` | 0 |
+| `DW` | 1 |
+| `CE` | 2 |
+| `RC` | 3 |
+| `LC` | 4 |
+| `RS` | 5 |
+| `LS` | 6 |
+| `BS` | 7 |
+
+Missing, empty, unknown, or differently cased strings map to zero, so legacy
+five-field HXD remains extended with subtype `UP`/zero. Common runtime loading
+preserves both values. Before copying externally loaded judgement-window data,
+the shared checker initializer selects profile 0 for ordinary type-1 HLD and
+profile 4 for extended type-1 HXD. The external values are absent and remain
+parameters; the clean-room reconstruction must not treat the two command forms
+as judgement-equivalent. Evidence:
+`claim.note.hold-extended-profile-selection`; reconstruction:
+`parse_c2s_hold_command_variant` and `note_checker_profile_selector`; focused
+test: `tests/hold_variant_test.cpp`.
 
 The object has separate start and checkpoint phases, both initialized to 0.
 Phase value 4 means that component is complete. Player-facing names for other
 phase values are not normative.
+
+A HOLD root reserves consecutive primary and middle/end result identifiers;
+the first compatible attached secondary lazily receives a third. Which slot is
+retained for each source result category is normative in
+`spec/judgement.md`. Evidence:
+`claim.judgement.result-component-identifier-flow`.
 
 ## Start component
 

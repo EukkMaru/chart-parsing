@@ -119,8 +119,9 @@ distinguish the initiating edge from the directional gesture.
   and mode selections are externally loaded and remain parameters.
 - Physical meanings of the two source banks and player-facing result/direction
   names are unresolved.
-- Active result-control effects beyond the already recovered tier-zeroing unit
-  remain open for this note family.
+- The active-result bridge used by FLK is one of the twelve closed callers of
+  `claim.judgement.active-tier-zeroing`; no family-specific lifetime or
+  precedence path remains.
 - Cross-family priority consequences are closed by
   `claim.matching.flick-candidate-asymmetry`.
 

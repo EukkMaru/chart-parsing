@@ -66,8 +66,8 @@ for that logical lane.
   Slide and HeavenHold as the other gameplay marker consumers and finds no
   additional writer.
 - Forced-result selection is covered by
-  `claim.judgement.forced-result-mode`; its player-facing identity and lifetime
-  remain unresolved.
+  `claim.judgement.forced-result-mode`; its producer and lifetime are closed,
+  while its player-facing identity is unassigned.
 
 ## Consequences
 

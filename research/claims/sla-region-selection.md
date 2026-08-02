@@ -1,20 +1,18 @@
 # Claim: SLA regions assign maximum overlapping scroll tags without entering judgement
 
 - ID: `claim.parser.sla-region-selection`
-- State: active
+- State: superseded
 - Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.events`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-07-27
 
 ## Statement
 
-`SLA` creates a parsed type-12 chart-time/lane region carrying an integer tag.
-Queries fully contained by overlapping regions receive the greatest positive
-tag, but type 12 is omitted from runtime-note construction and the tag reaches
-only projected scroll-position/resource paths, not the gameplay clock,
-candidate matching, or judgement outcome.
+This claim is superseded by
+`claim.parser.sla-materialization-selection`. Its region parser and maximum-tag
+selection remain correct, but its gameplay-exclusion conclusion is false.
 
 ## Anchors
 
@@ -60,20 +58,19 @@ candidate matching, or judgement outcome.
 
 ## Reasoning
 
-The parser field writes, both query implementations, and postprocessor copies
-form a complete tag-selection algorithm. Factory exclusion rules out an SLA
-runtime note, while the closed query-helper reference set carries selected tags
-into position projection. Comparing that data flow with the already closed
-per-note judgement paths establishes the scope boundary: SLA changes scroll
-projection grouping but not gameplay generation or judgement.
+The original analysis stopped at the per-note candidate and judgement
+consumers and treated position projection as presentation-only. It failed to
+connect parsed tag fields `+0x7c/+0x80` to the earlier pending-record
+materialization predicate. That predicate can retain or construct the note,
+which changes the first later substep in which the otherwise-correct candidate
+and judgement paths can run.
 
 ## Alternatives and falsifiers
 
 - Competing explanation: SLA creates a hidden note, or its tag selects a timing
   or judgement profile.
-- Evidence that would disprove this claim: a type-12 factory branch, a tag read
-  in candidate/input/result code, or a tag-keyed transform writing the
-  authoritative schedule or manager clock rather than projected state.
+- Evidence that disproved this claim: `FUN_00b29c90` reads the assigned tag and
+  applies `FUN_011c6720` before its far-path materialization bounds.
 
 ## Unknowns
 
@@ -87,7 +84,8 @@ projection grouping but not gameplay generation or judgement.
 
 - Ghidra mutations: none in the live project; GhidraMCP remained unavailable,
   so analysis and temporary function recovery stayed in the clone.
-- Spec sections: `spec/c2s.md`.
+- Superseded by: `claim.parser.sla-materialization-selection`.
+- Spec sections: corrected in `spec/c2s.md` and `spec/timing.md`.
 - Reconstruction code: `C2sSlaRegion`, `parse_c2s_sla_record`, and both
   `select_c2s_sla_tag` variants in `include/chart/reconstruction.hpp`.
 - Tests: `tests/sla_region_test.cpp`.

@@ -1,6 +1,7 @@
 #include "chart/reconstruction.hpp"
 
 #include <cassert>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -30,6 +31,25 @@ int main() {
     };
     const AirSlidePathPoint root{0.0F, 0.0F, 0.0F,
                                  AirSlideCommand::asc};
+    assert(air_slide_grid_tick({
+               std::numeric_limits<float>::infinity(), 0.0F, 0.0F,
+               AirSlideCommand::asc}) ==
+           std::numeric_limits<std::int32_t>::min());
+    assert(evaluate_air_slide_segment_generation(0, 600, 384) ==
+           AirSlideSegmentGenerationDisposition::generated);
+    assert(evaluate_air_slide_segment_generation(0, -383, 384) ==
+           AirSlideSegmentGenerationDisposition::no_interior_samples);
+    assert(evaluate_air_slide_segment_generation(0, 600, 0) ==
+           AirSlideSegmentGenerationDisposition::
+               source_path_cursor_does_not_advance);
+    assert(evaluate_air_slide_segment_generation(
+               2147483520, 2147483520, 384) ==
+           AirSlideSegmentGenerationDisposition::
+               source_cursor_wrap_expansion);
+    assert(evaluate_air_slide_cursor_advance(
+               2147483520, 2147483600, 384) ==
+           AirSlideSegmentGenerationDisposition::
+               source_cursor_wrap_expansion);
 
     // ASC carries the cadence across its control point. The first sample after
     // the root is disabled, but the carried samples are enabled.
@@ -48,6 +68,33 @@ int main() {
     assert(continuous[2].kind == AirSlideGeneratedRecordKind::sample);
     assert(air_slide_grid_tick(continuous[2].point) == 1152);
     assert(continuous.back().kind == AirSlideGeneratedRecordKind::path_end);
+
+    // Unlike AirHold/HeavenHold's unsigned span comparison, a decreasing
+    // AirSlide control simply admits no interior samples and appends its end.
+    const std::vector<AirSlidePathPoint> decreasing_controls{
+        {-1.0F, 0.0F, -10.0F, AirSlideCommand::asc},
+    };
+    const auto decreasing = generate_air_slide_path_records(
+        root, std::span<const AirSlidePathPoint>{decreasing_controls}, 1.0F,
+        constant_tempo, point_at_tick, schedule_at_point);
+    assert(decreasing.size() == 1);
+    assert(decreasing.front().kind ==
+           AirSlideGeneratedRecordKind::path_end);
+    assert(air_slide_grid_tick(decreasing.front().point) == -383);
+
+    const AirSlidePathPoint indefinite_root{
+        std::numeric_limits<float>::infinity(), 0.0F, 0.0F,
+        AirSlideCommand::asc};
+    const std::vector<AirSlidePathPoint> indefinite_controls{{
+        std::numeric_limits<float>::infinity(), 0.0F, 1.0F,
+        AirSlideCommand::asc,
+    }};
+    const auto indefinite = generate_air_slide_path_records(
+        indefinite_root,
+        std::span<const AirSlidePathPoint>{indefinite_controls}, 1.0F,
+        constant_tempo, point_at_tick, schedule_at_point);
+    assert(indefinite.size() == 1);
+    assert(indefinite.front().kind == AirSlideGeneratedRecordKind::path_end);
 
     // ASD inserts a boundary and restarts one step after the marked point.
     const std::vector<AirSlidePathPoint> restarted_controls{
@@ -82,6 +129,17 @@ int main() {
     assert(continuous[0].emission_enabled);
     assert(continuous[1].emission_enabled);
     assert(!continuous[2].emission_enabled);
+
+    continuous[0].emission_enabled = true;
+    continuous[1].emission_enabled = true;
+    continuous[2].emission_enabled = true;
+    filter_air_slide_path_emissions(
+        std::span{continuous}, continuous_controls.back(), 1.0F,
+        std::numeric_limits<float>::infinity(), false,
+        std::span<const AirHoldExclusionInterval>{}, constant_tempo);
+    assert(continuous[0].emission_enabled);
+    assert(continuous[1].emission_enabled);
+    assert(continuous[2].emission_enabled);
 
     restarted[3].emission_enabled = true;
     AirSlidePathPoint final_asd = restarted_controls.back();

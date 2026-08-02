@@ -28,7 +28,16 @@ These names are structural; do not infer user-facing mode semantics from the
 bits. The type-2 postprocessor converts the full control-point vector to a
 manager-owned runtime path container and inserts it under parsed key `+0x84`.
 `SlideNote` retains that key and performs checked lookup on every path use. It
-copies checkpoints but not the generated path container.
+copies checkpoints but not the generated path container. A missing key raises
+the source's standard out-of-range exception; it does not construct a fallback
+container or treat the path as disabled. Reconstruction:
+`require_slide_generated_path`.
+
+The second command-specific field is also a path-boundary marker:
+`SLD`/`SXD` set it and `SLC`/`SXC` clear it. The generated root boundary and
+final boundary are forced set; intermediate boundaries retain the authored
+field. These markers control one-shot path feedback, not shared judgement
+results.
 
 One exact style is an exception to this type-2 path. Field 8 is decoded by an
 exact three-string table: `SLD` is code 0, `HLD` is code 1, and `GRN` is code
@@ -58,6 +67,21 @@ slide. Start candidates cease after that phase.
 
 ## Generated path windows
 
+The builder bounds each endpoint width to `[1, 16]`, then selects one external
+five-float profile at index `16 - width`. Profile values come from the active
+runtime configuration block beginning at `+0x730` and are explicit
+reconstruction inputs. The first value defines a lane-anchor offset
+`(value - lane) * 0.5`; the remaining four are relative window endpoints. A
+separate runtime correction is added to all endpoint values.
+
+For each adjacent path-point pair, a lane window exists throughout the swept
+half-open corridor between their lane/width spans. Lanes inside the start span
+use its first two profile endpoints directly; lanes outside it receive a
+distance-weighted interpolation between the points. The final two endpoints
+are constructed the same way from the end span. The container-wide window uses
+the root's first two endpoints and the final point's last two endpoints. The
+exact implementation is `build_slide_generated_path`.
+
 Every enabled path record and nested lane window has four ordered float
 endpoints `(outer_early, center_early, center_late, outer_late)`. Classification
 is literal:
@@ -75,9 +99,8 @@ Only path records in phases 3, 4, and 5 participate. For each logical lane,
 classify its nested window in every participating record and retain the maximum
 numeric phase. Thus phase 5 dominates 4, and 4 dominates 3.
 
-The exact implementation is `classify_slide_window` and
-`combine_slide_window_phases`. Endpoint construction consumes external data and
-remains parameterized.
+The exact classifiers are `classify_slide_window` and
+`combine_slide_window_phases`.
 
 ## Two-bank path contact
 
@@ -118,6 +141,14 @@ Before absolute adjusted start, path phase is 0. At or after that start:
 If checkpoints remain, current gap index 0 gives path phase 2 and every other
 index gives phase 3. An empty checkpoint vector gives phase 4 immediately; no
 synthetic end checkpoint is added.
+
+Generated path segments have a separate one-shot feedback consumer. A due
+segment whose ending boundary marker is set reads the current ordinary or
+forced gap grade and routes category 2 to feedback/resource lookup only. It
+does not call the shared result dispatcher, apply active-result control, reset
+the gap tracker, consume an authored checkpoint, or change completion. The
+final generated segment is always marked. This path is excluded from normative
+judgement output.
 
 The update order is start component, path component, then completion check.
 Both component phases must equal 4 before the note requests base state 2. That
