@@ -518,16 +518,50 @@
     }
     regions.sort((a, b) => a.time - b.time);
 
-    // beat lines for the grid overlay
+    // Meter is a state schedule like BPM, not a bounded interval: a record has
+    // no duration and stays in force until the next one, so the list is sorted
+    // and seeded at position zero from MET_DEF. The fields read as unit then
+    // count — `4 3` is 3/4 — which is the inverse of the usual notation; that
+    // reading is inferred from the corpus, the reconstruction only calls them
+    // two integer meter fields. A zero count stops subdivision, matching the
+    // spec's note that a zero meter component halts subdivision generation.
+    metEvents.sort((a, b) => (a.m * R + a.t) - (b.m * R + b.t));
+    if (!metEvents.length || metEvents[0].m * R + metEvents[0].t > 0) {
+      metEvents.unshift({ m: 0, t: 0, n: head.metNum, d: head.metDen });
+    }
+    const beatsPerBarAt = p => {
+      let e = metEvents[0];
+      for (let i = 1; i < metEvents.length && metEvents[i].m * R + metEvents[i].t <= p; i++) {
+        e = metEvents[i];
+      }
+      return e.d > 0 ? e.d : 0; // second field is the count; zero stops subdivision
+    };
+
+    // Bar boundaries stay every R ticks — position is major*R + minor whatever
+    // the meter — so only the beats inside a bar move.
     const beats = [];
-    const lastP = notes.length ? notes[notes.length - 1].p + R * 2 : R * 8;
-    // Beat spacing assumes four beats to the measure; MET is parsed but the
-    // grid does not yet follow a meter change.
-    for (let p = 0, i = 0; p <= lastP && i < 20000; p += R / 4, i++) {
-      beats.push({
-        p, time: timeAt(p), bar: (p % R) === 0,
-        m: Math.floor(p / R), b: Math.round((p % R) / (R / 4)) + 1,
-      });
+    const lastBar = notes.length ? Math.floor(notes[notes.length - 1].p / R) + 2 : 8;
+    for (let bar = 0; bar <= lastBar; bar++) {
+      const base = bar * R;
+      const count = beatsPerBarAt(base);
+      beats.push({ p: base, time: timeAt(base), bar: true, m: bar, b: 1 });
+      if (count < 2) continue; // 0 stops subdivision; 1 leaves only the bar line
+      const step = R / count;
+      for (let i = 1; i < count; i++) {
+        const p = base + i * step;
+        beats.push({ p, time: timeAt(p), bar: false, m: bar, b: i + 1 });
+      }
+    }
+    beats.sort((a, b) => a.p - b.p);
+
+    // Positions where the signature actually changes, for the grid marker.
+    // Repeats of the value already in force are dropped: they mark nothing.
+    const meters = [];
+    for (const e of metEvents) {
+      const prev = meters[meters.length - 1];
+      if (prev && prev.n === e.n && prev.d === e.d) continue;
+      const p = e.m * R + e.t;
+      meters.push({ p, time: timeAt(p), n: e.n, d: e.d });
     }
 
     // Scroll schedules, one sorted interval list per key. STP and SFL are
@@ -565,7 +599,7 @@
 
     const dur = notes.length ? Math.max(...notes.map(n => n.endTime)) : 0;
     return { head, notes, markers, regions, regionsByKey, dcm, slas, counts,
-             unknown, beats, duration: dur, seg, R, timeAt, posAt };
+             unknown, beats, meters, duration: dur, seg, R, timeAt, posAt };
   }
 
   // ---- window trimming ----------------------------------------------------
@@ -911,6 +945,29 @@
           cx2.textAlign = "left";
           cx2.textBaseline = "alphabetic";
         }
+      }
+    }
+
+    // --- meter changes: a brighter rule and a label off the right edge
+    if (show.grid) {
+      const EXT = 7;
+      for (const mt of chart.meters) {
+        const t = depthAt(mt.time, 0);
+        if (t < -backT || t > FAR) continue;
+        const a = project(t, -EXT, 0, W, H), b = project(t, 16 + EXT, 0, W, H);
+        cx2.strokeStyle = `rgba(160,190,255,${Math.min(1, gridAlpha * 2.4).toFixed(3)})`;
+        cx2.lineWidth = 2.2;
+        cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
+
+        const edge = project(t, 16, 0, W, H);
+        const lab = `Time Sig. ${mt.d}/${mt.n}`;
+        cx2.fillStyle = "#a0beff";
+        cx2.font = "600 11px ui-monospace, Menlo, monospace";
+        cx2.textAlign = "left";
+        cx2.textBaseline = "middle";
+        const lw = cx2.measureText(lab).width;
+        cx2.fillText(lab, Math.min(W - lw - 4, edge.x + 22), edge.y);
+        cx2.textBaseline = "alphabetic";
       }
     }
 
