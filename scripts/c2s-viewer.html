@@ -302,7 +302,9 @@
   // ---- family table -------------------------------------------------------
   // Field layouts read off real records; index 0 is the first token after the
   // command name. Colours follow the cabinet's own family conventions.
-  const ACTION = "#ff5ce0"; // air action markers on air hold / air slide paths
+  const ACTION = "#ff5ce0";     // air action markers on air hold / air slide paths
+  const AIRUP = "#7ef08a";      // air-up green, also the air hold centre line
+  const ALD_PATH = "#ff5ce0";   // travelling ALD renders magenta; rungs stay purple
   const FAM = {
     TAP: { kind: "tap",   color: "#ff4d4d", label: "Tap" },
     CHR: { kind: "tap",   color: "#ffd633", label: "ExTap" },
@@ -415,17 +417,23 @@
           n.dur = +f[4] || 0; n.endLane = +f[5]; n.endWidth = +f[6] || 1;
           n.style = f[7] || ""; break;
         case "air": n.root = f[4] || ""; n.style = f[5] || ""; break;
-        case "ahold": n.root = f[4] || ""; n.dur = +f[5] || 0; n.style = f[6] || ""; break;
+        // Only the X/D-marked spelling creates an authored checkpoint — the
+        // air action. AHD and ASC extend the path and submit nothing, exactly
+        // as SLC/SXC shape a slide without a bar.
+        case "ahold":
+          n.root = f[4] || ""; n.dur = +f[5] || 0; n.style = f[6] || "";
+          n.isAction = cmd === "AHX"; break;
         case "aslide":
           n.root = f[4] || ""; n.h0 = +f[5] || 0; n.dur = +f[6] || 0;
           n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
-          n.style = f[10] || ""; break;
+          n.style = f[10] || ""; n.isAction = cmd === "ASD"; break;
         case "ald":
           n.sel = +f[4] || 0; n.h0 = +f[5] || 0; n.dur = +f[6] || 0;
           n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
           n.style = f[10] || "";
           // travels in height, in lane, or over real time -> renders as a line
           n.isPath = n.h0 !== n.h1 || n.endLane !== n.lane || n.dur > 2;
+          if (n.isPath) n.color = ALD_PATH;
           break;
         case "asolid":
           n.dur = +f[6] || 0; n.endLane = +f[7]; n.endWidth = +f[8] || 1;
@@ -847,7 +855,9 @@
 
     // Air slide records carry a path endpoint; air crush rungs are checkpoints
     // in their own right. Mark them as air actions.
-    if (s1 <= 1 && s1 >= -0.05) {
+    // Air action markers belong to air hold and air slide paths. An ALD rung
+    // is a note in its own right, not a path checkpoint, so it carries none.
+    if (n.isAction && s1 <= 1 && s1 >= -0.05) {
       const p = project(s1, (n.endLane ?? n.lane) - pad, h1, W, H);
       const q = project(s1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, h1, W, H);
       const th = Math.max(4, 11 * p.s);
@@ -910,18 +920,31 @@
   function drawAirHold(n, t0, t1, W, H) {
     const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
+    // AHD authors no height, so it sits at the ordinary air height. It is
+    // straight: no end lane exists to travel toward. Drawn narrower than its
+    // lane span, with a solid air-up green line down the centre.
     const h = AIR_PLANE;
-    const a0 = project(s0, n.lane, h, W, H), b0 = project(s0, n.lane + n.width, h, W, H);
-    const a1 = project(s1, n.lane, h, W, H), b1 = project(s1, n.lane + n.width, h, W, H);
+    const inset = n.width * 0.24;
+    const l0 = n.lane + inset, l1 = n.lane + n.width - inset;
+    const a0 = project(s0, l0, h, W, H), b0 = project(s0, l1, h, W, H);
+    const a1 = project(s1, l0, h, W, H), b1 = project(s1, l1, h, W, H);
     cx2.beginPath();
     cx2.moveTo(a0.x, a0.y); cx2.lineTo(b0.x, b0.y);
     cx2.lineTo(b1.x, b1.y); cx2.lineTo(a1.x, a1.y);
     cx2.closePath();
-    cx2.fillStyle = n.color + "40";
+    cx2.fillStyle = n.color + "3a";
     cx2.fill();
-    cx2.strokeStyle = n.color + "bb";
-    cx2.lineWidth = 1.2;
+    cx2.strokeStyle = n.color + "99";
+    cx2.lineWidth = 1;
     cx2.stroke();
+
+    const c0 = project(s0, n.lane + n.width / 2, h, W, H);
+    const c1 = project(s1, n.lane + n.width / 2, h, W, H);
+    cx2.strokeStyle = AIRUP;
+    cx2.lineWidth = Math.max(1.5, 3.4 * c0.s);
+    cx2.lineCap = "round";
+    cx2.beginPath(); cx2.moveTo(c0.x, c0.y); cx2.lineTo(c1.x, c1.y); cx2.stroke();
+    cx2.lineCap = "butt";
     // tether to the ground lane it belongs to
     const g0 = project(s0, n.lane + n.width / 2, 0, W, H);
     const t0p = project(s0, n.lane + n.width / 2, h, W, H);
@@ -930,7 +953,7 @@
     cx2.beginPath(); cx2.moveTo(g0.x, g0.y); cx2.lineTo(t0p.x, t0p.y); cx2.stroke();
     cx2.setLineDash([]);
     // each authored record endpoint is an air action point
-    if (s1 <= 1 && s1 >= -0.05) {
+    if (n.isAction && s1 <= 1 && s1 >= -0.05) {
       const th = Math.max(4, 11 * a1.s);
       cx2.fillStyle = ACTION;
       cx2.fillRect(a1.x, a1.y - th, b1.x - a1.x, th);
@@ -1093,10 +1116,15 @@
       `<div class="row"><div class="sw" style="background:${FAM[k].color}"></div>` +
       `<span class="n">${FAM[k].label}</span><span class="c">${k} · ${v}</span></div>`
     ).join("");
-    const actions = chart.notes.filter(n => n.kind === "ahold" || n.kind === "aslide").length;
+    const paths = chart.notes.filter(n => n.kind === "ald" && n.isPath).length;
+    if (paths) {
+      rows += `<div class="row"><div class="sw" style="background:${ALD_PATH}"></div>` +
+        `<span class="n">Air path (travelling ALD)</span><span class="c">line · ${paths}</span></div>`;
+    }
+    const actions = chart.notes.filter(n => n.isAction).length;
     if (actions) {
       rows += `<div class="row"><div class="sw" style="background:${ACTION}"></div>` +
-        `<span class="n">Air action</span><span class="c">endpoints · ${actions}</span></div>`;
+        `<span class="n">Air action</span><span class="c">ASD/AHX · ${actions}</span></div>`;
     }
     const regCount = new Map();
     for (const r of chart.regions) regCount.set(r.cmd, (regCount.get(r.cmd) || 0) + 1);
