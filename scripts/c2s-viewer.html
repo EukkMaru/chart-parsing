@@ -240,7 +240,7 @@
           <input id="time" type="range" min="0" max="1000" value="0" step="1" aria-label="Playback position">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Note speed</span><b id="sval">4.0</b></div>
+          <div class="lab"><span>Note speed</span><b id="sval">4.0</b> <b id="lval" style="color:var(--ink-3);font-weight:400"></b></div>
           <input id="speed" type="range" min="10" max="120" value="40" step="1" aria-label="Note speed">
         </div>
         <div class="ctl">
@@ -289,7 +289,7 @@
   </div>
 
   <footer class="note">
-    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> / <code>MET</code> schedule against <code>RESOLUTION</code>, so horizontal position along the corridor is real. The taper is cosmetic — the recovered projection is linear in time-delta and says nothing about perspective, which sits outside the reconstruction's scope. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
+    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> / <code>MET</code> schedule against <code>RESOLUTION</code>, so horizontal position along the corridor is real. The taper is cosmetic — the recovered projection is linear in time-delta and says nothing about perspective, which sits outside the reconstruction's scope. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
     <br><br>
     <b>Chart regions.</b> <code>STP</code>, <code>SFL</code>, <code>SLP</code> and <code>DCM</code> intervals are drawn on the floor with their factor and key. They rewrite a pending note's scheduled position before the materialization test, and only above the <code>30.0F</code> raw-delta shortcut — so they never move a near note. The bands here mark <em>where</em> each interval applies; the transform itself is not applied to the notes drawn, so a scrolling section will not visually speed up. <code>SFE</code> is recognised by the parser but has no handler case, so it is drawn dashed and dead.
   </footer>
@@ -590,7 +590,14 @@
   let chart = null, now = 0, playing = false, last = 0;
   let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
   const show = { wings: false, air: true, grid: true, bars: false };
-  const LOOK_BASE = 3400; // ms of chart visible at speed 1.0
+  // Visible lookahead at speed 1.0, derived rather than chosen. The recovered
+  // materialization projection is
+  //   projected = -65 - 1.5 * (base_offset + delta) * speed * factor
+  // eligible while -550 <= projected <= 550. With base_offset 0 and factor 1,
+  // the far bound gives delta <= (550 - 65) / 1.5 = 323.33 chart units, and
+  // the 0.06 units-per-millisecond scale converts that to 5388.9 ms.
+  // Caveat: that band is proven to gate object construction, not visibility.
+  const LOOK_BASE = 5388.9;
 
   const el = id => document.getElementById(id);
 
@@ -789,28 +796,33 @@
     const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     const steps = 10;
-    cx2.beginPath();
+    const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+    const left = [], right = [];
     for (let i = 0; i <= steps; i++) {
-      const t = s0 + (s1 - s0) * (i / steps);
-      const k = (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
-      const lane = n.endLane != null ? n.lane + (n.endLane - n.lane) * k : n.lane;
-      const p = project(t, lane, 0, W, H);
-      i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
-    }
-    for (let i = steps; i >= 0; i--) {
-      const t = s0 + (s1 - s0) * (i / steps);
-      const k = (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
       const lane = n.endLane != null ? n.lane + (n.endLane - n.lane) * k : n.lane;
       const w = n.endWidth != null ? n.width + (n.endWidth - n.width) * k : n.width;
-      const p = project(t, lane + w, 0, W, H);
-      cx2.lineTo(p.x, p.y);
+      left.push(project(t, lane, 0, W, H));
+      right.push(project(t, lane + w, 0, W, H));
     }
+
+    cx2.beginPath();
+    left.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
+    for (let i = right.length - 1; i >= 0; i--) cx2.lineTo(right[i].x, right[i].y);
     cx2.closePath();
     cx2.fillStyle = n.color + "44";
     cx2.fill();
+
+    // Stroke the two rails only. Closing the outline would draw a cross-edge
+    // at each segment boundary, which reads as a checkpoint bar that no
+    // toggle can remove.
     cx2.strokeStyle = n.color + "aa";
     cx2.lineWidth = 1;
-    cx2.stroke();
+    for (const rail of [left, right]) {
+      cx2.beginPath();
+      rail.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
+      cx2.stroke();
+    }
     // The slide path itself is always drawn — shaping points are what give a
     // slide its shape. Only the horizontal checkpoint bar is optional, and it
     // exists only where the boundary marker is set. A hold's start is its own
@@ -1181,6 +1193,7 @@
     el("time").value = String(Math.round(now));
     el("tval").textContent = (now / 1000).toFixed(2) + " s";
     el("sval").textContent = speed.toFixed(1);
+    el("lval").textContent = Math.round(lookahead()) + " ms";
     el("rval").textContent = rate.toFixed(2) + "×";
     el("wval").textContent = winMs + " ms";
     el("aval").textContent = GEO.airTop.toFixed(2);
