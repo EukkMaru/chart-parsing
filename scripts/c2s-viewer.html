@@ -883,9 +883,11 @@
     // in their own right. Mark them as air actions.
     // Air action markers belong to air hold and air slide paths. An ALD rung
     // is a note in its own right, not a path checkpoint, so it carries none.
-    if (n.isAction && s1 <= 1 && s1 >= -0.05) {
-      const p = project(s1, (n.endLane ?? n.lane) - pad, h1, W, H);
-      const q = project(s1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, h1, W, H);
+    // Anchor to the true endpoint, not the view-clamped one: clamping would
+    // pin the marker at the far edge until the endpoint came into range.
+    if (n.isAction && t1 <= 1 && t1 >= -0.05) {
+      const p = project(t1, (n.endLane ?? n.lane) - pad, h1, W, H);
+      const q = project(t1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, h1, W, H);
       const th = Math.max(4, 11 * p.s);
       cx2.fillStyle = ACTION;
       cx2.fillRect(p.x, p.y - th, q.x - p.x, th);
@@ -980,11 +982,12 @@
     cx2.beginPath(); cx2.moveTo(g0.x, g0.y); cx2.lineTo(t0p.x, t0p.y); cx2.stroke();
     cx2.setLineDash([]);
     // each authored record endpoint is an air action point
-    if (n.isAction && s1 <= 1 && s1 >= -0.05) {
-      const th = Math.max(4, 11 * a1.s);
+    if (n.isAction && t1 <= 1 && t1 >= -0.05) {
+      const e0 = project(t1, l0, h, W, H), e1 = project(t1, l1, h, W, H);
+      const th = Math.max(4, 11 * e0.s);
       cx2.fillStyle = ACTION;
-      cx2.fillRect(a1.x, a1.y - th, b1.x - a1.x, th);
-      barContour(a1.x, a1.y - th, b1.x - a1.x, th);
+      cx2.fillRect(e0.x, e0.y - th, e1.x - e0.x, th);
+      barContour(e0.x, e0.y - th, e1.x - e0.x, th);
     }
   }
 
