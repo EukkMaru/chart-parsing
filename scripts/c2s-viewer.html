@@ -255,7 +255,7 @@
           <button id="tWings" type="button" aria-pressed="false">Windows</button>
           <button id="tAir" type="button" aria-pressed="true">Air plane</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
-          <button id="tShape" type="button" aria-pressed="true" title="SLC / SXC — shape the path, no bar and no sound">Shaping pts</button>
+          <button id="tShape" type="button" aria-pressed="false" title="Horizontal checkpoint bars on slides. SLD/SXD carry one; SLC/SXC only shape the path.">Ckpt bars</button>
         </div>
         <div class="ctl">
           <div class="lab"><span>Window half-width</span><b id="wval">33 ms</b></div>
@@ -589,7 +589,7 @@
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
   let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
-  const show = { wings: false, air: true, grid: true, shaping: true };
+  const show = { wings: false, air: true, grid: true, bars: false };
   const LOOK_BASE = 3400; // ms of chart visible at speed 1.0
 
   const el = id => document.getElementById(id);
@@ -726,7 +726,6 @@
       const isAir = n.kind === "air" || n.kind === "ald" || n.kind === "aslide" ||
         n.kind === "ahold" || n.kind === "asolid";
       if (isAir && !show.air) continue;
-      if (n.kind === "slide" && !n.bar && !show.shaping) continue;
 
       if (n.kind === "asolid") {
         drawAirSolid(n, t0, t1, W, H);
@@ -812,9 +811,11 @@
     cx2.strokeStyle = n.color + "aa";
     cx2.lineWidth = 1;
     cx2.stroke();
-    // Only a set boundary marker ends a visible segment. Shaping points
-    // (SLC/SXC) carry no bar. Holds always show their start judgement.
-    const showBar = n.kind !== "slide" || n.bar;
+    // The slide path itself is always drawn — shaping points are what give a
+    // slide its shape. Only the horizontal checkpoint bar is optional, and it
+    // exists only where the boundary marker is set. A hold's start is its own
+    // judgement, not a checkpoint bar, so it is never suppressed.
+    const showBar = n.kind !== "slide" || (n.bar && show.bars);
     if (showBar && t0 >= -0.12 && t0 <= 1) drawTap(n, t0, W, H);
   }
 
@@ -1227,7 +1228,7 @@
     draw();
   });
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
-  toggle("tShape", "shaping");
+  toggle("tShape", "bars");
 
   strip.addEventListener("click", e => {
     if (!chart || !chart.duration) return;
