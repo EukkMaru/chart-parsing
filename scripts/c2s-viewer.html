@@ -255,6 +255,7 @@
           <button id="tWings" type="button" aria-pressed="false">Windows</button>
           <button id="tAir" type="button" aria-pressed="true">Air plane</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
+          <button id="tShape" type="button" aria-pressed="true" title="SLC / SXC — shape the path, no bar and no sound">Shaping pts</button>
         </div>
         <div class="ctl">
           <div class="lab"><span>Window half-width</span><b id="wval">33 ms</b></div>
@@ -422,7 +423,10 @@
         case "ald":
           n.sel = +f[4] || 0; n.h0 = +f[5] || 0; n.dur = +f[6] || 0;
           n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
-          n.style = f[10] || ""; break;
+          n.style = f[10] || "";
+          // travels in height, in lane, or over real time -> renders as a line
+          n.isPath = n.h0 !== n.h1 || n.endLane !== n.lane || n.dur > 2;
+          break;
         case "asolid":
           n.dur = +f[6] || 0; n.endLane = +f[7]; n.endWidth = +f[8] || 1;
           n.style = f[11] || ""; break;
@@ -498,6 +502,45 @@
     }
   }
 
+  // Second command-specific field, the path-boundary marker: SLD/SXD set it,
+  // SLC/SXC clear it. A set marker ends a visible segment and drives one-shot
+  // path feedback; a clear one only shapes the path. Root and final boundaries
+  // are forced set whatever the command says.
+  const SLIDE_MARKER = { SLD: 1, SXD: 1, SLC: 0, SXC: 0 };
+
+  function markSlideBoundaries(notes) {
+    const slides = notes.filter(n => n.kind === "slide");
+    const startsAt = new Set(slides.map(n => `${n.p}:${n.lane}`));
+    const endsAt = new Set(slides.map(n => `${n.p + n.dur}:${n.endLane ?? n.lane}`));
+    for (const n of slides) {
+      const isRoot = !endsAt.has(`${n.p}:${n.lane}`);
+      const isFinal = !startsAt.has(`${n.p + n.dur}:${n.endLane ?? n.lane}`);
+      n.marker = SLIDE_MARKER[n.cmd] === 1;
+      n.bar = n.marker || isRoot || isFinal;
+      n.forcedBar = !n.marker && n.bar;
+    }
+  }
+
+  // AirHold and AirSlide own an air-up start component: air_hold_start_profile
+  // and air_slide_start_profile both resolve AirDirectionCode::air. Charts
+  // never author a separate AIR record for it, so the arrow has to come from
+  // the note itself. Only the first record of a chain carries one.
+  function markAirChainStarts(notes) {
+    const continues = new Set();
+    for (const n of notes) {
+      if (n.kind !== "ahold" && n.kind !== "aslide") continue;
+      const endLane = n.endLane ?? n.lane;
+      continues.add(`${n.p + n.dur}:${endLane}`);
+    }
+    const seen = new Set();
+    for (const n of notes) {
+      if (n.kind !== "ahold" && n.kind !== "aslide") continue;
+      const at = `${n.p}:${n.lane}`;
+      n.chainStart = !continues.has(at) && !seen.has(at);
+      if (n.chainStart) seen.add(at);
+    }
+  }
+
   // ---- geometry -----------------------------------------------------------
   const cv = document.getElementById("field");
   const cx2 = cv.getContext("2d");
@@ -505,6 +548,18 @@
   const sx2 = strip.getContext("2d");
 
   const GEO = { yNear: 0.88, yFar: 0.26, halfNear: 0.46, z0: 1, Z: 3.4, airTop: 0.31 };
+  // The ceiling of the air region, in lift units. Every air element is placed
+  // at or below it and nothing may exceed it; the slider scales the whole
+  // region by moving GEO.airTop.
+  const AIR_PLANE = 1.0;
+
+  // Authored height 1.0 is the lane surface, not a low hover: charts park a
+  // path at 1.0 while it runs along the floor beside a hold. So height maps
+  // 1 -> ground and the chart's tallest -> the air plane.
+  function liftHeight(v) {
+    const span = Math.max(1, maxH - 1);
+    return Math.max(0, Math.min(AIR_PLANE, ((v || 1) - 1) / span));
+  }
 
   function persp(t) { return GEO.z0 / (GEO.z0 + t * GEO.Z); }
 
@@ -522,7 +577,7 @@
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
   let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1;
-  const show = { wings: false, air: true, grid: true };
+  const show = { wings: false, air: true, grid: true, shaping: true };
   const LOOK_BASE = 3400; // ms of chart visible at speed 1.0
 
   const el = id => document.getElementById(id);
@@ -557,6 +612,19 @@
       cx2.strokeStyle = l % 4 === 0 ? "rgba(150,162,200,.30)" : "rgba(150,162,200,.11)";
       cx2.lineWidth = l % 4 === 0 ? 1.4 : 1;
       cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
+    }
+
+    // --- air plane: the ceiling every air element is bounded by
+    if (show.air) {
+      const p0 = project(0, 0, AIR_PLANE, W, H), p16 = project(0, 16, AIR_PLANE, W, H);
+      const q0 = project(1, 0, AIR_PLANE, W, H), q16 = project(1, 16, AIR_PLANE, W, H);
+      cx2.strokeStyle = "rgba(126,240,138,.16)";
+      cx2.lineWidth = 1;
+      cx2.beginPath();
+      cx2.moveTo(p0.x, p0.y); cx2.lineTo(q0.x, q0.y);
+      cx2.moveTo(p16.x, p16.y); cx2.lineTo(q16.x, q16.y);
+      cx2.moveTo(p0.x, p0.y); cx2.lineTo(p16.x, p16.y);
+      cx2.stroke();
     }
 
     // --- beat grid
@@ -643,13 +711,25 @@
     for (const n of vis) {
       const t0 = (n.time - now) / LA;
       const t1 = (n.endTime - now) / LA;
-      const isAir = n.kind === "air" || n.kind === "ald" || n.kind === "aslide" || n.kind === "ahold";
+      const isAir = n.kind === "air" || n.kind === "ald" || n.kind === "aslide" ||
+        n.kind === "ahold" || n.kind === "asolid";
       if (isAir && !show.air) continue;
+      if (n.kind === "slide" && !n.bar && !show.shaping) continue;
 
-      if (n.kind === "ald" || n.kind === "aslide") {
+      if (n.kind === "asolid") {
+        drawAirSolid(n, t0, t1, W, H);
+      } else if (n.kind === "ald" && n.isPath) {
+        drawAirTrace(n, t0, t1, W, H);
+      } else if (n.kind === "ald" || n.kind === "aslide") {
         drawAirBand(n, t0, t1, W, H);
+        // The air-up start reaches the record's own authored height, which is
+        // what makes it line up with the path leaving that point.
+        if (n.chainStart) {
+          drawArrow(t0, n.lane, n.width, n.color, true, W, H, liftHeight(n.h0));
+        }
       } else if (n.kind === "ahold") {
         drawAirHold(n, t0, t1, W, H);
+        if (n.chainStart) drawArrow(t0, n.lane, n.width, n.color, true, W, H);
       } else if (n.kind === "hold" || n.kind === "slide") {
         drawSustain(n, t0, t1, W, H);
       } else if (n.kind === "air") {
@@ -720,7 +800,10 @@
     cx2.strokeStyle = n.color + "aa";
     cx2.lineWidth = 1;
     cx2.stroke();
-    if (t0 >= -0.12 && t0 <= 1) drawTap(n, t0, W, H);
+    // Only a set boundary marker ends a visible segment. Shaping points
+    // (SLC/SXC) carry no bar. Holds always show their start judgement.
+    const showBar = n.kind !== "slide" || n.bar;
+    if (showBar && t0 >= -0.12 && t0 <= 1) drawTap(n, t0, W, H);
   }
 
   function drawAirBand(n, t0, t1, W, H) {
@@ -728,7 +811,7 @@
     if (s1 < s0) return;
     // Authored heights are relative; air records are off the ground by
     // definition, so the scale keeps their order but never sits on the floor.
-    const lift = v => 0.30 + 0.70 * (v / maxH);
+    const lift = liftHeight;
     const h0 = lift(n.h0), h1 = lift(n.h1);
     const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
     // Crush rungs are authored one lane wide; widen the drawn ribbon so a
@@ -769,10 +852,61 @@
     }
   }
 
+  // An ALD record that travels — in height, in lane, or over real duration —
+  // draws in game as a thin line, not a body. Flat instantaneous records are
+  // rungs and keep their bar. The discriminator is the record's own geometry;
+  // it correlates with the selector field, whose meaning is unassigned.
+  function drawAirTrace(n, t0, t1, W, H) {
+    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    if (s1 < s0) return;
+    const lift = liftHeight;
+    const h0 = lift(n.h0), h1 = lift(n.h1);
+    const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+    const c0 = n.lane + n.width / 2;
+    const c1 = (n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2;
+    const steps = 10;
+    cx2.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
+      const p = project(t, c0 + (c1 - c0) * k, h0 + (h1 - h0) * k, W, H);
+      i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+    }
+    const near = project(s0, n.lane, h0, W, H);
+    cx2.strokeStyle = n.color;
+    cx2.lineWidth = Math.max(1.5, 3.2 * near.s);
+    cx2.lineCap = "round";
+    cx2.stroke();
+    cx2.lineCap = "butt";
+  }
+
+  // ASO is a trace: it reads no input, submits no result, and draws as a line
+  // rather than a body. Its record carries endpoint widths, but they bound the
+  // trace's lane span, not a filled shape. The two anonymous properties per
+  // endpoint have no assigned meaning in the reconstruction, so they are not
+  // used as height here.
+  function drawAirSolid(n, t0, t1, W, H) {
+    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    if (s1 < s0) return;
+    const laneAt = k => (n.lane + n.width / 2) +
+      (((n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2) - (n.lane + n.width / 2)) * k;
+    const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+    const steps = 10;
+    cx2.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const t = s0 + (s1 - s0) * (i / steps);
+      const p = project(t, laneAt(kOf(t)), AIR_PLANE, W, H);
+      i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+    }
+    const near = project(s0, 0, AIR_PLANE, W, H);
+    cx2.strokeStyle = n.color;
+    cx2.lineWidth = Math.max(1, 2.4 * near.s);
+    cx2.stroke();
+  }
+
   function drawAirHold(n, t0, t1, W, H) {
     const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
-    const h = 0.74;
+    const h = AIR_PLANE;
     const a0 = project(s0, n.lane, h, W, H), b0 = project(s0, n.lane + n.width, h, W, H);
     const a1 = project(s1, n.lane, h, W, H), b1 = project(s1, n.lane + n.width, h, W, H);
     cx2.beginPath();
@@ -800,13 +934,19 @@
   }
 
   function drawAirArrow(n, t, W, H) {
-    if (t < -0.12 || t > 1) return;
     const up = n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR";
+    drawArrow(t, n.lane, n.width, n.color, up, W, H);
+  }
+
+  function drawArrow(t, lane, width, color, up, W, H, topH) {
+    if (t < -0.12 || t > 1) return;
+    const top = topH === undefined ? AIR_PLANE : topH;
+    if (top <= 0.001) return;
     // The arrow stands on its lane: base on the floor, reaching into the air
     // plane. Up notes carry the head at the top, down notes at the floor.
-    const g0 = project(t, n.lane, 0, W, H);
-    const g1 = project(t, n.lane + n.width, 0, W, H);
-    const a0 = project(t, n.lane, 0.86, W, H);
+    const g0 = project(t, lane, 0, W, H);
+    const g1 = project(t, lane + width, 0, W, H);
+    const a0 = project(t, lane, top, W, H);
     const mid = (g0.x + g1.x) / 2;
     const halfW = (g1.x - g0.x) / 2;
     const shaftW = Math.max(2.5, halfW * 0.32);
@@ -818,7 +958,7 @@
     const neck = up ? yAir + head : yGround - head;
     const tail = up ? yGround : yAir;
 
-    cx2.fillStyle = n.color;
+    cx2.fillStyle = color;
     cx2.beginPath();
     cx2.moveTo(mid, tip);
     cx2.lineTo(mid + halfW, neck);
@@ -937,6 +1077,8 @@
       ["BPM", bpms.length > 1 ? bpms[0] + "…" + bpms[bpms.length - 1] : bpms[0]],
       ["Length", (chart.duration / 1000).toFixed(1) + " s"],
       ["Records", noteTotal],
+      ["Slide bars", chart.notes.filter(n => n.kind === "slide" && n.bar).length],
+      ["Shaping pts", chart.notes.filter(n => n.kind === "slide" && !n.bar).length],
       ["Regions", chart.regions.length],
       ["Commands", c.size],
     ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
@@ -980,6 +1122,8 @@
   function load(text) {
     chart = parseC2s(text);
     computeTrims(chart.notes);
+    markAirChainStarts(chart.notes);
+    markSlideBoundaries(chart.notes);
     maxH = Math.max(1, ...chart.notes.map(n => Math.max(n.h0 || 0, n.h1 || 0)));
     now = 0;
     el("time").max = String(Math.max(1, Math.round(chart.duration)));
@@ -1039,6 +1183,7 @@
     draw();
   });
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
+  toggle("tShape", "shaping");
 
   strip.addEventListener("click", e => {
     if (!chart || !chart.duration) return;
