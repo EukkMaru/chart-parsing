@@ -253,13 +253,29 @@
         <h2>Overlays</h2>
         <div class="btnrow">
           <button id="tWings" type="button" aria-pressed="false">Windows</button>
-          <button id="tAir" type="button" aria-pressed="true">Air plane</button>
+          <button id="tAir" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
           <button id="tShape" type="button" aria-pressed="false" title="Horizontal checkpoint bars on slides. SLD/SXD carry one; SLC/SXC only shape the path.">Ckpt bars</button>
+          <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
+          <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
+          <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
         </div>
         <div class="ctl">
           <div class="lab"><span>Window half-width</span><b id="wval">33 ms</b></div>
           <input id="win" type="range" min="5" max="120" value="33" step="1" aria-label="Judgement window half-width">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Camera pitch</span><b id="tiltval">default</b></div>
+          <input id="tilt" type="range" min="0" max="100" value="62" step="1" aria-label="Camera pitch">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Bar subdivision</span><b id="oval">off</b></div>
+          <input id="overlay" type="range" min="0" max="16" value="0" step="1" aria-label="Bar subdivision overlay">
+          <div id="opat" style="font-size:10px;color:var(--ink-3);letter-spacing:.06em;min-height:14px"></div>
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Beat grid</span><b id="gval">35%</b></div>
+          <input id="gridop" type="range" min="0" max="100" value="35" step="1" aria-label="Beat grid opacity">
         </div>
         <div class="ctl">
           <div class="lab"><span>Air plane height</span><b id="aval">0.31</b></div>
@@ -482,12 +498,18 @@
     // beat lines for the grid overlay
     const beats = [];
     const lastP = notes.length ? notes[notes.length - 1].p + R * 2 : R * 8;
+    // Beat spacing assumes four beats to the measure; MET is parsed but the
+    // grid does not yet follow a meter change.
     for (let p = 0, i = 0; p <= lastP && i < 20000; p += R / 4, i++) {
-      beats.push({ p, time: timeAt(p), bar: (p % R) === 0 });
+      beats.push({
+        p, time: timeAt(p), bar: (p % R) === 0,
+        m: Math.floor(p / R), b: Math.round((p % R) / (R / 4)) + 1,
+      });
     }
 
     const dur = notes.length ? Math.max(...notes.map(n => n.endTime)) : 0;
-    return { head, notes, markers, regions, counts, unknown, beats, duration: dur, seg };
+    return { head, notes, markers, regions, counts, unknown, beats,
+             duration: dur, seg, R, timeAt };
   }
 
   // ---- window trimming ----------------------------------------------------
@@ -521,10 +543,10 @@
     const startsAt = new Set(slides.map(n => `${n.p}:${n.lane}`));
     const endsAt = new Set(slides.map(n => `${n.p + n.dur}:${n.endLane ?? n.lane}`));
     for (const n of slides) {
-      const isRoot = !endsAt.has(`${n.p}:${n.lane}`);
+      n.isRoot = !endsAt.has(`${n.p}:${n.lane}`);
       const isFinal = !startsAt.has(`${n.p + n.dur}:${n.endLane ?? n.lane}`);
       n.marker = SLIDE_MARKER[n.cmd] === 1;
-      n.bar = n.marker || isRoot || isFinal;
+      n.bar = n.marker || n.isRoot || isFinal;
       n.forcedBar = !n.marker && n.bar;
     }
   }
@@ -547,6 +569,34 @@
       n.chainStart = !continues.has(at) && !seen.has(at);
       if (n.chainStart) seen.add(at);
     }
+  }
+
+  // ---- subdivision overlay ------------------------------------------------
+  // A bar split into N equal parts. Each position takes a colour by how coarse
+  // a division it lands on: the bar start is 1, the finest level is 2, and
+  // each coarser level above that counts up. Levels come from N's prime
+  // factors in ascending order, so 8 gives 1,2,3,2,4,2,3,2 and 12 gives
+  // 1,2,2,3,2,2,4,2,2,3,2,2. A prime N has only one level, so every division
+  // after the bar start is colour 2.
+  const OVERLAY_COLORS = ["#ff1f5a", "#3d9bff", "#ffd21f", "#19e8a5", "#c44dff", "#ff8c1a"];
+
+  function overlayPattern(n) {
+    const primes = [];
+    let x = n;
+    for (let p = 2; p * p <= x; p++) while (x % p === 0) { primes.push(p); x /= p; }
+    if (x > 1) primes.push(x);
+    const k = primes.length;
+    const spacing = [];
+    let s = n;
+    for (const p of primes) { s /= p; spacing.push(s); }
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      if (i === 0) { out.push(1); continue; }
+      let lvl = k;
+      for (let j = 0; j < k; j++) if (i % spacing[j] === 0) { lvl = j + 1; break; }
+      out.push(k + 2 - lvl);
+    }
+    return { colors: out, levels: k + 1 };
   }
 
   // ---- geometry -----------------------------------------------------------
@@ -575,6 +625,26 @@
 
   function persp(t) { return GEO.z0 / (GEO.z0 + t * GEO.Z); }
 
+  // Camera pitch. Interpolates away from the default in both directions, so
+  // the midpoint reproduces the original geometry exactly. Toward 1 the
+  // vertical travel grows and the perspective flattens to orthographic — a
+  // bird's eye. Toward 0 the travel collapses to nothing while the scaling
+  // sharpens, so notes hold one screen position and only swell as they arrive.
+  const TILT_DEFAULT = 0.62;
+  const TILT_MID = { yNear: 0.88, yFar: 0.26, Z: 3.4, halfNear: 0.46 };
+  const TILT_TOP = { yNear: 0.94, yFar: 0.06, Z: 0.001, halfNear: 0.44 };
+  const TILT_EYE = { yNear: 0.60, yFar: 0.60, Z: 14, halfNear: 0.30 };
+
+  function applyTilt(v) {
+    const to = v >= TILT_DEFAULT ? TILT_TOP : TILT_EYE;
+    const u = v >= TILT_DEFAULT
+      ? (v - TILT_DEFAULT) / (1 - TILT_DEFAULT)
+      : 1 - v / TILT_DEFAULT;
+    for (const key of ["yNear", "yFar", "Z", "halfNear"]) {
+      GEO[key] = TILT_MID[key] + (to[key] - TILT_MID[key]) * u;
+    }
+  }
+
   function project(t, u, h, W, H) {
     const s = persp(t), sFar = persp(1);
     const yN = H * GEO.yNear, yF = H * GEO.yFar;
@@ -588,8 +658,18 @@
 
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
-  let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
-  const show = { wings: false, air: true, grid: true, bars: false };
+  let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5, gridAlpha = 0.35;
+  let overlayN = 0, overlayPat = null;
+  const show = { wings: false, air: true, grid: true, bars: false,
+                 airNotes: true, cosmetic: true, autoplay: true };
+  const AIR_KINDS = new Set(["air", "ald", "aslide", "ahold", "asolid"]);
+
+  // Autoplay consumes everything exactly at the judgement plane. Otherwise a
+  // little overhang past it keeps a hit visible as it leaves. Sustained bodies
+  // clip at the plane, so a hold is eaten progressively rather than sliding
+  // through.
+  const nearClip = () => show.autoplay ? 0 : -0.05;
+  const tapClip = () => show.autoplay ? 0 : -0.12;
   // Visible lookahead at speed 1.0, derived rather than chosen. The recovered
   // materialization projection is
   //   projected = -65 - 1.5 * (base_offset + delta) * speed * factor
@@ -611,7 +691,7 @@
     if (!chart) return;
 
     const LA = lookahead();
-    const back = LA * 0.10; // a little past the line, so hits are visible leaving
+    const back = show.autoplay ? 0 : LA * 0.10;
 
     // --- corridor floor
     const c0 = project(0, 0, 0, W, H), c16 = project(0, 16, 0, W, H);
@@ -633,6 +713,26 @@
       cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
     }
 
+    // --- subdivision overlay, drawn over the floor and under the notes
+    if (overlayN > 0 && overlayPat) {
+      const EXT = 7;
+      const step = chart.R / overlayN;
+      for (const bt of chart.beats) {
+        if (!bt.bar) continue;
+        for (let i = 0; i < overlayN; i++) {
+          const d = chart.timeAt(bt.m * chart.R + i * step) - now;
+          if (d < -back || d > LA) continue;
+          const t = d / LA;
+          const a = project(t, -EXT, 0, W, H), b = project(t, 16 + EXT, 0, W, H);
+          const idx = overlayPat.colors[i];
+          const rank = idx === 1 ? 0 : overlayPat.levels + 1 - idx;
+          cx2.strokeStyle = OVERLAY_COLORS[(idx - 1) % OVERLAY_COLORS.length];
+          cx2.lineWidth = Math.max(1, 3 - rank * 0.5);
+          cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
+        }
+      }
+    }
+
     // --- air plane: the ceiling every air element is bounded by
     if (show.air) {
       const p0 = project(0, 0, AIR_PLANE, W, H), p16 = project(0, 16, AIR_PLANE, W, H);
@@ -646,24 +746,45 @@
       cx2.stroke();
     }
 
-    // --- beat grid
+    // --- beat grid, running out past the playfield as if the floor continued
     if (show.grid) {
+      const EXT = 7; // lanes of overhang on each side
       for (const bt of chart.beats) {
         const d = bt.time - now;
         if (d < -back || d > LA) continue;
         const t = d / LA;
-        const a = project(t, 0, 0, W, H), b = project(t, 16, 0, W, H);
-        cx2.strokeStyle = bt.bar ? "rgba(150,162,200,.26)" : "rgba(150,162,200,.09)";
-        cx2.lineWidth = bt.bar ? 1.2 : 1;
+        const a = project(t, -EXT, 0, W, H), b = project(t, 16 + EXT, 0, W, H);
+        const alpha = gridAlpha * (bt.bar ? 1 : 0.34);
+        cx2.strokeStyle = `rgba(150,162,200,${alpha.toFixed(3)})`;
+        cx2.lineWidth = bt.bar ? 1.3 : 1;
         cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
+
+        // Measure number only, set just outside the playfield edge and riding
+        // its own grid line down the corridor.
+        if (bt.bar) {
+          // Set slightly later in time so the glyph clears its own line.
+          const edge = project(Math.min(1, t + 0.014), 0, 0, W, H);
+          const size = Math.max(20, Math.round(34 * edge.s));
+          cx2.fillStyle = `rgba(150,162,200,${Math.min(1, gridAlpha * 1.9).toFixed(3)})`;
+          cx2.font = `600 ${size}px ui-monospace, Menlo, monospace`;
+          cx2.textAlign = "right";
+          cx2.textBaseline = "middle";
+          const label = String(bt.m);
+          // Keep a wide number on canvas at the near end, where the lane-0
+          // edge sits only a few dozen pixels in.
+          const lx = Math.max(cx2.measureText(label).width + 4, edge.x - 8);
+          cx2.fillText(label, lx, edge.y);
+          cx2.textAlign = "left";
+          cx2.textBaseline = "alphabetic";
+        }
       }
     }
 
     // --- chart-region intervals, drawn on the floor beneath everything
-    for (const r of chart.regions) {
+    for (const r of (show.cosmetic ? chart.regions : [])) {
       const d0 = r.time - now, d1 = r.endTime - now;
       if (d1 < -back || d0 > LA) continue;
-      const t0 = Math.max(-0.06, d0 / LA), t1 = Math.min(1, d1 / LA);
+      const t0 = Math.max(nearClip(), d0 / LA), t1 = Math.min(1, d1 / LA);
       const a0 = project(t0, 0, 0, W, H), b0 = project(t0, 16, 0, W, H);
       const a1 = project(t1, 0, 0, W, H), b1 = project(t1, 16, 0, W, H);
       if (r.def.point || t1 <= t0) {
@@ -685,18 +806,29 @@
         cx2.stroke();
         cx2.setLineDash([]);
       }
-      const lab = r.cmd
-        + (r.def.key ? ` k${r.key}` : "")
-        + (r.def.factor ? ` ×${r.factor}` : "");
+      // A scroll factor of 1 is normal speed, so the authored factor is the
+      // speed. The formula's factor-1 term is arithmetic, not the value.
+      const num = v => Number(v.toFixed(2)).toString();
+      let lab;
+      if (r.cmd === "SLP" || r.cmd === "SFL") {
+        lab = `Scroll speed ${num(r.factor)}` + (r.key ? ` · key ${r.key}` : "");
+      } else if (r.cmd === "STP") {
+        lab = "Stop";
+      } else if (r.cmd === "CLK") {
+        lab = "Click";
+      } else {
+        lab = r.def.label + (r.def.factor ? ` ${num(r.factor)}` : "");
+      }
       cx2.fillStyle = r.def.color;
       cx2.font = `${Math.max(9, Math.round(12 * a0.s))}px ui-monospace, Menlo, monospace`;
       cx2.textAlign = "right";
-      cx2.fillText(lab, a0.x - 8, a0.y + 3);
+      const lw = cx2.measureText(lab).width;
+      cx2.fillText(lab, Math.max(lw + 4, a0.x - 8), a0.y + 3);
       cx2.textAlign = "left";
     }
 
     // --- unrecognised commands, placed by deduced position only
-    for (const k of chart.markers) {
+    for (const k of (show.cosmetic ? chart.markers : [])) {
       const d = k.time - now;
       if (d < -back || d > LA) continue;
       const t = d / LA;
@@ -730,15 +862,17 @@
     for (const n of vis) {
       const t0 = (n.time - now) / LA;
       const t1 = (n.endTime - now) / LA;
-      const isAir = n.kind === "air" || n.kind === "ald" || n.kind === "aslide" ||
-        n.kind === "ahold" || n.kind === "asolid";
-      if (isAir && !show.air) continue;
+
+      if (AIR_KINDS.has(n.kind) && !show.airNotes) continue;
+      if (n.kind === "asolid" && !show.cosmetic) continue;
 
       if (n.kind === "asolid") {
         drawAirSolid(n, t0, t1, W, H);
       } else if (n.kind === "ald" && n.isPath) {
         drawAirTrace(n, t0, t1, W, H);
-      } else if (n.kind === "ald" || n.kind === "aslide") {
+      } else if (n.kind === "ald") {
+        drawAirRung(n, t0, W, H);
+      } else if (n.kind === "aslide") {
         drawAirBand(n, t0, t1, W, H);
         // The air-up start reaches the record's own authored height, which is
         // what makes it line up with the path leaving that point.
@@ -792,7 +926,7 @@
   }
 
   function drawTap(n, t, W, H) {
-    if (t < -0.12 || t > 1) return;
+    if (t < tapClip() || t > 1) return;
     const [a, b] = laneQuad(t, n.lane, n.width, W, H, 0);
     const th = Math.max(3, 16 * a.s);
     const alpha = t < 0 ? Math.max(0, 1 + t / 0.12) : 1;
@@ -804,7 +938,7 @@
   }
 
   function drawSustain(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     const steps = 10;
     const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
@@ -838,12 +972,14 @@
     // slide its shape. Only the horizontal checkpoint bar is optional, and it
     // exists only where the boundary marker is set. A hold's start is its own
     // judgement, not a checkpoint bar, so it is never suppressed.
-    const showBar = n.kind !== "slide" || (n.bar && show.bars);
-    if (showBar && t0 >= -0.12 && t0 <= 1) drawTap(n, t0, W, H);
+    // A slide's root is the note you tap to start it — a real start judgement,
+    // like a hold's. Only the checkpoint bars along the path are optional.
+    const showBar = n.kind !== "slide" || n.isRoot || (n.bar && show.bars);
+    if (showBar && t0 >= tapClip() && t0 <= 1) drawTap(n, t0, W, H);
   }
 
   function drawAirBand(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     // Authored heights are relative; air records are off the ground by
     // definition, so the scale keeps their order but never sits on the floor.
@@ -871,12 +1007,10 @@
       cx2.lineTo(p.x, p.y);
     }
     cx2.closePath();
-    cx2.fillStyle = n.color + (n.kind === "ald" ? "cc" : "55");
+    cx2.fillStyle = n.color + "55";
     cx2.fill();
-    // An ALD rung is a horizontal bar like any other note, so it takes the
-    // same white contour.
-    cx2.strokeStyle = n.kind === "ald" ? "#ffffff" : n.color + "cc";
-    cx2.lineWidth = n.kind === "ald" ? 1 : 1.2;
+    cx2.strokeStyle = n.color + "cc";
+    cx2.lineWidth = 1.2;
     cx2.stroke();
 
     // Air slide records carry a path endpoint; air crush rungs are checkpoints
@@ -885,7 +1019,7 @@
     // is a note in its own right, not a path checkpoint, so it carries none.
     // Anchor to the true endpoint, not the view-clamped one: clamping would
     // pin the marker at the far edge until the endpoint came into range.
-    if (n.isAction && t1 <= 1 && t1 >= -0.05) {
+    if (n.isAction && t1 <= 1 && t1 >= nearClip()) {
       const p = project(t1, (n.endLane ?? n.lane) - pad, h1, W, H);
       const q = project(t1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, h1, W, H);
       const th = Math.max(4, 11 * p.s);
@@ -895,12 +1029,27 @@
     }
   }
 
+  // A rung lasts a single tick, so a time-spanned quad would collapse to a
+  // hairline. It gets a fixed screen thickness instead, the way a tap does.
+  function drawAirRung(n, t, W, H) {
+    if (t < tapClip() || t > 1) return;
+    const pad = 0.55;
+    const p = project(t, n.lane - pad, liftHeight(n.h0), W, H);
+    const q = project(t, n.lane + n.width + pad, liftHeight(n.h0), W, H);
+    const th = Math.max(6, 26 * p.s);
+    cx2.fillStyle = n.color;
+    cx2.globalAlpha = t < 0 ? Math.max(0, 1 + t / 0.12) : 1;
+    cx2.fillRect(p.x, p.y - th, q.x - p.x, th);
+    cx2.globalAlpha = 1;
+    barContour(p.x, p.y - th, q.x - p.x, th);
+  }
+
   // An ALD record that travels — in height, in lane, or over real duration —
   // draws in game as a thin line, not a body. Flat instantaneous records are
   // rungs and keep their bar. The discriminator is the record's own geometry;
   // it correlates with the selector field, whose meaning is unassigned.
   function drawAirTrace(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     const lift = liftHeight;
     const h0 = lift(n.h0), h1 = lift(n.h1);
@@ -928,7 +1077,7 @@
   // endpoint have no assigned meaning in the reconstruction, so they are not
   // used as height here.
   function drawAirSolid(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     const laneAt = k => (n.lane + n.width / 2) +
       (((n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2) - (n.lane + n.width / 2)) * k;
@@ -947,7 +1096,7 @@
   }
 
   function drawAirHold(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, -0.05), s1 = Math.min(t1, 1);
+    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, 1);
     if (s1 < s0) return;
     // AHD authors no height, so it sits at the ordinary air height. It is
     // straight: no end lane exists to travel toward. Drawn narrower than its
@@ -982,7 +1131,7 @@
     cx2.beginPath(); cx2.moveTo(g0.x, g0.y); cx2.lineTo(t0p.x, t0p.y); cx2.stroke();
     cx2.setLineDash([]);
     // each authored record endpoint is an air action point
-    if (n.isAction && t1 <= 1 && t1 >= -0.05) {
+    if (n.isAction && t1 <= 1 && t1 >= nearClip()) {
       const e0 = project(t1, l0, h, W, H), e1 = project(t1, l1, h, W, H);
       const th = Math.max(4, 11 * e0.s);
       cx2.fillStyle = ACTION;
@@ -991,46 +1140,70 @@
     }
   }
 
+  // Left/right spellings lean the block toward the side they name. The angle
+  // is cosmetic: the reconstruction keeps six direction codes but attaches no
+  // geometry to them, and only the up/down half reaches judgement.
+  const AIR_LEAN_DEG = 30; // lean off vertical, on screen
+  const LATERAL = { AUL: -1, ADL: -1, AUR: 1, ADR: 1 };
+
   function drawAirArrow(n, t, W, H) {
     const up = n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR";
-    drawArrow(t, n.lane, n.width, n.color, up, W, H);
+    drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, LATERAL[n.cmd] || 0);
   }
 
-  function drawArrow(t, lane, width, color, up, W, H, topH) {
-    if (t < -0.12 || t > 1) return;
+  function drawArrow(t, lane, width, color, up, W, H, topH, lateral) {
+    if (t < tapClip() || t > 1) return;
     const top = topH === undefined ? AIR_PLANE : topH;
     if (top <= 0.001) return;
     // The arrow stands on its lane: base on the floor, reaching into the air
     // plane. Up notes carry the head at the top, down notes at the floor.
-    const g0 = project(t, lane, 0, W, H);
-    const g1 = project(t, lane + width, 0, W, H);
+    // Drawn 20% narrower than the note's lane span so the block reads as an
+    // arrow sitting on the lane rather than filling it.
+    const trim = width * 0.1;
+    const g0 = project(t, lane + trim, 0, W, H);
+    const g1 = project(t, lane + width - trim, 0, W, H);
     const a0 = project(t, lane, top, W, H);
     const mid = (g0.x + g1.x) / 2;
-    const halfW = (g1.x - g0.x) / 2;
-    const shaftW = Math.max(2.5, halfW * 0.32);
     const yGround = g0.y;
     const yAir = a0.y;
-    const head = Math.min((yGround - yAir) * 0.42, Math.max(12, 54 * g0.s));
 
+    // A block chevron, not a stick arrow: a rectangle with an isosceles
+    // triangle carved out of the tail edge and the same triangle set on the
+    // head. The whole shape stays between the lane surface and the air plane.
     const tip = up ? yAir : yGround;
-    const neck = up ? yAir + head : yGround - head;
     const tail = up ? yGround : yAir;
+    const s = Math.sign(tail - tip) || 1;
+    const notch = Math.abs(tail - tip) * 0.3;
+    const L = g0.x, R = g1.x;
+
+    // Leaning is a shear along the whole length, not a shift of the head. The
+    // offset scales with distance from the tail, so the carved tail triangle
+    // and the head triangle lean at the same angle as the body.
+    const dx = (lateral || 0) * Math.abs(tail - tip) *
+      Math.tan(AIR_LEAN_DEG * Math.PI / 180);
+    const span = tail - tip;
+    const sx = y => (span === 0 ? 0 : dx * (1 - (y - tip) / span));
+
+    const yShoulder = tip + s * notch;
+    const yNotch = tail - s * notch;
 
     cx2.fillStyle = color;
     cx2.beginPath();
-    cx2.moveTo(mid, tip);
-    cx2.lineTo(mid + halfW, neck);
-    cx2.lineTo(mid + shaftW, neck);
-    cx2.lineTo(mid + shaftW, tail);
-    cx2.lineTo(mid - shaftW, tail);
-    cx2.lineTo(mid - shaftW, neck);
-    cx2.lineTo(mid - halfW, neck);
+    cx2.moveTo(mid + sx(tip), tip);                  // head apex
+    cx2.lineTo(R + sx(yShoulder), yShoulder);        // right shoulder
+    cx2.lineTo(R + sx(tail), tail);                  // right tail corner
+    cx2.lineTo(mid + sx(yNotch), yNotch);            // carved tail apex
+    cx2.lineTo(L + sx(tail), tail);                  // left tail corner
+    cx2.lineTo(L + sx(yShoulder), yShoulder);        // left shoulder
     cx2.closePath();
+    // The block is tall and wide enough to hide notes behind it, so the fill
+    // is mostly transparent and the opaque contour carries the shape.
+    cx2.globalAlpha = 0.8;
     cx2.fill();
-
-    // a brighter foot where it meets the lane
-    cx2.fillStyle = "rgba(255,255,255,.5)";
-    cx2.fillRect(g0.x, yGround - Math.max(1.5, 3 * g0.s), g1.x - g0.x, Math.max(1.5, 3 * g0.s));
+    cx2.globalAlpha = 1;
+    cx2.strokeStyle = "rgba(255,255,255,.85)";
+    cx2.lineWidth = 1;
+    cx2.stroke();
   }
 
   function drawWindow(n, W, H, LA) {
@@ -1215,6 +1388,17 @@
     el("rval").textContent = rate.toFixed(2) + "×";
     el("wval").textContent = winMs + " ms";
     el("aval").textContent = GEO.airTop.toFixed(2);
+    el("gval").textContent = Math.round(gridAlpha * 100) + "%";
+    const tv = +el("tilt").value;
+    el("tiltval").textContent = tv === 62 ? "default"
+      : tv >= 96 ? "bird's eye" : tv <= 4 ? "head-on" : String(tv);
+    el("oval").textContent = overlayN === 0 ? "off" : String(overlayN);
+    // Colour key for the levels actually in use, not the whole sequence.
+    el("opat").innerHTML = overlayPat
+      ? Array.from({ length: overlayPat.levels }, (_, i) =>
+          `<span style="color:${OVERLAY_COLORS[i % OVERLAY_COLORS.length]}">${i + 1}</span>`
+        ).join("  ")
+      : "";
     draw();
     drawStrip();
   }
@@ -1243,6 +1427,13 @@
   el("rate").addEventListener("input", e => { rate = +e.target.value / 100; sync(); });
   el("win").addEventListener("input", e => { winMs = +e.target.value; sync(); });
   el("airh").addEventListener("input", e => { GEO.airTop = +e.target.value / 100; sync(); });
+  el("gridop").addEventListener("input", e => { gridAlpha = +e.target.value / 100; sync(); });
+  el("tilt").addEventListener("input", e => { applyTilt(+e.target.value / 100); sync(); });
+  el("overlay").addEventListener("input", e => {
+    overlayN = +e.target.value;
+    overlayPat = overlayN > 0 ? overlayPattern(overlayN) : null;
+    sync();
+  });
   el("play").addEventListener("click", () => {
     playing = !playing;
     el("play").textContent = playing ? "Pause" : "Play";
@@ -1259,7 +1450,8 @@
     draw();
   });
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
-  toggle("tShape", "bars");
+  toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
+  toggle("tAuto", "autoplay");
 
   strip.addEventListener("click", e => {
     if (!chart || !chart.duration) return;
