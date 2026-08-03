@@ -1,0 +1,115 @@
+# Temp handoff: what a render-comparison session turned up
+
+Temporary note, not normative. Delete once its contents are either promoted to
+claims or dismissed. Nothing here satisfies a gate in `docs/COMPLETION.md`.
+
+## What this session was
+
+An offline chart viewer (`scripts/c2s-viewer.html`) was built from this
+repository's own specs and claims, then compared frame-by-frame against
+gameplay footage of the same `.c2s` files. Seven local charts across the 2000
+and 8000 index ranges.
+
+The method's one virtue is that the viewer is not an independent
+reimplementation. Command vocabulary and field layouts come from `spec/c2s.md`,
+timing from the `BPM`/`MET` schedule per `spec/timing.md`, the slide boundary
+marker and chain continuation from `spec/notes/slide.md`, the `ASD`/`ASC` and
+`AHX`/`AHD` checkpoint split from the air specs, the air-up start from
+`air_hold_start_profile` / `air_slide_start_profile`, note speed from the
+recovered materialization projection. So a disagreement with the cabinet is
+either a viewer bug or a spec gap, and the viewer bugs were fixable and got
+fixed. What survived is in GitHub issues 2 through 5.
+
+Its limits are real. Footage is watched, not instrumented. Counts of fast
+elements are estimates. Judgement outcomes are mostly invisible — you can see
+what renders and hear what sounds, not what scores. Player vocabulary in the
+issues is the observer's, not this project's.
+
+## Leads, roughly by value
+
+**1. `ALD` appears to generate judged checkpoints (issue #3).**
+`spec/notes/air_ladder.md` says one runtime checker per parsed control point
+and documents no path generation at all, unlike types 5, 8 and 13. Observation
+disagrees twice over: a section with four authored control points shows
+twelve to sixteen discrete blocks, and a single record spanning two height
+units shows three. The recovered Air-family adaptive step does not account for
+it — at 219 BPM against a 240 reference it yields 48 ticks, roughly three
+samples where a dozen were seen.
+
+Cheapest first move: re-walk the type-9 load at the anchors already in
+`claim.note.air-ladder-judgement`, looking for a generated-record vector
+analogous to type 13's, or for a load that expands one parsed point into
+several runtime records.
+
+**2. Slide checkpoints split into two rendered classes (issue #4).**
+Some intermediate control points draw as a note and fire a cue at their own
+scheduled time; others draw nothing and only bend the path. The path-boundary
+marker is the obvious discriminator and is demonstrably *not* it: three
+records in one chart are all `SXD`, all marker-set, all chain-final, and one
+renders while two do not.
+
+Cheapest first move: locate the **parsed connection field**. `spec/notes/slide.md`
+names it in the continuation test but never gives it a token index or an
+offset, so it is currently unreadable from outside. It is the leading
+candidate. Second candidate: the trailing token after the style string, present
+in some charts and absent in others.
+
+Note the scope argument before dismissing this as rendering. A cue scheduled at
+a checkpoint's *authored* time is not rendering — it is a gameplay-pipeline
+event keyed to a checkpoint.
+
+**3. Profile 7 may test absence of upward exit (issue #2).**
+Weakest of the three, and explicitly filed as a hypothesis. Rests on the
+65/215 sentinel asymmetry, the reset seeding to 65, and two player reports.
+Falsifiable as described in the issue.
+
+**4. The `ALD` connection selector partitions behaviour cleanly.**
+Across three charts the selector separates records that render as travelling
+lines from records that render as discrete blocks, with zero crossover in one
+555-record chart. `claim.note.air-ladder-judgement` lists its meaning under
+Unknowns. Values seen: 0, 1, 2, 4, 6, 12, 16, 24, and 38400. The last appears
+in every chart examined and always on flat single-tick records, which makes it
+look like a sentinel rather than an authoring artifact.
+
+## Friction worth fixing while you are in there
+
+**The 91-entry descriptor registry is asserted but never enumerated.**
+`spec/c2s.md` states the count and the ID range and stops. That is what made
+`SLP` invisible until a chart forced the question, and any other unrecognised
+spelling would be equally invisible today. Writing the list down is cheap and
+closes a whole class of blind spot.
+
+**Nobody documents who fills the authored checkpoint vector.**
+`spec/notes/hold.md` and `spec/notes/slide.md` both say the note *copies* a
+checkpoint vector from the parsed record. Neither says where it came from.
+This may be the same question as lead 2.
+
+**`claim.parser.sla-region-selection` is a good cautionary tale.**
+It concluded that `SLA` could not affect gameplay. That reads as obviously
+right — type 12 constructs no runtime object. It was wrong, and the proof-check
+pass caught it: the tag selects a keyed scroll schedule, the schedule feeds
+materialization, and materialization gates when a note can participate. Worth
+keeping in mind for anything currently concluded to be inert on the grounds
+that it builds nothing.
+
+## Do not trust these parts of the viewer
+
+They are fitted or invented, and several are flagged in issue #5:
+
+- All playfield proportions. Rendering is out of scope, so none of the
+  geometry could have come from the binary.
+- The `ALD` rung generation grid, fitted to observed counts.
+- The selector gate on rung generation, inferred from two player reports.
+- Authored height 1.0 meaning the lane surface, and the per-chart air-height
+  anchor. Inferred; `AIR` records carry no height field to calibrate against.
+- The `MET` field order read as unit-then-count. Inferred from the corpus.
+- Scroll transform magnitudes. The structure follows `spec/timing.md` exactly,
+  but the source works in a derived millisecond domain and the viewer works in
+  the tempo map's own milliseconds.
+
+One part is better supported than it was: the note-speed mapping,
+`5388.9 / speed` ms, derived from the materialization eligibility band. The
+unproven step was whether that band is also the visible extent. A player
+paused footage and the viewer at the same instant at speed 9.0 and reported
+near-identical visible note counts. Still observation, not proof, but no longer
+an assumption.
