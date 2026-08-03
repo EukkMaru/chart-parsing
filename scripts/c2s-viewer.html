@@ -240,8 +240,8 @@
           <input id="time" type="range" min="0" max="1000" value="0" step="1" aria-label="Playback position">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Note speed</span><b id="sval">4.0</b> <b id="lval" style="color:var(--ink-3);font-weight:400"></b></div>
-          <input id="speed" type="range" min="10" max="120" value="40" step="1" aria-label="Note speed">
+          <div class="lab"><span>Note speed</span><b id="sval">9.0</b> <b id="lval" style="color:var(--ink-3);font-weight:400"></b></div>
+          <input id="speed" type="range" min="10" max="120" value="90" step="1" aria-label="Note speed">
         </div>
         <div class="ctl">
           <div class="lab"><span>Playback rate</span><b id="rval">1.00×</b></div>
@@ -588,7 +588,7 @@
 
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
-  let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
+  let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
   const show = { wings: false, air: true, grid: true, bars: false };
   // Visible lookahead at speed 1.0, derived rather than chosen. The recovered
   // materialization projection is
@@ -780,16 +780,27 @@
     return [a, b];
   }
 
+  // Every note drawn as a horizontal bar gets the same white contour, so a
+  // dense stack reads as separate notes rather than one mass.
+  function barContour(x, y, w, h, alpha) {
+    cx2.globalAlpha = alpha === undefined ? 1 : alpha;
+    cx2.strokeStyle = "#ffffff";
+    cx2.lineWidth = 1;
+    cx2.strokeRect(Math.round(x) + 0.5, Math.round(y) + 0.5,
+                   Math.round(w) - 1, Math.round(h) - 1);
+    cx2.globalAlpha = 1;
+  }
+
   function drawTap(n, t, W, H) {
     if (t < -0.12 || t > 1) return;
     const [a, b] = laneQuad(t, n.lane, n.width, W, H, 0);
     const th = Math.max(3, 16 * a.s);
+    const alpha = t < 0 ? Math.max(0, 1 + t / 0.12) : 1;
     cx2.fillStyle = n.color;
-    cx2.globalAlpha = t < 0 ? Math.max(0, 1 + t / 0.12) : 1;
+    cx2.globalAlpha = alpha;
     cx2.fillRect(a.x, a.y - th, b.x - a.x, th);
     cx2.globalAlpha = 1;
-    cx2.fillStyle = "rgba(255,255,255,.55)";
-    cx2.fillRect(a.x, a.y - th, b.x - a.x, Math.max(1, th * 0.22));
+    barContour(a.x, a.y - th, b.x - a.x, th, alpha);
   }
 
   function drawSustain(n, t0, t1, W, H) {
@@ -860,10 +871,12 @@
       cx2.lineTo(p.x, p.y);
     }
     cx2.closePath();
-    cx2.fillStyle = n.color + "55";
+    cx2.fillStyle = n.color + (n.kind === "ald" ? "cc" : "55");
     cx2.fill();
-    cx2.strokeStyle = n.color + "cc";
-    cx2.lineWidth = 1.2;
+    // An ALD rung is a horizontal bar like any other note, so it takes the
+    // same white contour.
+    cx2.strokeStyle = n.kind === "ald" ? "#ffffff" : n.color + "cc";
+    cx2.lineWidth = n.kind === "ald" ? 1 : 1.2;
     cx2.stroke();
 
     // Air slide records carry a path endpoint; air crush rungs are checkpoints
@@ -876,6 +889,7 @@
       const th = Math.max(4, 11 * p.s);
       cx2.fillStyle = ACTION;
       cx2.fillRect(p.x, p.y - th, q.x - p.x, th);
+      barContour(p.x, p.y - th, q.x - p.x, th);
     }
   }
 
@@ -970,6 +984,7 @@
       const th = Math.max(4, 11 * a1.s);
       cx2.fillStyle = ACTION;
       cx2.fillRect(a1.x, a1.y - th, b1.x - a1.x, th);
+      barContour(a1.x, a1.y - th, b1.x - a1.x, th);
     }
   }
 
