@@ -553,12 +553,16 @@
   // region by moving GEO.airTop.
   const AIR_PLANE = 1.0;
 
-  // Authored height 1.0 is the lane surface, not a low hover: charts park a
-  // path at 1.0 while it runs along the floor beside a hold. So height maps
-  // 1 -> ground and the chart's tallest -> the air plane.
+  // Authored height 1.0 is the lane surface: charts park a path at 1.0 while
+  // it runs along the floor beside a hold. The far end is anchored to the
+  // ordinary air height rather than to the chart maximum, because a handful of
+  // extreme records would otherwise squash every ordinary note onto the floor.
+  // Taller records genuinely rise above the plane, capped so they stay on
+  // screen.
+  const AIR_OVERSHOOT = 2.0;
   function liftHeight(v) {
-    const span = Math.max(1, maxH - 1);
-    return Math.max(0, Math.min(AIR_PLANE, ((v || 1) - 1) / span));
+    const span = Math.max(0.5, airUnit - 1);
+    return Math.max(0, Math.min(AIR_OVERSHOOT, ((v || 1) - 1) / span));
   }
 
   function persp(t) { return GEO.z0 / (GEO.z0 + t * GEO.Z); }
@@ -576,7 +580,7 @@
 
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
-  let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1;
+  let speed = 4.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5;
   const show = { wings: false, air: true, grid: true, shaping: true };
   const LOOK_BASE = 3400; // ms of chart visible at speed 1.0
 
@@ -1079,6 +1083,7 @@
       ["Records", noteTotal],
       ["Slide bars", chart.notes.filter(n => n.kind === "slide" && n.bar).length],
       ["Shaping pts", chart.notes.filter(n => n.kind === "slide" && !n.bar).length],
+      ["Air unit", airUnit],
       ["Regions", chart.regions.length],
       ["Commands", c.size],
     ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
@@ -1125,6 +1130,17 @@
     markAirChainStarts(chart.notes);
     markSlideBoundaries(chart.notes);
     maxH = Math.max(1, ...chart.notes.map(n => Math.max(n.h0 || 0, n.h1 || 0)));
+    // Ordinary air height, taken from the most common air-slide height. Air
+    // slides sit at the same height a plain AIR note does, and AIR records
+    // carry no height field to read it from.
+    const tally = new Map();
+    for (const n of chart.notes) {
+      if (n.kind !== "aslide") continue;
+      for (const h of [n.h0, n.h1]) if (h > 0) tally.set(h, (tally.get(h) || 0) + 1);
+    }
+    airUnit = tally.size
+      ? [...tally.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      : 5;
     now = 0;
     el("time").max = String(Math.max(1, Math.round(chart.duration)));
     el("drop").classList.add("hidden");
