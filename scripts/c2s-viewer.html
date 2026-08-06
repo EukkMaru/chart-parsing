@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>c2s corridor — chart inspector</title>
 <style>
   :root {
@@ -263,7 +264,7 @@
           <button id="tWings" type="button" aria-pressed="false">Windows</button>
           <button id="tAir" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
-          <button id="tShape" type="button" aria-pressed="false" title="Horizontal checkpoint bars on slides. SLD/SXD carry one; SLC/SXC only shape the path.">Ckpt bars</button>
+          <button id="tShape" type="button" aria-pressed="false" title="Show shape-only SLC/SXC controls as faint debug rules. Binary-backed SLD/SXD endpoint resources remain visible.">Shape pts</button>
           <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
           <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
           <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
@@ -314,9 +315,9 @@
   </div>
 
   <footer class="note">
-    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> / <code>MET</code> schedule against <code>RESOLUTION</code>, so horizontal position along the corridor is real. The taper is cosmetic — the recovered projection is linear in time-delta and says nothing about perspective, which sits outside the reconstruction's scope. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
+    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> schedule on this snapshot's fixed 384-tick grid; authored <code>RESOLUTION</code> is recognized but rejected. The taper is cosmetic — the recovered projection is linear in time-delta and says nothing about perspective, which sits outside the reconstruction's scope. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
     <br><br>
-    <b>Chart regions.</b> <code>STP</code>, <code>SFL</code>, <code>SLP</code> and <code>DCM</code> intervals are marked in the gutter off the right edge of the playfield, labelled with their scroll speed. They rewrite a pending note's scheduled position before the materialization test, and only above the <code>30.0F</code> raw-delta shortcut — so they never move a near note. The bands here mark <em>where</em> each interval applies; the transform itself is not applied to the notes drawn, so a scrolling section will not visually speed up. <code>SFE</code> is recognised by the parser but has no handler case, so it is drawn dashed and dead.
+    <b>Chart regions.</b> <code>STP</code>, <code>SFL</code>, <code>SLP</code> and <code>DCM</code> intervals are marked in the gutter off the right edge of the playfield, labelled with their scroll speed. They rewrite a pending note's scheduled position before the materialization test, and only above the <code>30.0F</code> raw-delta shortcut — so they never move a near note. With <b>Apply scroll</b> enabled, the recovered interval composition and DCM selection are applied to drawn distance; the remaining caveat is the unavailable external view calibration. <code>SFE</code> is recognised by the parser but has no handler case, so it is drawn dashed and dead.
   </footer>
 </div>
 
@@ -329,7 +330,19 @@
   // command name. Colours follow the cabinet's own family conventions.
   const ACTION = "#ff5ce0";     // air action markers on air hold / air slide paths
   const AIRUP = "#7ef08a";      // air-up green, also the air hold centre line
-  const ALD_PATH = "#ff5ce0";   // travelling ALD renders magenta; rungs stay purple
+  // Product-choice colors applied to the three recovered asset-independent
+  // ALD stream geometries. The original packed colors/resources are external
+  // and are intentionally not copied.
+  const ALD_STREAM_ZERO = "#ff5ce0";
+  const ALD_STREAM_TWO = "#a35cff";
+  const ALD_STREAM_ONE = "#58275f";
+  const ALD_UNRESOLVED_RESULT_INDEX = 0xff;
+  const C2S_STYLE = [
+    "DEF","RED","ORN","YEL","LIM","GRN","AQA","CYN",
+    "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
+  ];
+  const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
+  const SLIDE_FEEDBACK = ["UP", "DW", "CE", "RC", "LC", "RS", "LS", "BS"];
   const FAM = {
     TAP: { kind: "tap",   color: "#ff4d4d", label: "Tap" },
     CHR: { kind: "tap",   color: "#ffd633", label: "ExTap" },
@@ -385,6 +398,20 @@
   );
 
   // ---- parsing ------------------------------------------------------------
+  const c2sInt = value => Number.isNaN(Number.parseInt(value, 10))
+    ? 0 : Number.parseInt(value, 10);
+  const c2sWidth = value => Math.max(1, Math.min(16, c2sInt(value)));
+  const exactIndexOrZero = (table, value) => {
+    const index = table.indexOf(value || "");
+    return index < 0 ? 0 : index;
+  };
+  // ALD vertical endpoints are stored as integer tenths by adding 0.5 before
+  // truncation, then converted back to float for generated interpolation.
+  const aldVertical = value => {
+    const parsed = Number.parseFloat(value);
+    return Number.isNaN(parsed) ? 0 : Math.trunc(parsed * 10 + 0.5) * 0.1;
+  };
+
   function parseC2s(text) {
     const lines = text.split(/\r?\n/);
     const head = { resolution: 384, bpmDef: 120, metNum: 4, metDen: 4, creator: "", version: "" };
@@ -397,7 +424,9 @@
       const cmd = t[0], f = t.slice(1);
       counts.set(cmd, (counts.get(cmd) || 0) + 1);
 
-      if (cmd === "RESOLUTION" || cmd === "CLK_DEF") { head.resolution = +f[0] || head.resolution; continue; }
+      // This snapshot recognizes RESOLUTION but has no accepting header case;
+      // reset-owned 384 remains in force. CLK_DEF does not replace it either.
+      if (cmd === "RESOLUTION" || cmd === "CLK_DEF") continue;
       if (cmd === "BPM_DEF") { head.bpmDef = +f[0] || head.bpmDef; continue; }
       if (cmd === "MET_DEF") { head.metNum = +f[0] || 4; head.metDen = +f[1] || 4; continue; }
       if (cmd === "CREATOR") { head.creator = f.join(" "); continue; }
@@ -409,6 +438,7 @@
       if (reg) {
         regions.push({
           cmd, def: reg,
+          sourceOrder: regions.length,
           m: +f[0], t: +f[1],
           dur: reg.point ? 0 : (+f[2] || 0),
           factor: reg.factor ? (+f[3] || 0) : null,
@@ -443,7 +473,14 @@
         case "hold": n.dur = +f[4] || 0; n.style = f[5] || ""; break;
         case "slide":
           n.dur = +f[4] || 0; n.endLane = +f[5]; n.endWidth = +f[6] || 1;
-          n.style = f[7] || ""; break;
+          n.style = f[7] || "";
+          n.slideStyleCode = exactIndexOrZero(SLIDE_STYLE, n.style);
+          n.slideExtendedRoot = cmd === "SXD" || cmd === "SXC";
+          n.slideFeedbackCode = n.slideExtendedRoot
+            ? exactIndexOrZero(SLIDE_FEEDBACK, f[8]) : 0;
+          n.slideRuntime = n.slideStyleCode === 1 ? "heaven_hold" : "slide";
+          n.slideResultTableIndex = 0xff;
+          break;
         case "air": n.root = f[4] || ""; n.style = f[5] || ""; break;
         // Only the X/D-marked spelling creates an authored checkpoint — the
         // air action. AHD and ASC extend the path and submit nothing, exactly
@@ -456,12 +493,14 @@
           n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
           n.style = f[10] || ""; n.isAction = cmd === "ASD"; break;
         case "ald":
-          n.sel = +f[4] || 0; n.h0 = +f[5] || 0; n.dur = +f[6] || 0;
-          n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
+          n.lane = c2sInt(f[2]); n.width = c2sWidth(f[3]);
+          n.interval = c2sInt(f[4]); n.h0 = aldVertical(f[5]);
+          n.dur = c2sInt(f[6]); n.endLane = c2sInt(f[7]);
+          n.endWidth = c2sWidth(f[8]); n.h1 = aldVertical(f[9]);
           n.style = f[10] || "";
-          // travels in height, in lane, or over real time -> renders as a line
-          n.isPath = n.h0 !== n.h1 || n.endLane !== n.lane || n.dur > 2;
-          if (n.isPath) n.color = ALD_PATH;
+          n.styleCode = Math.max(0, C2S_STYLE.indexOf(n.style));
+          n.aldRuntime = n.interval === 0 && n.styleCode === 15
+            ? "heaven_hold" : "air_ladder";
           break;
         case "asolid":
           n.dur = +f[6] || 0; n.endLane = +f[7]; n.endWidth = +f[8] || 1;
@@ -507,6 +546,8 @@
       n.time = timeAt(n.p);
       n.endTime = n.dur > 0 ? timeAt(n.p + n.dur) : n.time;
     }
+    const { chains: aldChains, samples: aldSamples } =
+      buildAirLadderChains(notes, timeAt);
     notes.sort((a, b) => a.time - b.time);
     for (const k of markers) { k.p = k.m * R + k.t; k.time = timeAt(k.p); }
     markers.sort((a, b) => a.time - b.time);
@@ -577,28 +618,50 @@
     }
     for (const list of regionsByKey.values()) list.sort((a, b) => a.start - b.start);
 
-    // DCM is a separate query and stays in SOURCE order, deliberately unsorted.
+    // DCM is a separate query and stays in source order even though region UI
+    // records above are sorted for drawing.
     const dcm = regions.filter(r => r.cmd === "DCM")
+      .sort((a, b) => a.sourceOrder - b.sourceOrder)
       .map(r => ({ start: r.time, end: r.endTime, factor: r.factor }));
 
     // A note takes the greatest positive tag among SLA regions that contain it
     // in time and fully contain its lane span. Everything else stays key 0.
     const slas = notes.filter(n => n.kind === "region");
-    for (const n of notes) {
-      if (n.kind === "region") continue;
+    const selectSlaKey = (p, lane, width, floatSpan = false) => {
       let key = 0;
-      const q = n.p + R / 192; // the shared query shift
+      // 1/192 canonical scalar equals half of one fixed-resolution authored
+      // tick, not R/192 ticks.
+      const q = p + 0.5;
       for (const s of slas) {
         if (s.tag <= key) continue;
         if (q < s.p || q >= s.p + s.dur) continue;
-        if (n.lane < s.lane || n.lane + n.width > s.lane + s.width) continue;
+        const leftTolerance = floatSpan ? 0.00001 : 0;
+        const rightTolerance = floatSpan ? 0.00001 : 0;
+        if (lane < s.lane - leftTolerance) continue;
+        if (lane + width > s.lane + s.width + rightTolerance) continue;
         key = s.tag;
       }
-      n.slaKey = key;
+      return key;
+    };
+    for (const n of notes) {
+      if (n.kind === "region") continue;
+      n.slaKey = selectSlaKey(n.p, n.lane, n.width);
+      if (n.kind === "ald") {
+        // Type-9 precompute selects the integer-span SLA key independently at
+        // every authored endpoint. Generated samples use the tolerant float-
+        // span selector below; neither path inherits the chain root's key.
+        n.endSlaKey = selectSlaKey(
+          n.p + n.dur, n.endLane ?? n.lane, n.endWidth ?? n.width);
+      }
+    }
+    for (const sample of aldSamples) {
+      sample.slaKey = selectSlaKey(
+        sample.p, sample.lane, sample.width, true);
     }
 
     const dur = notes.length ? Math.max(...notes.map(n => n.endTime)) : 0;
-    return { head, notes, markers, regions, regionsByKey, dcm, slas, counts,
+    return { head, notes, markers, regions, regionsByKey, dcm, slas,
+             aldChains, aldSamples, counts,
              unknown, beats, meters, duration: dur, seg, R, timeAt, posAt };
   }
 
@@ -623,26 +686,28 @@
   }
 
   // Second command-specific field, the path-boundary marker: SLD/SXD set it,
-  // SLC/SXC clear it. A set marker ends a visible segment and drives one-shot
-  // path feedback; a clear one only shapes the path. Root and final boundaries
-  // are forced set whatever the command says.
+  // SLC/SXC clear it. For ordinary type-2 Slide, a set ending marker owns a
+  // persistent endpoint resource; a clear one only shapes the shared path.
+  // Root is a separate start resource and the final ending marker is forced.
+  // Exact HLD style is retyped to HeavenHold before this Slide path runs.
   const SLIDE_MARKER = { SLD: 1, SXD: 1, SLC: 0, SXC: 0 };
 
   function markSlideBoundaries(notes) {
-    // Continuation requires position, lane AND bounded width to match the
-    // previous point. Omitting width wrongly links a chain that ends narrow
-    // into the next bar's full-width root, swallowing that root.
+    // Continuation requires position, lane, bounded width, and the decoded
+    // style/connection code to match the previous point. The command's first
+    // bit is a root property and is deliberately not a continuation key.
     const slides = notes.filter(n => n.kind === "slide");
-    const head = n => `${n.p}:${n.lane}:${n.width}`;
-    const tail = n => `${n.p + n.dur}:${n.endLane ?? n.lane}:${n.endWidth ?? n.width}`;
+    const head = n => `${n.p}:${n.lane}:${n.width}:${n.slideStyleCode}`;
+    const tail = n => `${n.p + n.dur}:${n.endLane ?? n.lane}:${n.endWidth ?? n.width}:${n.slideStyleCode}`;
     const startsAt = new Set(slides.map(head));
     const endsAt = new Set(slides.map(tail));
     for (const n of slides) {
       n.isRoot = !endsAt.has(head(n));
       n.isFinal = !startsAt.has(tail(n));
-      n.marker = SLIDE_MARKER[n.cmd] === 1;
-      n.bar = n.marker || n.isRoot || n.isFinal;
-      n.forcedBar = !n.marker && n.bar;
+      n.marker = n.slideRuntime === "slide" && SLIDE_MARKER[n.cmd] === 1;
+      n.endpointResource = n.slideRuntime === "slide" && (n.marker || n.isFinal);
+      n.bar = n.isRoot || n.endpointResource;
+      n.forcedBar = n.slideRuntime === "slide" && !n.marker && n.isFinal;
     }
   }
 
@@ -666,6 +731,124 @@
     }
   }
 
+  // Recovered type-9 producer. Authored ALD endpoints are 0x24-byte controls;
+  // this distinct model vector corresponds to the parser's generated 0x20-byte
+  // records and therefore to runtime profile-7 checkpoint cardinality.
+  function buildAirLadderChains(notes, timeAt) {
+    const chains = [];
+    const samples = [];
+    const samePoint = (left, right) =>
+      left.p === right.p && left.lane === right.lane &&
+      left.width === right.width && left.vertical === right.vertical;
+
+    for (const segment of notes) {
+      if (segment.kind !== "ald") continue;
+      const start = {
+        p: segment.p, lane: segment.lane, width: segment.width,
+        vertical: segment.h0, segment,
+      };
+      const end = {
+        p: segment.p + segment.dur,
+        lane: segment.endLane, width: segment.endWidth,
+        vertical: segment.h1, segment,
+      };
+      let chain = chains.find(candidate =>
+        candidate.interval === segment.interval &&
+        candidate.style === segment.style && samePoint(candidate.last, start));
+      if (!chain) {
+        chain = {
+          interval: segment.interval,
+          style: segment.style,
+          root: start,
+          controls: [],
+          generated: [],
+          generationDisposition: "generated",
+        };
+        chains.push(chain);
+      }
+      chain.controls.push(end);
+      chain.last = end;
+      segment.aldChain = chain;
+      segment.generated = [];
+    }
+
+    for (const chain of chains) {
+      if (!chain.controls.length) {
+        chain.generationDisposition = "no_authored_controls";
+        continue;
+      }
+      if (chain.interval <= 0) {
+        chain.generationDisposition = "nonpositive_interval";
+        continue;
+      }
+      let cursor = chain.root.p | 0;
+      const finalTick = chain.controls[chain.controls.length - 1].p | 0;
+      if (!(cursor < finalTick)) {
+        chain.generationDisposition = "no_forward_span";
+        continue;
+      }
+
+      let controlIndex = 0;
+      let previous = chain.root;
+      let previousTick = cursor;
+      const append = (owner, p, lane, vertical, width) => {
+        const sample = {
+          p, time: timeAt(p), lane, h: vertical, width,
+          first: chain.generated.length === 0,
+          chainOrdinal: chain.generated.length,
+          slaKey: 0,
+          resultTableIndex: ALD_UNRESOLVED_RESULT_INDEX,
+        };
+        chain.generated.push(sample);
+        owner.segment.generated.push(sample);
+        samples.push(sample);
+      };
+
+      while (cursor < finalTick) {
+        let emitted = false;
+        while (controlIndex < chain.controls.length) {
+          const current = chain.controls[controlIndex];
+          const currentTick = current.p | 0;
+          if (cursor < currentTick && previousTick !== currentTick) {
+            const fraction =
+              (cursor - previousTick) / (currentTick - previousTick);
+            append(
+              current,
+              cursor,
+              previous.lane + (current.lane - previous.lane) * fraction,
+              previous.vertical +
+                (current.vertical - previous.vertical) * fraction,
+              previous.width + (current.width - previous.width) * fraction,
+            );
+            emitted = true;
+            break;
+          }
+          previous = current;
+          previousTick = currentTick;
+          controlIndex++;
+        }
+        // The final control owns finalTick, so this is an internal invariant,
+        // not a chart fallback.
+        if (!emitted) throw new Error("ALD generated-control scan invariant");
+
+        const next = (cursor + chain.interval) | 0;
+        if (next < cursor) {
+          chain.generationDisposition = "source_cursor_wrap_expansion";
+          break;
+        }
+        cursor = next;
+      }
+
+      if (chain.generationDisposition === "generated" &&
+          cursor === finalTick) {
+        const last = chain.controls[chain.controls.length - 1];
+        append(last, finalTick, last.lane, last.vertical, last.width);
+      }
+    }
+
+    return { chains, samples };
+  }
+
   // ---- subdivision overlay ------------------------------------------------
   // A bar split into N equal parts. Each position takes a colour by how coarse
   // a division it lands on: the bar start is 1, the finest level is 2, and
@@ -674,11 +857,6 @@
   // 1,2,2,3,2,2,4,2,2,3,2,2. A prime N has only one level, so every division
   // after the bar start is colour 2.
   const OVERLAY_COLORS = ["#ff1f5a", "#3d9bff", "#ffd21f", "#19e8a5", "#c44dff", "#ff8c1a"];
-
-  // Divisions of a measure between generated ALD rungs. Matched to observed
-  // rendering: the reconstruction documents no path generation for ALD at all,
-  // and the Air-family tempo-adaptive step gives far too few samples here.
-  const ALD_RUNG_DIV = 32;
 
   function overlayPattern(n) {
     const primes = [];
@@ -1054,7 +1232,8 @@
     for (const n of chart.notes) {
       if (n.kind === "region") continue;
       n.vt0 = scrolledTime(n.time, now, n.slaKey);
-      n.vt1 = scrolledTime(n.endTime, now, n.slaKey);
+      n.vt1 = scrolledTime(
+        n.endTime, now, n.kind === "ald" ? n.endSlaKey : n.slaKey);
       let dStart = n.vt0 - now, dEnd = n.vt1 - now;
       // Cull against the factored distance, or a slowed note gets dropped
       // while still on screen and a hastened one is kept after leaving.
@@ -1078,9 +1257,9 @@
       if (n.kind !== "slide" || n.isRoot) headKeys.add(keyOf(n.vt0, n.lane));
     }
 
-    // End caps go down before any note, so an end that lands on top of another
-    // note sits under it. Presentation only: the reconstruction is explicit
-    // that no end checkpoint exists and that none may be synthesised.
+    // Terminal resources go down before any root at the same position. A
+    // Slide final endpoint is the builder's forced ending-marker resource,
+    // not a synthetic judgement checkpoint; its original image is external.
     for (const n of vis) {
       const capped = n.kind === "hold" || (n.kind === "slide" && n.isFinal);
       if (!capped) continue;
@@ -1092,24 +1271,35 @@
       const k = keyOf(n.vt1, lane);
       if (solidKeys.has(k)) continue;
       solidKeys.add(k);
-      drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, n.color);
+      if (n.kind === "slide") {
+        if (slideEndpointResourceVisible(n.slideResultTableIndex)) {
+          drawBoundary(n, tEnd, W, H, true, 0, lane, n.endWidth ?? n.width);
+        }
+      } else {
+        drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, n.color);
+      }
     }
 
     for (const n of vis) {
       // The projection factor multiplies distance, so a fast note is pushed
       // further out for the same time delta and covers more ground per tick.
       const t0 = depthAt(n.time, n.slaKey);
-      const t1 = depthAt(n.endTime, n.slaKey);
+      const t1 = depthAt(
+        n.endTime, n.kind === "ald" ? n.endSlaKey : n.slaKey);
 
       if (AIR_KINDS.has(n.kind) && !show.airNotes) continue;
       if (n.kind === "asolid" && !show.cosmetic) continue;
 
       if (n.kind === "asolid") {
         drawAirSolid(n, t0, t1, W, H);
-      } else if (n.kind === "ald" && n.isPath) {
-        drawAirTrace(n, t0, t1, W, H);
       } else if (n.kind === "ald") {
-        drawAirRung(n, t0, W, H);
+        for (const sample of n.generated || []) {
+          sample.drawDepth = depthAt(sample.time, sample.slaKey);
+        }
+        // The exact zero/NON combination is the separate HeavenHold class;
+        // its presentation remains tracked under render.heaven_hold and must
+        // not be sent through type-9 AirLadder geometry.
+        if (n.aldRuntime === "air_ladder") drawAirTrace(n, t0, t1, W, H);
       } else if (n.kind === "aslide") {
         drawAirBand(n, t0, t1, W, H);
         // The air-up start reaches the record's own authored height, which is
@@ -1189,7 +1379,8 @@
     cx2.globalAlpha = 1;
   }
 
-  // The X spellings are the ex variants; their root reads as an ExTap.
+  // The X spellings select the binary's extended root-resource branch. Yellow
+  // is this asset-free viewer's substitute; the original resource is external.
   const EX_ROOT = new Set(["HXD", "SXD", "SXC", "HHX"]);
 
   // The ex colour belongs to the root alone — the note you tap to start the
@@ -1227,13 +1418,12 @@
     }
   }
 
-  // A checkpoint boundary is not a note: a thin rule across the path. Every
-  // segment junction gets one so the chain's structure is visible, but only a
-  // set boundary marker — SLD/SXD, plus the forced root and final — draws
-  // strong. SLC/SXC junctions draw faint, since they shape without scoring.
-  function drawBoundary(n, t, W, H, strong, h) {
+  // The endpoint resource's original image is external. A strong white rule
+  // is the viewer's asset-free placeholder for its proven presence; faint
+  // rules are optional debug-only shape controls and are not canonical notes.
+  function drawBoundary(n, t, W, H, strong, h, lane, width) {
     if (t < tapClip() || t > FAR) return;
-    const [a, b] = laneQuad(t, n.lane, n.width, W, H, h || 0);
+    const [a, b] = laneQuad(t, lane ?? n.lane, width ?? n.width, W, H, h || 0);
     const th = strong ? Math.max(2, 6 * a.s) : Math.max(1, 3 * a.s);
     noteBar(a.x, a.y - th, b.x - a.x, th, "#ffffff", strong ? 0.9 : 0.4);
   }
@@ -1241,22 +1431,19 @@
   function drawSustain(n, t0, t1, W, H) {
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
-    const steps = 10;
     const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
-    const left = [], right = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
+    const pathPoint = t => {
+      const k = kOf(t);
       const lane = n.endLane != null ? n.lane + (n.endLane - n.lane) * k : n.lane;
-      const w = n.endWidth != null ? n.width + (n.endWidth - n.width) * k : n.width;
-      const l = project(t, lane, 0, W, H);
-      const r = project(t, lane + w, 0, W, H);
-      // Same trim taps get, applied per sample in screen space: two ribbons in
-      // neighbouring lanes leave a hairline between them instead of fusing.
-      const g = Math.min(NOTE_GAP, (r.x - l.x) * 0.18);
-      l.x += g; r.x -= g;
-      left.push(l);
-      right.push(r);
-    }
+      const width = n.endWidth != null ? n.width + (n.endWidth - n.width) * k : n.width;
+      return { t, lane, width, center: lane + width * 0.5 };
+    };
+    const a = pathPoint(s0), b = pathPoint(s1);
+    const left = [project(a.t, a.lane, 0, W, H), project(b.t, b.lane, 0, W, H)];
+    const right = [
+      project(a.t, a.lane + a.width, 0, W, H),
+      project(b.t, b.lane + b.width, 0, W, H),
+    ];
 
     cx2.beginPath();
     left.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
@@ -1265,27 +1452,34 @@
     cx2.fillStyle = n.color + "44";
     cx2.fill();
 
-    // Stroke the two rails only. Closing the outline would draw a cross-edge
-    // at each segment boundary, which reads as a checkpoint bar that no
-    // toggle can remove.
-    cx2.strokeStyle = n.color + "aa";
-    cx2.lineWidth = 1;
-    for (const rail of [left, right]) {
-      cx2.beginPath();
-      rail.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
-      cx2.stroke();
+    // JointSlide stream 1 is exactly one lane wide around the path center.
+    // Stream colours/materials are external, so these two fills are neutral
+    // asset-free silhouettes. The binary's 18-vertex width-change subdivision
+    // changes resource coordinates but not this outer Canvas silhouette.
+    const centerLeft = [
+      project(a.t, a.center - 0.5, 0, W, H),
+      project(b.t, b.center - 0.5, 0, W, H),
+    ];
+    const centerRight = [
+      project(a.t, a.center + 0.5, 0, W, H),
+      project(b.t, b.center + 0.5, 0, W, H),
+    ];
+    cx2.beginPath();
+    centerLeft.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
+    for (let i = centerRight.length - 1; i >= 0; i--) {
+      cx2.lineTo(centerRight[i].x, centerRight[i].y);
     }
-    // The slide path itself is always drawn — shaping points are what give a
-    // slide its shape. Only the horizontal checkpoint bar is optional, and it
-    // exists only where the boundary marker is set. A hold's start is its own
-    // judgement, not a checkpoint bar, so it is never suppressed.
-    // A slide's root is the note you tap to start it — a real start judgement,
-    // like a hold's. Only the checkpoint bars along the path are optional.
-    // Solid notes only at a chain's ends: the root here, the cap in the
-    // pre-pass. Mid-chain junctions never draw one, whatever their boundary
-    // marker says — the marker is not a reliable predictor of what the cabinet
-    // renders, so the viewer does not guess. They show as rules under the
-    // toggle instead, weighted by the marker.
+    cx2.closePath();
+    cx2.fillStyle = n.color + "77";
+    cx2.fill();
+
+    // Stream 2 exists only in presentation mode 1. This chart-only viewer does
+    // not yet simulate the start/path judgement phases, so it does not guess
+    // that overlay or either runtime-packed main-stream colour.
+    // The root is a separate start resource. A generated segment's marker
+    // belongs to its ending boundary, not to the next segment's start. Marked
+    // nonfinal endpoints therefore stay visible without the debug toggle;
+    // unmarked endpoints can be exposed only as faint shape diagnostics.
     const isStart = n.kind !== "slide" || n.isRoot;
     const solidKey = `${Math.round(n.vt0 / 8)}:${n.lane}`;
     if (isStart && solidKeys.has(solidKey)) {
@@ -1293,8 +1487,16 @@
     } else if (isStart) {
       solidKeys.add(solidKey);
       drawTap(n, t0, W, H, undefined, undefined, rootColor(n));
-    } else if (show.bars) {
-      drawBoundary(n, t0, W, H, n.marker);
+    }
+
+    if (n.kind === "slide" && !n.isFinal) {
+      const endLane = n.endLane ?? n.lane;
+      const endWidth = n.endWidth ?? n.width;
+      if (n.marker && slideEndpointResourceVisible(n.slideResultTableIndex)) {
+        drawBoundary(n, t1, W, H, true, 0, endLane, endWidth);
+      } else if (show.bars) {
+        drawBoundary(n, t1, W, H, false, 0, endLane, endWidth);
+      }
     }
 
   }
@@ -1357,77 +1559,125 @@
     }
   }
 
-  // A rung lasts a single tick, so a time-spanned quad would collapse to a
-  // hairline. It gets a fixed screen thickness instead, the way a tap does.
-  function drawAirRung(n, t, W, H) {
-    if (t < tapClip() || t > FAR) return;
-    const pad = 0.55;
-    const p = project(t, n.lane - pad, liftHeight(n.h0), W, H);
-    const q = project(t, n.lane + n.width + pad, liftHeight(n.h0), W, H);
-    const th = Math.max(6, 26 * p.s);
-    noteBar(p.x, p.y - th, q.x - p.x, th, n.color,
-            t < 0 ? Math.max(0, 1 + t / 0.12) : 1);
-  }
-
-  // An ALD record that travels — in height, in lane, or over real duration —
-  // draws in game as a thin line, not a body. Flat instantaneous records are
-  // rungs and keep their bar. The discriminator is the record's own geometry;
-  // it correlates with the selector field, whose meaning is unassigned.
-  function drawAirTrace(n, t0, t1, W, H) {
+  function drawAldQuad(t0, t1, center0, center1, half0, half1,
+                       h0, h1, color, alpha, W, H) {
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
-    const lift = liftHeight;
-    const h0 = lift(n.h0), h1 = lift(n.h1);
-    const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+    const span = t1 - t0;
+    const at = (value0, value1, t) => span !== 0
+      ? value0 + (value1 - value0) * ((t - t0) / span) : value0;
+    const cNear = at(center0, center1, s0);
+    const cFar = at(center0, center1, s1);
+    const wNear = at(half0, half1, s0);
+    const wFar = at(half0, half1, s1);
+    const hNear = at(h0, h1, s0);
+    const hFar = at(h0, h1, s1);
+    const a = project(s0, cNear - wNear, hNear, W, H);
+    const b = project(s0, cNear + wNear, hNear, W, H);
+    const c = project(s1, cFar - wFar, hFar, W, H);
+    const d = project(s1, cFar + wFar, hFar, W, H);
+    cx2.beginPath();
+    cx2.moveTo(a.x, a.y); cx2.lineTo(d.x, d.y);
+    cx2.lineTo(c.x, c.y); cx2.lineTo(a.x, a.y);
+    cx2.lineTo(b.x, b.y); cx2.lineTo(d.x, d.y);
+    cx2.closePath();
+    cx2.globalAlpha = alpha;
+    cx2.fillStyle = color;
+    cx2.fill();
+    cx2.globalAlpha = 1;
+  }
+
+  function aldStreamOneScale(renderVertical) {
+    if (renderVertical <= 0) return 0.75;
+    if (renderVertical >= 15.574) return 0.65;
+    return (1 - renderVertical * 0.06420958) * 0.100000024 + 0.65;
+  }
+
+  // Exact binary predicate. The external NotesJudgeResultTable row count is
+  // unavailable to this chart-only viewer. That is harmless while a sample is
+  // still the exact 0xff unresolved sentinel; attempting to draw a resolved
+  // state without an explicit table count is rejected instead of guessed.
+  function aldCheckpointEffectVisible(resultTableIndex, loadedRows = null) {
+    if (loadedRows === null) {
+      if (resultTableIndex !== ALD_UNRESOLVED_RESULT_INDEX) {
+        throw new Error("resolved ALD checkpoint requires result-table rows");
+      }
+      return true;
+    }
+    const narrowedRows = loadedRows & 0xff;
+    return !(resultTableIndex < narrowedRows);
+  }
+
+  // Slide generated endpoints use the same exact table-count predicate but
+  // own an independent result byte. This viewer supplies only the binary's
+  // initial 0xff state; a resolved simulation must provide the external count.
+  function slideEndpointResourceVisible(resultTableIndex, loadedRows = null) {
+    if (loadedRows === null) {
+      if (resultTableIndex !== 0xff) {
+        throw new Error("resolved Slide endpoint requires result-table rows");
+      }
+      return true;
+    }
+    const narrowedRows = loadedRows & 0xff;
+    return !(resultTableIndex < narrowedRows);
+  }
+
+  // Main ALD geometry is root plus authored controls, not the generated
+  // checkpoint vector. The three neutral stream silhouettes below preserve
+  // the recovered endpoint widths, zero/full-vertical planes, fixed strip,
+  // compact style flag, and Joint scene-submission order 0,1,2. The separate
+  // primitive-counter categories 7,9,8 are diagnostics. Canvas camera, colors,
+  // blending, and therefore final pixel overlap remain product choices because
+  // the selected external resources are absent.
+  function drawAirTrace(n, t0, t1, W, H) {
     const c0 = n.lane + n.width / 2;
     const c1 = (n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2;
-    const steps = 10;
-    cx2.beginPath();
-    for (let i = 0; i <= steps; i++) {
-      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
-      const p = project(t, c0 + (c1 - c0) * k, h0 + (h1 - h0) * k, W, H);
-      i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+    const h0 = liftHeight(n.h0), h1 = liftHeight(n.h1);
+    if (n.styleCode !== 15) {
+      // Stream 0: full-vertical, half extent 1.5*width render units, divided
+      // by the exact 4 render-units-per-lane transform for this canvas model.
+      drawAldQuad(t0, t1, c0, c1,
+                  n.width * 0.375, (n.endWidth ?? n.width) * 0.375,
+                  h0, h1, ALD_STREAM_ZERO, 0.30, W, H);
+      // Stream 1: vertical-zero quad whose half extent attenuates with the
+      // exact render-vertical transform.
+      const rv0 = (n.h0 - 1) * 3.8934999;
+      const rv1 = (n.h1 - 1) * 3.8934999;
+      drawAldQuad(t0, t1, c0, c1,
+                  n.width * 0.5 * aldStreamOneScale(rv0),
+                  (n.endWidth ?? n.width) * 0.5 * aldStreamOneScale(rv1),
+                  0, 0, ALD_STREAM_ONE, 0.32, W, H);
+      // Stream 2: full-vertical double-sided quad. Both windings have one
+      // canvas silhouette; non-default style selects the compact half extent.
+      const fixedHalf = (n.styleCode !== 0 ? 0.98 : 1.96) / 4;
+      drawAldQuad(t0, t1, c0, c1, fixedHalf, fixedHalf,
+                  h0, h1, ALD_STREAM_TWO, 0.62, W, H);
     }
-    const near = project(s0, n.lane, h0, W, H);
-    cx2.strokeStyle = n.color;
-    cx2.lineWidth = Math.max(1.5, 3.2 * near.s);
-    cx2.lineCap = "round";
-    cx2.stroke();
-    cx2.lineCap = "butt";
 
-    // A record materialises a rung at every whole height it crosses. A span of
-    // 5.0 -> 3.0 shows three; a flat record crosses one and shows it at its own
-    // control point. Selector 0 records show none, so the selector gates it.
-    // The selector's meaning is unassigned in the reconstruction — this follows
-    // observed rendering across three charts, not the binary.
-    if (n.sel !== 0) {
-      const ks = new Set([0]);
-      // Along the duration, on a 1/32-of-a-measure grid. A long flat record is
-      // a stream of evenly spaced rungs; a record shorter than one step gets
-      // only its own control point.
-      const G = chart.R / ALD_RUNG_DIV;
-      if (n.dur > 0) for (let o = G; o <= n.dur; o += G) ks.add(+(o / n.dur).toFixed(4));
-      // And at every whole height the record crosses, which is what makes a
-      // brief 5.0 -> 3.0 span read as three stacked rungs.
-      if (n.h0 !== n.h1) {
-        const lo = Math.ceil(Math.min(n.h0, n.h1));
-        const hi = Math.floor(Math.max(n.h0, n.h1));
-        for (let hv = lo; hv <= hi; hv++) {
-          ks.add(+((hv - n.h0) / (n.h1 - n.h0)).toFixed(4));
-        }
-      }
-      for (const k of ks) {
-        if (k < 0 || k > 1) continue;
-        const t = t0 + (t1 - t0) * k;
-        if (t < nearClip() || t > FAR) continue;
-        const lane = n.lane + ((n.endLane ?? n.lane) - n.lane) * k;
-        const w = n.width + ((n.endWidth ?? n.width) - n.width) * k;
-        const hv = n.h0 + (n.h1 - n.h0) * k;
-        const p = project(t, lane - 0.55, liftHeight(hv), W, H);
-        const q = project(t, lane + w + 0.55, liftHeight(hv), W, H);
-        const th = Math.max(6, 26 * p.s);
-        noteBar(p.x, p.y - th, q.x - p.x, th, FAM.ALD.color);
-      }
+    // Generated ALD checkpoints come only from the recovered fixed-interval
+    // producer and own separate first/later external resources. Their traced
+    // transform centers at lane+width/2 and scales the resource's lateral axis
+    // to decoded chart width. In the binary, a 0xff result-table-index sentinel
+    // keeps the effect active; resolution replaces it with an embedded mapping,
+    // and an index below the externally loaded NotesJudgeResultTable row count
+    // hides it. This chart-only viewer has neither profile-7 input nor that
+    // external row count, so every sample remains the exact unresolved sentinel
+    // instead of inventing a result transition. The global Autoplay clip is a
+    // separately labeled product preview control. The simple bar is an original
+    // asset-free glyph.
+    for (const sample of n.generated || []) {
+      const t = sample.drawDepth;
+      if (t < tapClip() || t > FAR) continue;
+      if (!aldCheckpointEffectVisible(sample.resultTableIndex)) continue;
+      const p = project(t, sample.lane, liftHeight(sample.h), W, H);
+      const q = project(t, sample.lane + sample.width,
+                        liftHeight(sample.h), W, H);
+      const th = Math.max(6, 26 * p.s);
+      // The binary selects distinct first/later resource tables. Their assets
+      // are intentionally unavailable, so this original bar style is shared
+      // while the resource-independent geometry distinction remains pending.
+      noteBar(p.x, p.y - th, q.x - p.x, th, FAM.ALD.color,
+              1);
     }
   }
 
@@ -1672,6 +1922,9 @@
       ["BPM", bpms.length > 1 ? bpms[0] + "…" + bpms[bpms.length - 1] : bpms[0]],
       ["Length", (chart.duration / 1000).toFixed(1) + " s"],
       ["Records", noteTotal],
+      ["ALD samples", chart.aldSamples.length],
+      ["ALD no-sample chains", chart.aldChains.filter(
+        c => c.generationDisposition !== "generated").length],
       ["Slide bars", chart.notes.filter(n => n.kind === "slide" && n.bar).length],
       ["Shaping pts", chart.notes.filter(n => n.kind === "slide" && !n.bar).length],
       ["Air unit", airUnit],
@@ -1686,10 +1939,12 @@
       `<div class="row"><div class="sw" style="background:${FAM[k].color}"></div>` +
       `<span class="n">${FAM[k].label}</span><span class="c">${k} · ${v}</span></div>`
     ).join("");
-    const paths = chart.notes.filter(n => n.kind === "ald" && n.isPath).length;
+    const paths = chart.notes.filter(n =>
+      n.kind === "ald" && n.aldRuntime === "air_ladder" &&
+      n.styleCode !== 15).length;
     if (paths) {
-      rows += `<div class="row"><div class="sw" style="background:${ALD_PATH}"></div>` +
-        `<span class="n">Air path (travelling ALD)</span><span class="c">line · ${paths}</span></div>`;
+      rows += `<div class="row"><div class="sw" style="background:${ALD_STREAM_ZERO}"></div>` +
+        `<span class="n">AirLadder authored path</span><span class="c">3 streams · ${paths}</span></div>`;
     }
     const actions = chart.notes.filter(n => n.isAction).length;
     if (actions) {
@@ -1875,6 +2130,47 @@
     if (e.key === "ArrowLeft") { now = Math.max(0, now - 250); sync(); }
     if (e.key === "ArrowRight") { now += 250; sync(); }
   });
+
+  // Optional local automation hook for corpus/reference sweeps. Normal users
+  // still use the file picker; `?src=../music/.../chart.c2s` loads only a
+  // same-origin URL (including another local file beside this offline viewer).
+  const sourceParam = new URLSearchParams(location.search).get("src");
+  if (sourceParam) {
+    const sourceUrl = new URL(sourceParam, location.href);
+    const sameLocal = location.protocol === "file:" && sourceUrl.protocol === "file:";
+    const sameOrigin = location.protocol !== "file:" && sourceUrl.origin === location.origin;
+    if (sameLocal || sameOrigin) {
+      try {
+        // Deliberately synchronous only in explicit automation mode so a
+        // headless screenshot cannot race the reference parse/render.
+        const request = new XMLHttpRequest();
+        request.open("GET", sourceUrl, false);
+        request.send();
+        if (request.status !== 0 && request.status !== 200) {
+          throw new Error(`chart load failed: ${request.status}`);
+        }
+        load(request.responseText);
+        const at = Number.parseFloat(
+          new URLSearchParams(location.search).get("at"));
+        const focus = new URLSearchParams(location.search).get("focus");
+        if (Number.isFinite(at)) {
+          now = Math.max(0, at);
+          sync();
+        } else if (focus && chart) {
+          const target = chart.notes.find(note =>
+            note.cmd === focus.toUpperCase() || note.kind === focus.toLowerCase());
+          if (target) {
+            now = Math.max(0, target.time - lookahead() * 0.35);
+            sync();
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        el("unknown").textContent = String(error);
+        el("unkCard").hidden = false;
+      }
+    }
+  }
 
   sync();
 })();

@@ -3875,11 +3875,12 @@ update_air_slide_generated_checkpoint(HoldGapState& gap,
     return decision;
 }
 
-// claim.note.air-ladder-judgement
+// claim.note.air-ladder-generated-checkpoints
 //
 // ALD normally constructs AirLadderNote. One exact parsed-field combination
 // selects the separate HeavenHoldNote implementation shared with parsed type
-// 13: selector zero and style-table code 15 (the executable string "NON").
+// 13: sampling interval zero and style-table code 15 (the executable string
+// "NON").
 enum class AldRuntimeKind : std::uint8_t {
     air_ladder,
     heaven_hold,
@@ -3888,9 +3889,9 @@ enum class AldRuntimeKind : std::uint8_t {
 inline constexpr std::int32_t ald_non_style_code = 15;
 inline constexpr std::int32_t ald_missing_style_code = 0;
 
-constexpr AldRuntimeKind select_ald_runtime(std::int32_t selector,
+constexpr AldRuntimeKind select_ald_runtime(std::int32_t sampling_interval,
                                             std::int32_t style_code) {
-    return selector == 0 && style_code == ald_non_style_code
+    return sampling_interval == 0 && style_code == ald_non_style_code
                ? AldRuntimeKind::heaven_hold
                : AldRuntimeKind::air_ladder;
 }
@@ -3900,6 +3901,193 @@ inline constexpr std::int32_t air_ladder_source_category = 18;
 
 constexpr bool air_ladder_exposes_candidate() {
     return false;
+}
+
+// Type-9 ALD keeps authored 0x24-byte controls separate from its generated
+// 0x20-byte samples. The parser supplies already-decoded widths to the
+// generator and stores the visible vertical property in tenths before this
+// interpolation step.
+struct AirLadderPathPoint {
+    ChartPosition position{};
+    float scheduled{};
+    float lane{};
+    float vertical{};
+    float decoded_width{1.0F};
+};
+
+struct AirLadderGeneratedCheckpoint {
+    AirLadderPathPoint point{};
+    bool enabled{true};
+};
+
+// The main type-9 path does not use the generated checkpoint vector. Its
+// precompute owns root plus authored-control path points. Each point is a
+// decoded width, lane center, vertical value, and a marker set only on the
+// final authored endpoint. An empty control list has no valid authored span.
+struct AirLadderAuthoredGeometryPoint {
+    float decoded_width{1.0F};
+    float lane_center{};
+    float vertical{};
+    bool final_endpoint{};
+};
+
+inline std::vector<AirLadderAuthoredGeometryPoint>
+build_air_ladder_authored_geometry_path(
+    const AirLadderPathPoint& root,
+    std::span<const AirLadderPathPoint> controls) {
+    std::vector<AirLadderAuthoredGeometryPoint> path;
+    if (controls.empty()) {
+        return path;
+    }
+    path.reserve(controls.size() + 1);
+    const auto append = [&path](const AirLadderPathPoint& point,
+                                bool final_endpoint) {
+        path.push_back(AirLadderAuthoredGeometryPoint{
+            point.decoded_width,
+            point.lane + point.decoded_width * 0.5F,
+            point.vertical,
+            final_endpoint,
+        });
+    };
+    append(root, false);
+    for (std::size_t index = 0; index < controls.size(); ++index) {
+        append(controls[index], index + 1 == controls.size());
+    }
+    return path;
+}
+
+inline std::int32_t air_ladder_grid_tick(
+    const AirLadderPathPoint& point) {
+    return cvttss2si_i32(
+        (point.position.major + point.position.minor * 0.25F) * 384.0F +
+        0.5F);
+}
+
+// The producer holds its cursor in a uint32 register and uses unsigned
+// quotient/remainder when converting a sampled tick back to C2S position.
+// For ordinary nonnegative chart positions this is the familiar major/minor
+// split; preserving the register interpretation also defines negative-bit
+// patterns without C++ signed-division assumptions.
+inline ChartPosition air_ladder_position_from_grid_tick(
+    std::int32_t tick) {
+    const std::uint32_t raw = std::bit_cast<std::uint32_t>(tick);
+    return canonicalize_c2s_position(
+        static_cast<std::int32_t>(raw / 384U),
+        static_cast<std::int32_t>(raw % 384U));
+}
+
+enum class AirLadderGenerationDisposition : std::uint8_t {
+    generated,
+    no_authored_controls,
+    nonpositive_interval,
+    no_forward_span,
+    source_cursor_wrap_expansion,
+};
+
+struct AirLadderGenerationResult {
+    AirLadderGenerationDisposition disposition{
+        AirLadderGenerationDisposition::generated};
+    std::vector<AirLadderGeneratedCheckpoint> checkpoints{};
+};
+
+// The cursor begins at the root, not one interval after it. A final authored
+// endpoint is present only when the fixed interval lands on it exactly;
+// overshoot leaves the last generated point before the end. Each returned
+// point receives the parser's post-generation schedule value through the
+// callback. The two nonprogress dispositions report malformed source domains
+// instead of reproducing an unbounded allocation/loop in the clean-room code.
+template <typename ScheduleAtPosition>
+AirLadderGenerationResult generate_air_ladder_checkpoints(
+    const AirLadderPathPoint& root,
+    std::span<const AirLadderPathPoint> controls,
+    std::int32_t interval,
+    ScheduleAtPosition schedule_at_position) {
+    AirLadderGenerationResult result{};
+    if (controls.empty()) {
+        result.disposition =
+            AirLadderGenerationDisposition::no_authored_controls;
+        return result;
+    }
+    if (interval <= 0) {
+        result.disposition =
+            AirLadderGenerationDisposition::nonpositive_interval;
+        return result;
+    }
+
+    std::int32_t cursor = air_ladder_grid_tick(root);
+    const std::int32_t final_tick =
+        air_ladder_grid_tick(controls.back());
+    if (!(cursor < final_tick)) {
+        result.disposition =
+            AirLadderGenerationDisposition::no_forward_span;
+        return result;
+    }
+
+    std::size_t control_index = 0;
+    std::int32_t previous_tick = cursor;
+    AirLadderPathPoint previous = root;
+
+    while (cursor < final_tick) {
+        bool emitted = false;
+        while (control_index < controls.size()) {
+            const auto& current = controls[control_index];
+            const std::int32_t current_tick =
+                air_ladder_grid_tick(current);
+            if (cursor < current_tick && previous_tick != current_tick) {
+                const float fraction =
+                    static_cast<float>(
+                        subtract_i32_wrapped(cursor, previous_tick)) /
+                    static_cast<float>(subtract_i32_wrapped(
+                        current_tick, previous_tick));
+                AirLadderPathPoint point{};
+                point.position =
+                    air_ladder_position_from_grid_tick(cursor);
+                point.lane =
+                    (current.lane - previous.lane) * fraction +
+                    previous.lane;
+                point.vertical =
+                    (current.vertical - previous.vertical) * fraction +
+                    previous.vertical;
+                point.decoded_width =
+                    (current.decoded_width - previous.decoded_width) *
+                        fraction +
+                    previous.decoded_width;
+                point.scheduled = schedule_at_position(point.position);
+                result.checkpoints.push_back({point, true});
+                emitted = true;
+                break;
+            }
+
+            previous = current;
+            previous_tick = current_tick;
+            ++control_index;
+        }
+
+        // Since controls.back() owns final_tick and cursor < final_tick, the
+        // scan must encounter a bounding nonzero span. Reaching the end would
+        // contradict those invariants even when earlier controls are unordered
+        // or duplicated.
+        if (!emitted) {
+            return result;
+        }
+
+        const std::int32_t next = add_i32_wrapped(cursor, interval);
+        if (next < cursor) {
+            result.disposition = AirLadderGenerationDisposition::
+                source_cursor_wrap_expansion;
+            return result;
+        }
+        cursor = next;
+    }
+
+    if (cursor == final_tick) {
+        AirLadderPathPoint point = controls.back();
+        point.position = air_ladder_position_from_grid_tick(final_tick);
+        point.scheduled = schedule_at_position(point.position);
+        result.checkpoints.push_back({point, true});
+    }
+    result.disposition = AirLadderGenerationDisposition::generated;
+    return result;
 }
 
 // The runtime visits every unresolved 0x88-byte checker in one update; unlike
@@ -3919,15 +4107,405 @@ constexpr std::size_t air_ladder_new_resolution_count(
     return resolved;
 }
 
-// For ordinary finite runtime values, the concrete terminal predicate waits
-// for both the external completion threshold and every retained-profile
-// checker. Equality at the threshold is terminal-eligible.
+// The runtime copies the final authored endpoint schedule from the type-9
+// precompute object. The comparison below preserves the executable's exact
+// two-comparison guard instead of simplifying it to current >= end: either
+// NaN operand bypasses the schedule guard, after which checker cardinality is
+// still required. Equality at the authored end is terminal-eligible.
 constexpr bool air_ladder_is_terminal(float current,
-                                      float completion_threshold,
+                                      float authored_end_schedule,
                                       std::size_t resolved_count,
                                       std::size_t checkpoint_count) {
-    return completion_threshold <= current &&
-           resolved_count == checkpoint_count;
+    if (current <= authored_end_schedule &&
+        authored_end_schedule != current) {
+        return false;
+    }
+    return resolved_count == checkpoint_count;
+}
+
+// claim.note.air-ladder-precalc-presentation
+//
+// These neutral structures reconstruct the asset-independent portion of the
+// shared type-9 geometry builder. Resource identities, colors, textures, and
+// stream names are intentionally absent. The executable carries raw-relative
+// and projected position separately; clipping changes projected position and
+// the geometric values, but not raw-relative position or the endpoint marker.
+struct AirLadderGeometryEndpoint {
+    float raw_relative{};
+    float projected{};
+    float lateral{};
+    float vertical{};
+    float decoded_width{1.0F};
+    float style_coordinate{};
+    float normalized_left{};
+    float normalized_right{};
+    bool path_marker{};
+};
+
+struct AirLadderGeometrySegment {
+    bool enabled{true};
+    AirLadderGeometryEndpoint start{};
+    AirLadderGeometryEndpoint end{};
+};
+
+inline constexpr float air_ladder_projection_near = 50.0F;
+inline constexpr float air_ladder_projection_far = -600.0F;
+inline constexpr float air_ladder_clip_minimum_span = 0.000001F;
+inline constexpr std::array<std::int32_t, 3>
+    air_ladder_primitive_counter_categories{7, 9, 8};
+
+// The type-9 precompute selects one embedded coordinate by normalized style
+// code and copies it to the final float of every neutral vertex. It is kept as
+// geometry data without assigning a texture-atlas or resource name.
+inline constexpr std::array<float, 16>
+    air_ladder_style_vertex_coordinates{
+        0.1561999917F,
+        0.9688000083F,
+        0.9061999917F,
+        0.8436999917F,
+        0.7811999917F,
+        0.7186999917F,
+        0.6561999917F,
+        0.5938000083F,
+        0.5311999917F,
+        0.4688000083F,
+        0.4061999917F,
+        0.3438000083F,
+        0.2811999917F,
+        0.09399998188F,
+        0.03100001812F,
+        0.0F,
+    };
+
+constexpr float air_ladder_style_vertex_coordinate(
+    std::int32_t style_code) {
+    const std::int32_t normalized =
+        0 <= style_code && style_code < 16 ? style_code : 0;
+    return air_ladder_style_vertex_coordinates[
+        static_cast<std::size_t>(normalized)];
+}
+
+constexpr float air_ladder_render_lateral(float value) {
+    return (value - 8.0F) * 4.0F;
+}
+
+constexpr float air_ladder_render_vertical(float value) {
+    return (value - 1.0F) * 3.8934999F;
+}
+
+constexpr float air_ladder_stream_zero_half_extent(float decoded_width) {
+    return air_ladder_render_lateral(decoded_width + 8.0F) * 0.5F *
+           0.75F;
+}
+
+constexpr float air_ladder_stream_one_scale(float vertical) {
+    if (0.0F < vertical) {
+        if (15.574F <= vertical) {
+            return 0.65F;
+        }
+        return (1.0F - vertical * 0.06420958F) * 0.100000024F +
+               0.65F;
+    }
+    return 0.75F;
+}
+
+constexpr float air_ladder_stream_one_half_extent(float decoded_width,
+                                                   float vertical) {
+    return air_ladder_render_lateral(decoded_width + 8.0F) * 0.5F *
+           air_ladder_stream_one_scale(vertical);
+}
+
+constexpr float air_ladder_stream_two_half_extent(bool compact) {
+    return compact ? 0.98F : 1.96F;
+}
+
+// Each generated checkpoint owns a separate presentation resource transform.
+// The resource identity comes from one of two external tables (first sample
+// versus later samples), indexed by the decoded width. Clean-room code keeps
+// only the exact selector and transform; it accepts the resource's intrinsic
+// width as an explicit external parameter instead of copying resource data.
+struct AirLadderCheckpointTransform {
+    std::int32_t resource_slot{};
+    float lateral{};
+    float vertical{};
+    float projected{-10000.0F};
+    float lateral_scale{1.0F};
+    float vertical_scale{1.0F};
+    float projected_scale{1.0F};
+};
+
+inline constexpr std::uint8_t
+    air_ladder_unresolved_result_table_index = 0xff;
+
+// FUN_00c196f0 produces judgement tiers 0..11. FUN_00c18270 indexes this
+// executable-owned mapping with that tier and stores the selected
+// NotesJudgeResultTable row index on the checkpoint record.
+inline constexpr std::array<std::uint8_t, 12>
+    air_ladder_result_table_indices{
+        0, 0, 0, 1, 2, 3, 4, 3, 2, 1, 0, 0};
+
+constexpr std::uint8_t air_ladder_result_table_index(
+    std::uint8_t judgement_tier) {
+    if (judgement_tier >= air_ladder_result_table_indices.size()) {
+        throw std::out_of_range{"invalid AirLadder judgement tier"};
+    }
+    return air_ladder_result_table_indices[judgement_tier];
+}
+
+// Checkpoint records begin with the 0xff sentinel. Resolution replaces it with
+// the embedded judgement-tier mapping's NotesJudgeResultTable row index. The
+// presentation update narrows the externally loaded table's row count to one
+// byte and hides the resource exactly when the stored index is in range.
+// Returning true means the transform/visible update is taken; a missing
+// external resource still makes that update a no-op inside the resource path.
+constexpr bool air_ladder_checkpoint_effect_visible(
+    std::uint8_t result_table_index,
+    std::size_t loaded_result_table_rows) {
+    const auto narrowed_rows =
+        static_cast<std::uint8_t>(loaded_result_table_rows);
+    return !(result_table_index < narrowed_rows);
+}
+
+inline std::int32_t air_ladder_checkpoint_resource_slot(
+    float decoded_width) {
+    const std::int32_t raw =
+        subtract_i32_wrapped(cvttss2si_i32(decoded_width + 0.999F), 1);
+    return std::clamp(raw, 0, 15);
+}
+
+constexpr float air_ladder_checkpoint_vertical(float vertical) {
+    return (vertical - 1.0F) * 3.8934999F + 0.14999962F;
+}
+
+constexpr float air_ladder_checkpoint_lateral_scale(
+    float decoded_width,
+    std::int32_t resource_intrinsic_width) {
+    return resource_intrinsic_width < 1
+               ? 1.0F
+               : decoded_width /
+                     static_cast<float>(resource_intrinsic_width);
+}
+
+inline AirLadderCheckpointTransform build_air_ladder_checkpoint_transform(
+    float lane,
+    float decoded_width,
+    float vertical,
+    std::int32_t resource_intrinsic_width) {
+    return AirLadderCheckpointTransform{
+        air_ladder_checkpoint_resource_slot(decoded_width),
+        air_ladder_render_lateral(lane + decoded_width * 0.5F),
+        air_ladder_checkpoint_vertical(vertical),
+        -10000.0F,
+        air_ladder_checkpoint_lateral_scale(
+            decoded_width, resource_intrinsic_width),
+        1.0F,
+        1.0F,
+    };
+}
+
+constexpr float air_ladder_clamp_unit(float value) {
+    if (value <= 1.0F) {
+        return value <= 0.0F ? 0.0F : value;
+    }
+    return 1.0F;
+}
+
+constexpr float air_ladder_mix(float from, float to, float fraction) {
+    return from * (1.0F - fraction) + to * fraction;
+}
+
+constexpr void air_ladder_clip_endpoint(
+    AirLadderGeometryEndpoint& endpoint,
+    const AirLadderGeometryEndpoint& opposite,
+    float projected_boundary,
+    float fraction) {
+    endpoint.projected = projected_boundary;
+    endpoint.lateral =
+        air_ladder_mix(endpoint.lateral, opposite.lateral, fraction);
+    endpoint.vertical =
+        air_ladder_mix(endpoint.vertical, opposite.vertical, fraction);
+    endpoint.decoded_width = air_ladder_mix(
+        endpoint.decoded_width, opposite.decoded_width, fraction);
+    endpoint.style_coordinate = air_ladder_mix(
+        endpoint.style_coordinate, opposite.style_coordinate, fraction);
+    endpoint.normalized_left = air_ladder_mix(
+        endpoint.normalized_left, opposite.normalized_left, fraction);
+    endpoint.normalized_right = air_ladder_mix(
+        endpoint.normalized_right, opposite.normalized_right, fraction);
+}
+
+constexpr AirLadderGeometrySegment clip_air_ladder_geometry_segment(
+    AirLadderGeometrySegment segment) {
+    const AirLadderGeometryEndpoint original_start = segment.start;
+    const AirLadderGeometryEndpoint original_end = segment.end;
+    const float start_projected = original_start.projected;
+    const float end_projected = original_end.projected;
+
+    if ((start_projected < air_ladder_projection_far &&
+         end_projected < air_ladder_projection_far) ||
+        (air_ladder_projection_near < start_projected &&
+         air_ladder_projection_near < end_projected)) {
+        segment.enabled = false;
+        return segment;
+    }
+
+    float span = start_projected - end_projected;
+    if (span < 0.0F) {
+        span = -span;
+    }
+    if (!(air_ladder_clip_minimum_span <= span)) {
+        return segment;
+    }
+
+    if (air_ladder_projection_near < start_projected) {
+        const float fraction = air_ladder_clamp_unit(
+            (start_projected - air_ladder_projection_near) / span);
+        segment.start = original_start;
+        air_ladder_clip_endpoint(segment.start, original_end,
+                                 air_ladder_projection_near, fraction);
+    }
+    if (air_ladder_projection_near < end_projected) {
+        const float fraction = air_ladder_clamp_unit(
+            (end_projected - air_ladder_projection_near) / span);
+        segment.end = original_end;
+        air_ladder_clip_endpoint(segment.end, original_start,
+                                 air_ladder_projection_near, fraction);
+    }
+    if (start_projected < air_ladder_projection_far) {
+        const float fraction = air_ladder_clamp_unit(
+            (air_ladder_projection_far - start_projected) / span);
+        segment.start = original_start;
+        air_ladder_clip_endpoint(segment.start, original_end,
+                                 air_ladder_projection_far, fraction);
+    }
+    if (end_projected < air_ladder_projection_far) {
+        const float fraction = air_ladder_clamp_unit(
+            (air_ladder_projection_far - end_projected) / span);
+        segment.end = original_end;
+        air_ladder_clip_endpoint(segment.end, original_start,
+                                 air_ladder_projection_far, fraction);
+    }
+    return segment;
+}
+
+// FUN_00c03c00 appends 0x18-byte vertices with render-space lateral,
+// vertical, projected position, a caller-selected packed color, and two
+// neutral coordinates. Streams zero and one emit one six-vertex quad with a
+// winding selected by projected endpoint order. Stream two emits both
+// windings (twelve vertices), making its quad double-sided.
+struct AirLadderGeometryVertex {
+    float lateral{};
+    float vertical{};
+    float projected{};
+    std::uint32_t color{};
+    float coordinate_u{};
+    float coordinate_v{};
+};
+
+static_assert(sizeof(AirLadderGeometryVertex) == 0x18);
+
+constexpr AirLadderGeometryVertex air_ladder_geometry_vertex(
+    const AirLadderGeometryEndpoint& endpoint,
+    float lateral,
+    float vertical,
+    std::uint32_t color,
+    float coordinate_u) {
+    return AirLadderGeometryVertex{
+        lateral,
+        vertical,
+        endpoint.projected,
+        color,
+        coordinate_u,
+        endpoint.style_coordinate,
+    };
+}
+
+constexpr std::array<AirLadderGeometryVertex, 6>
+air_ladder_single_sided_quad(const AirLadderGeometryVertex& start_left,
+                             const AirLadderGeometryVertex& start_right,
+                             const AirLadderGeometryVertex& end_left,
+                             const AirLadderGeometryVertex& end_right,
+                             bool end_not_after_start) {
+    if (end_not_after_start) {
+        return {start_left, end_right, end_left,
+                start_left, start_right, end_right};
+    }
+    return {start_left, end_left, end_right,
+            start_left, end_right, start_right};
+}
+
+constexpr std::array<AirLadderGeometryVertex, 6>
+build_air_ladder_stream_zero_vertices(const AirLadderGeometrySegment& segment,
+                                      std::uint32_t color) {
+    const float start_half =
+        air_ladder_stream_zero_half_extent(segment.start.decoded_width);
+    const float end_half =
+        air_ladder_stream_zero_half_extent(segment.end.decoded_width);
+    const auto start_left = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral - start_half,
+        segment.start.vertical, color, segment.start.normalized_left);
+    const auto start_right = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral + start_half,
+        segment.start.vertical, color, segment.start.normalized_right);
+    const auto end_left = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral - end_half,
+        segment.end.vertical, color, segment.end.normalized_left);
+    const auto end_right = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral + end_half,
+        segment.end.vertical, color, segment.end.normalized_right);
+    return air_ladder_single_sided_quad(
+        start_left, start_right, end_left, end_right,
+        segment.end.projected <= segment.start.projected);
+}
+
+constexpr std::array<AirLadderGeometryVertex, 6>
+build_air_ladder_stream_one_vertices(const AirLadderGeometrySegment& segment,
+                                     std::uint32_t color) {
+    const float start_half = air_ladder_stream_one_half_extent(
+        segment.start.decoded_width, segment.start.vertical);
+    const float end_half = air_ladder_stream_one_half_extent(
+        segment.end.decoded_width, segment.end.vertical);
+    const auto start_left = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral - start_half, 0.0F, color,
+        segment.start.normalized_left);
+    const auto start_right = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral + start_half, 0.0F, color,
+        segment.start.normalized_right);
+    const auto end_left = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral - end_half, 0.0F, color,
+        segment.end.normalized_left);
+    const auto end_right = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral + end_half, 0.0F, color,
+        segment.end.normalized_right);
+    return air_ladder_single_sided_quad(
+        start_left, start_right, end_left, end_right,
+        segment.end.projected <= segment.start.projected);
+}
+
+constexpr std::array<AirLadderGeometryVertex, 12>
+build_air_ladder_stream_two_vertices(const AirLadderGeometrySegment& segment,
+                                     std::uint32_t color,
+                                     bool compact) {
+    const float half_extent =
+        air_ladder_stream_two_half_extent(compact);
+    const auto start_left = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral - half_extent,
+        segment.start.vertical, color, 0.0F);
+    const auto start_right = air_ladder_geometry_vertex(
+        segment.start, segment.start.lateral + half_extent,
+        segment.start.vertical, color, 1.0F);
+    const auto end_left = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral - half_extent,
+        segment.end.vertical, color, 0.0F);
+    const auto end_right = air_ladder_geometry_vertex(
+        segment.end, segment.end.lateral + half_extent,
+        segment.end.vertical, color, 1.0F);
+    return {
+        start_left, end_left, end_right,
+        start_left, end_right, start_right,
+        start_left, end_right, end_left,
+        start_left, start_right, end_right,
+    };
 }
 
 // claim.note.slide-hld-heaven-retyping
@@ -3972,6 +4550,67 @@ constexpr bool slide_command_uses_extended_profile(SlideCommandForm command) {
 constexpr bool slide_command_sets_path_marker(SlideCommandForm command) {
     return command == SlideCommandForm::sld ||
            command == SlideCommandForm::sxd;
+}
+
+// claim.note.slide-presentation-classes
+//
+// The command-form flag belongs to the root record. For an ordinary type-2
+// Slide it selects the extended root-resource branch; resource identities are
+// external and therefore are not reproduced here.
+constexpr bool slide_root_uses_extended_resource(SlideCommandForm command) {
+    return slide_command_uses_extended_profile(command);
+}
+
+// Slide field 9 uses the same exact eight-name decoder as HXD. It is copied
+// only for an extended root and later selects one of two result-feedback
+// tables. It does not select persistent path geometry.
+constexpr std::int32_t slide_feedback_code(std::string_view name) {
+    return c2s_hxd_subtype_code(name);
+}
+
+constexpr std::int32_t slide_bounded_style_resource_index(
+    std::int32_t style_code) {
+    return std::clamp(style_code, slide_sld_style_code,
+                      slide_grn_style_code);
+}
+
+inline constexpr std::uint8_t slide_unresolved_result_table_index = 0xff;
+
+constexpr bool slide_generated_endpoint_resource_present(
+    bool ending_boundary_marker) {
+    return ending_boundary_marker;
+}
+
+// A due generated segment stores the current mapped result on marked
+// endpoints and hardcodes four on shape-only segments. Shape-only segments do
+// not own an endpoint resource, so the hardcoded value has no persistent
+// endpoint-visibility consumer.
+constexpr std::uint8_t slide_generated_segment_result_table_index(
+    bool ending_boundary_marker,
+    std::uint8_t mapped_result_table_index) {
+    return ending_boundary_marker ? mapped_result_table_index : 4U;
+}
+
+constexpr bool slide_generated_endpoint_resource_visible(
+    std::uint8_t result_table_index,
+    std::size_t loaded_result_table_rows) {
+    const auto narrowed_rows =
+        static_cast<std::uint8_t>(loaded_result_table_rows);
+    return !(result_table_index < narrowed_rows);
+}
+
+template <typename ResourceId>
+constexpr ResourceId select_slide_feedback_resource(
+    std::int32_t feedback_code,
+    bool alternate_table,
+    const std::array<ResourceId, 8>& primary,
+    const std::array<ResourceId, 8>& alternate,
+    ResourceId unavailable) {
+    if (static_cast<std::uint32_t>(feedback_code) >= primary.size()) {
+        return unavailable;
+    }
+    const auto index = static_cast<std::size_t>(feedback_code);
+    return alternate_table ? alternate[index] : primary[index];
 }
 
 // claim.note.heaven-hold-judgement
@@ -4544,6 +5183,431 @@ enum class SlidePathPhase : std::uint8_t {
     other_current_gap = 3,
     complete = 4,
 };
+
+// claim.note.slide-path-presentation-geometry
+//
+// SlideNote derives this literal three-state presentation input from its two
+// gameplay components before calling JointSlide. Names describe only the
+// observed geometry consequences; no player-facing state label is inferred.
+enum class SlidePresentationMode : std::uint8_t {
+    base = 0,
+    hide_past_with_overlay = 1,
+    alternate_color = 2,
+};
+
+constexpr SlidePresentationMode slide_presentation_mode(
+    SlideStartPhase start,
+    SlidePathPhase path) {
+    if (path == SlidePathPhase::best_current_gap) {
+        return SlidePresentationMode::hide_past_with_overlay;
+    }
+    if (start == SlideStartPhase::resolved) {
+        return path == SlidePathPhase::other_current_gap
+                   ? SlidePresentationMode::alternate_color
+                   : SlidePresentationMode::hide_past_with_overlay;
+    }
+    return SlidePresentationMode::base;
+}
+
+inline constexpr float slide_geometry_epsilon = 0.000001F;
+inline constexpr float slide_width_change_epsilon = 0.00000011920929F;
+inline constexpr float slide_projection_far = -600.0F;
+inline constexpr float slide_projection_near = 50.0F;
+inline constexpr float slide_inner_width_scale = 0.7F;
+inline constexpr float slide_inner_coordinate_left = 0.15F;
+inline constexpr float slide_inner_coordinate_right = 0.85F;
+inline constexpr float slide_center_stream_half_extent = 2.0F;
+inline constexpr std::uint32_t slide_overlay_stream_color = 0x20ffffffU;
+inline constexpr std::array<std::int32_t, 3>
+    slide_primitive_counter_categories{1, 2, 3};
+inline constexpr std::array<std::int32_t, 3>
+    slide_stream_topology_modes{4, 3, 3};
+inline constexpr std::array<std::int32_t, 3>
+    slide_joint_submission_order{0, 1, 2};
+
+struct SlidePresentationPoint {
+    float decoded_width{};
+    float lane_center{};
+    bool marker{};
+};
+
+struct SlidePresentationSegment {
+    bool visible{true};
+    bool crosses_judgement{};
+    float raw_start{};
+    float raw_end{};
+    float projected_start{};
+    float projected_end{};
+    float lateral_start{};
+    float lateral_end{};
+    float width_start{};
+    float width_end{};
+    bool start_marker{};
+    bool end_marker{};
+    float coordinate_start{1.0F};
+    float coordinate_end{};
+};
+
+struct SlidePresentationGeometry {
+    bool cardinality_valid{};
+    std::vector<SlidePresentationSegment> segments{};
+};
+
+struct SlideGeometryVertex {
+    float lateral{};
+    float vertical{};
+    float projected{};
+    std::uint32_t color{};
+    float coordinate_u{};
+    float coordinate_v{};
+};
+
+constexpr float slide_render_lateral(float value) {
+    return (value - 8.0F) * 4.0F;
+}
+
+constexpr float slide_render_half_width(float decoded_width) {
+    return slide_render_lateral(decoded_width + 8.0F) * 0.5F;
+}
+
+constexpr float slide_clamp_unit(float value) {
+    return std::clamp(value, 0.0F, 1.0F);
+}
+
+constexpr void interpolate_slide_segment_start(
+    SlidePresentationSegment& segment,
+    float fraction,
+    float projected) {
+    const float retained = 1.0F - fraction;
+    segment.lateral_start =
+        segment.lateral_start * retained + fraction * segment.lateral_end;
+    segment.width_start =
+        segment.width_start * retained + fraction * segment.width_end;
+    segment.coordinate_start = segment.coordinate_start * retained +
+                               fraction * segment.coordinate_end;
+    segment.projected_start = projected;
+}
+
+constexpr void interpolate_slide_segment_end(
+    SlidePresentationSegment& segment,
+    float fraction,
+    float projected) {
+    const float retained = 1.0F - fraction;
+    segment.lateral_end =
+        segment.lateral_end * retained + fraction * segment.lateral_start;
+    segment.width_end =
+        segment.width_end * retained + fraction * segment.width_start;
+    segment.coordinate_end = segment.coordinate_end * retained +
+                             fraction * segment.coordinate_start;
+    segment.projected_end = projected;
+}
+
+constexpr void clip_slide_presentation_segment(
+    SlidePresentationSegment& segment) {
+    if ((segment.projected_start < slide_projection_far &&
+         segment.projected_end < slide_projection_far) ||
+        (slide_projection_near < segment.projected_start &&
+         slide_projection_near < segment.projected_end)) {
+        segment.visible = false;
+        return;
+    }
+
+    const SlidePresentationSegment original = segment;
+    const float span =
+        std::fabs(original.projected_start - original.projected_end);
+    if (span < slide_geometry_epsilon) {
+        return;
+    }
+    if (slide_projection_near < original.projected_start) {
+        const float fraction = slide_clamp_unit(
+            (original.projected_start - slide_projection_near) / span);
+        const float retained = 1.0F - fraction;
+        segment.projected_start = slide_projection_near;
+        segment.lateral_start = original.lateral_start * retained +
+                                fraction * original.lateral_end;
+        segment.width_start = original.width_start * retained +
+                              fraction * original.width_end;
+        segment.coordinate_start = original.coordinate_start * retained +
+                                   fraction * original.coordinate_end;
+    }
+    if (slide_projection_near < original.projected_end) {
+        const float fraction = slide_clamp_unit(
+            (original.projected_end - slide_projection_near) / span);
+        const float retained = 1.0F - fraction;
+        segment.projected_end = slide_projection_near;
+        segment.lateral_end = original.lateral_end * retained +
+                              fraction * original.lateral_start;
+        segment.width_end = original.width_end * retained +
+                            fraction * original.width_start;
+        segment.coordinate_end = original.coordinate_end * retained +
+                                 fraction * original.coordinate_start;
+    }
+    if (original.projected_start < slide_projection_far) {
+        const float fraction = slide_clamp_unit(
+            (slide_projection_far - original.projected_start) / span);
+        const float retained = 1.0F - fraction;
+        segment.projected_start = slide_projection_far;
+        segment.lateral_start = original.lateral_start * retained +
+                                fraction * original.lateral_end;
+        segment.width_start = original.width_start * retained +
+                              fraction * original.width_end;
+        segment.coordinate_start = original.coordinate_start * retained +
+                                   fraction * original.coordinate_end;
+    }
+    if (original.projected_end < slide_projection_far) {
+        const float fraction = slide_clamp_unit(
+            (slide_projection_far - original.projected_end) / span);
+        const float retained = 1.0F - fraction;
+        segment.projected_end = slide_projection_far;
+        segment.lateral_end = original.lateral_end * retained +
+                              fraction * original.lateral_start;
+        segment.width_end = original.width_end * retained +
+                            fraction * original.width_start;
+        segment.coordinate_end = original.coordinate_end * retained +
+                                 fraction * original.coordinate_start;
+    }
+}
+
+inline SlidePresentationGeometry build_slide_presentation_geometry(
+    std::span<const SlidePresentationPoint> points,
+    std::span<const float> raw_positions,
+    std::span<const float> projected_positions,
+    SlidePresentationMode mode,
+    float projected_judgement_plane) {
+    SlidePresentationGeometry result{};
+    if (points.size() < 2 || raw_positions.size() != points.size() ||
+        projected_positions.size() != points.size()) {
+        return result;
+    }
+    result.cardinality_valid = true;
+    result.segments.reserve(points.size());
+    for (std::size_t index = 0; index + 1U < points.size(); ++index) {
+        const auto& start = points[index];
+        const auto& end = points[index + 1U];
+        result.segments.push_back({
+            .visible = true,
+            .crosses_judgement =
+                raw_positions[index] < slide_geometry_epsilon &&
+                -slide_geometry_epsilon < raw_positions[index + 1U],
+            .raw_start = raw_positions[index],
+            .raw_end = raw_positions[index + 1U],
+            .projected_start = projected_positions[index],
+            .projected_end = projected_positions[index + 1U],
+            .lateral_start = slide_render_lateral(start.lane_center),
+            .lateral_end = slide_render_lateral(end.lane_center),
+            .width_start = start.decoded_width,
+            .width_end = end.decoded_width,
+            .start_marker = index == 0U || start.marker,
+            .end_marker = index + 2U == points.size() || end.marker,
+        });
+    }
+
+    std::size_t group_start = 0;
+    for (std::size_t index = 0; index < result.segments.size(); ++index) {
+        if (!result.segments[index].end_marker) {
+            continue;
+        }
+        const float denominator = std::max(
+            std::fabs(result.segments[index].raw_end -
+                      result.segments[group_start].raw_start),
+            0.00001F);
+        float distance = 0.0F;
+        for (std::size_t member = group_start; member <= index; ++member) {
+            auto& segment = result.segments[member];
+            segment.coordinate_start =
+                slide_clamp_unit(distance / denominator);
+            distance += std::fabs(segment.raw_start - segment.raw_end);
+            segment.coordinate_end =
+                slide_clamp_unit(distance / denominator);
+        }
+        group_start = index + 1U;
+    }
+
+    const auto crossing = std::find_if(
+        result.segments.begin(), result.segments.end(),
+        [](const SlidePresentationSegment& segment) {
+            return segment.crosses_judgement;
+        });
+    if (crossing != result.segments.end()) {
+        const std::size_t index =
+            static_cast<std::size_t>(crossing - result.segments.begin());
+        const SlidePresentationSegment original = *crossing;
+        const float denominator = std::max(
+            std::fabs(original.raw_end - original.raw_start),
+            slide_geometry_epsilon);
+        const float fraction =
+            slide_clamp_unit(std::fabs(original.raw_start) / denominator);
+        SlidePresentationSegment past = original;
+        SlidePresentationSegment future = original;
+        past.raw_start = 0.0F;
+        past.raw_end = 0.0F;
+        interpolate_slide_segment_end(
+            past, fraction, projected_judgement_plane);
+        past.end_marker = false;
+        interpolate_slide_segment_start(
+            future, fraction, projected_judgement_plane);
+        future.start_marker = false;
+        result.segments[index] = past;
+        result.segments.insert(result.segments.begin() + index + 1U, future);
+    }
+
+    for (auto& segment : result.segments) {
+        if (mode == SlidePresentationMode::hide_past_with_overlay &&
+            segment.raw_end < slide_geometry_epsilon) {
+            segment.visible = false;
+        }
+        if (segment.visible) {
+            clip_slide_presentation_segment(segment);
+        }
+    }
+    return result;
+}
+
+constexpr SlideGeometryVertex slide_geometry_vertex(
+    float lateral,
+    float projected,
+    std::uint32_t color,
+    float coordinate_u,
+    float coordinate_v) {
+    return {lateral, 0.0F, projected, color, coordinate_u, coordinate_v};
+}
+
+inline std::vector<SlideGeometryVertex> build_slide_main_stream_vertices(
+    const SlidePresentationSegment& segment,
+    std::uint32_t color) {
+    if (!segment.visible) {
+        return {};
+    }
+    const float start_half = slide_render_half_width(segment.width_start);
+    const float end_half = slide_render_half_width(segment.width_end);
+    const auto sl = slide_geometry_vertex(
+        segment.lateral_start - start_half, segment.projected_start, color,
+        0.0F, segment.coordinate_start);
+    const auto sr = slide_geometry_vertex(
+        segment.lateral_start + start_half, segment.projected_start, color,
+        1.0F, segment.coordinate_start);
+    const auto el = slide_geometry_vertex(
+        segment.lateral_end - end_half, segment.projected_end, color,
+        0.0F, segment.coordinate_end);
+    const auto er = slide_geometry_vertex(
+        segment.lateral_end + end_half, segment.projected_end, color,
+        1.0F, segment.coordinate_end);
+    const bool reverse = segment.projected_end <= segment.projected_start;
+    if (std::fabs(segment.width_start - segment.width_end) <
+        slide_width_change_epsilon) {
+        return reverse ? std::vector<SlideGeometryVertex>{sl, er, el,
+                                                          sl, sr, er}
+                       : std::vector<SlideGeometryVertex>{sl, el, er,
+                                                          sl, er, sr};
+    }
+
+    const auto sli = slide_geometry_vertex(
+        segment.lateral_start - start_half * slide_inner_width_scale,
+        segment.projected_start, color, slide_inner_coordinate_left,
+        segment.coordinate_start);
+    const auto sri = slide_geometry_vertex(
+        segment.lateral_start + start_half * slide_inner_width_scale,
+        segment.projected_start, color, slide_inner_coordinate_right,
+        segment.coordinate_start);
+    const auto eli = slide_geometry_vertex(
+        segment.lateral_end - end_half * slide_inner_width_scale,
+        segment.projected_end, color, slide_inner_coordinate_left,
+        segment.coordinate_end);
+    const auto eri = slide_geometry_vertex(
+        segment.lateral_end + end_half * slide_inner_width_scale,
+        segment.projected_end, color, slide_inner_coordinate_right,
+        segment.coordinate_end);
+    std::vector<SlideGeometryVertex> vertices;
+    vertices.reserve(18);
+    if (reverse) {
+        vertices.insert(vertices.end(), {eli, sli, eri, sli, sri, eri});
+        if (segment.width_end <= segment.width_start) {
+            vertices.insert(vertices.end(),
+                            {el, sl, eli, sl, sli, eli,
+                             eri, sri, sr, er, eri, sr});
+        } else {
+            vertices.insert(vertices.end(),
+                            {el, sl, sli, eli, el, sli,
+                             eri, sri, er, sri, sr, er});
+        }
+    } else {
+        vertices.insert(vertices.end(), {sli, eli, eri, sri, sli, eri});
+        if (segment.width_end <= segment.width_start) {
+            vertices.insert(vertices.end(),
+                            {sl, el, eli, sli, sl, eli,
+                             sri, eri, sr, eri, er, sr});
+        } else {
+            vertices.insert(vertices.end(),
+                            {sl, el, sli, el, eli, sli,
+                             sri, eri, er, sr, sri, er});
+        }
+    }
+    return vertices;
+}
+
+inline std::vector<SlideGeometryVertex> build_slide_center_stream_vertices(
+    const SlidePresentationSegment& segment,
+    std::uint32_t color) {
+    if (!segment.visible) {
+        return {};
+    }
+    const auto sl = slide_geometry_vertex(
+        segment.lateral_start - slide_center_stream_half_extent,
+        segment.projected_start, color, 0.0F, segment.coordinate_start);
+    const auto sr = slide_geometry_vertex(
+        segment.lateral_start + slide_center_stream_half_extent,
+        segment.projected_start, color, 1.0F, segment.coordinate_start);
+    const auto el = slide_geometry_vertex(
+        segment.lateral_end - slide_center_stream_half_extent,
+        segment.projected_end, color, 0.0F, segment.coordinate_end);
+    const auto er = slide_geometry_vertex(
+        segment.lateral_end + slide_center_stream_half_extent,
+        segment.projected_end, color, 1.0F, segment.coordinate_end);
+    return segment.projected_end <= segment.projected_start
+               ? std::vector<SlideGeometryVertex>{sl, er, el, sl, sr, er}
+               : std::vector<SlideGeometryVertex>{sl, el, er, sl, er, sr};
+}
+
+inline std::vector<SlideGeometryVertex> build_slide_overlay_stream_vertices(
+    const SlidePresentationSegment& segment,
+    SlidePresentationMode mode) {
+    if (mode != SlidePresentationMode::hide_past_with_overlay ||
+        !segment.visible) {
+        return {};
+    }
+    const float start_half = slide_render_half_width(segment.width_start);
+    const float end_half = slide_render_half_width(segment.width_end);
+    const auto sl = slide_geometry_vertex(
+        segment.lateral_start - start_half, segment.projected_start,
+        slide_overlay_stream_color, 0.0F, segment.coordinate_start);
+    const auto sr = slide_geometry_vertex(
+        segment.lateral_start + start_half, segment.projected_start,
+        slide_overlay_stream_color, 1.0F, segment.coordinate_start);
+    const auto el = slide_geometry_vertex(
+        segment.lateral_end - end_half, segment.projected_end,
+        slide_overlay_stream_color, 0.0F, segment.coordinate_end);
+    const auto er = slide_geometry_vertex(
+        segment.lateral_end + end_half, segment.projected_end,
+        slide_overlay_stream_color, 1.0F, segment.coordinate_end);
+    return segment.projected_end <= segment.projected_start
+               ? std::vector<SlideGeometryVertex>{sl, er, el, sl, sr, er}
+               : std::vector<SlideGeometryVertex>{sl, el, er, sl, er, sr};
+}
+
+inline float slide_mode_one_intensity(float counter) {
+    constexpr float two_pi = 6.2831855F;
+    const float phase = std::fmod(counter * 0.05F, 1.0F);
+    return std::sin(phase * two_pi) * 0.25F + 1.5F;
+}
+
+constexpr std::uint32_t slide_main_stream_color(
+    SlidePresentationMode mode,
+    std::uint32_t base_color,
+    std::uint32_t alternate_color) {
+    return mode == SlidePresentationMode::alternate_color
+               ? alternate_color
+               : base_color;
+}
 
 constexpr bool slide_exposes_candidate(SlideStartPhase phase) {
     return phase != SlideStartPhase::resolved;

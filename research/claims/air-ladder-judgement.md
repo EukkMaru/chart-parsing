@@ -1,7 +1,7 @@
 # Claim: ordinary ALD constructs a candidate-free AirLadderNote with profile-7 checkpoints
 
 - ID: `claim.note.air-ladder-judgement`
-- State: active
+- State: superseded
 - Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
@@ -10,9 +10,16 @@
   `judgement.windows`, `judgement.miss`, `note.other_variants`,
   `state.ownership`, `config.external`, `interactions.cross_note`,
   `audit.indirect_calls`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-08-03
 
 ## Statement
+
+Superseded by `claim.note.air-ladder-generated-checkpoints` in
+`research/claims/air-ladder-generated-checkpoints.md`. This historical claim
+incorrectly identified the parsed record's generated `0x20`-byte vector as the
+authored control vector. Its candidate, checker-update, category, terminal,
+and class-selection observations remain inputs to the replacement claim, but
+the stated checkpoint producer and cardinality do not.
 
 An ALD parsed type-9 chain normally constructs RTTI-identified
 `projView::AirLadderNote`. It exposes no lane candidate, builds one independent

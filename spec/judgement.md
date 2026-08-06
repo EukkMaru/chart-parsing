@@ -517,15 +517,22 @@ marker rules are normative in `spec/notes/air_slide.md`; reconstruction/tests:
 
 ## AirLadder checkpoint results
 
-Ordinary ALD/AirLadder builds one profile-7 retained checker per control point
-and can resolve multiple checkers in one substep because it iterates the entire
-vector. Every accepted checker submits source category 18, mapped category 7.
-Completion additionally waits for the external threshold with an inclusive
-`current >= threshold` boundary. The zero/`NON` ALD class-selection exception
-is HeavenHoldNote and is tracked separately. Exact behavior is normative in
-`spec/notes/air_ladder.md`; reconstruction/tests: `air_ladder_*`,
+Ordinary ALD/AirLadder builds one profile-7 retained checker per sampled
+`0x20` generated record, not per `0x24` authored control. The parser starts at
+the root and advances by ALD's exact positive interval, interpolating lane,
+vertical value, and decoded width across the authored chain. AirLadder can
+resolve multiple generated checkers in one substep because it iterates the
+entire runtime vector. Every accepted checker submits source category 18,
+mapped category 7. Completion additionally waits for the chart-derived end
+with an inclusive `current >= final authored endpoint schedule` boundary for
+ordinary finite values. That schedule is chart-derived by the type-9
+precompute, not externally configured. The zero-interval/`NON` ALD
+class-selection exception is HeavenHoldNote and is tracked separately. Exact
+behavior is normative in `spec/notes/air_ladder.md`; reconstruction/tests:
+`generate_air_ladder_checkpoints`, `air_ladder_*`, and
 `tests/air_ladder_judgement_test.cpp`. Evidence:
-`claim.note.air-ladder-judgement`.
+`claim.note.air-ladder-generated-checkpoints` and
+`claim.note.air-ladder-precalc-presentation`.
 
 ## HeavenHold start and path results
 

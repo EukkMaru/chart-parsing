@@ -1,4 +1,19 @@
-# Ghidra and MCP operating guide
+# Ghidra and MCP guide for stage two
+
+## Role in the viewer phase
+
+The exact-snapshot gameplay investigation is closed. Ghidra is now used only
+for focused static questions raised by the product, such as an unexplained
+command field, generated path, render lifetime, camera transform, or resource-
+independent geometry rule. Start from the viewer discrepancy and known anchors;
+do not resume broad whole-program exploration by default. Once focused slices
+are closed, a final systematic presentation saturation audit is mandatory; the
+known GitHub issues are not evidence that all relevant render paths were found.
+
+Static analysis may recover presentation behavior, transformations, state
+ordering, and parameter selection. It must not be used to extract, reproduce,
+or ship proprietary textures, models, audio, fonts, shaders, effects, or other
+assets.
 
 ## Local identity
 
@@ -7,24 +22,17 @@
 - Project database: `chart.rep/`
 - Program snapshot SHA-256:
   `4e492489fb8e63c5b3ffad5267e78b02fcf8d74a261b058fc296a7e968516520`
-- GhidraMCP: 5.15.0, HTTP plugin endpoint `http://127.0.0.1:8089`
+- GhidraMCP plugin backend: `http://127.0.0.1:8089`
 
-Paths may be overridden for diagnostics with `GHIDRA_HOME` and
-`GHIDRA_MCP_URL`. Run `python3 scripts/harness.py doctor` before analysis.
-
-The GUI must have the `chart` project and `game.exe` program open, with the MCP
-server enabled under **Tools > GhidraMCP > Start MCP Server**. The chat/client
-must also expose the `ghidra-mcp` MCP server; a listening HTTP port does not by
-itself prove that the client loaded its tools.
+Run `python3 scripts/harness.py doctor` before analysis. The GUI must have the
+`chart` project and `game.exe` open with the MCP server enabled under
+**Tools > GhidraMCP > Start MCP Server**. A listening TCP port alone does not
+prove that the client loaded the native tools.
 
 ### Codex bridge registration
 
-The Ghidra plugin on port 8089 exposes its HTTP/Unix-socket backend. Its
-`/mcp/instance_info` and `/mcp/schema` paths are plugin REST endpoints; the bare
-`http://127.0.0.1:8089/mcp` path is not a streamable MCP transport.
-
-Codex uses the separately installed Python stdio bridge from the local
-GhidraMCP checkout:
+The plugin's HTTP/Unix-socket backend is not a streamable MCP endpoint at the
+bare `/mcp` URL. Codex uses the installed stdio bridge:
 
 ```toml
 [mcp_servers.ghidra-mcp]
@@ -36,41 +44,64 @@ GHIDRA_MCP_URL = "http://127.0.0.1:8089"
 PYTHONIOENCODING = "utf-8"
 ```
 
-This entry is installed in `/home/maru/.codex/config.toml`. Existing Codex
-threads do not hot-load newly registered MCP servers; start a new session after
-adding or changing the entry. The bridge prefers the live per-user Unix socket
-when available and falls back to the configured TCP URL.
+Existing threads do not hot-load newly registered MCP servers; start a fresh
+session after changing the client configuration. The bridge prefers the live
+per-user Unix socket and falls back to the configured TCP URL.
 
-## Orientation before decompilation
+## Focused investigation workflow
 
-Use strings, xrefs, imports, callers/callees, function hashes, and data references
-to narrow the target. Avoid repeatedly requesting huge decompiler windows.
-Inspect one bounded function and its necessary context at a time.
+1. Reproduce and classify the viewer mismatch under `docs/WORKFLOW.md`.
+2. Exhaust active claims, specs, reconstruction helpers, tests, and corpus
+   invariants before opening a new binary question.
+3. Name the smallest missing fact and its expected product consumer.
+4. Use strings, xrefs, imports, callers/callees, hashes, data references, and
+   existing note/view RTTI anchors to narrow the target.
+5. Trace upstream ownership and downstream consumers, including reset/error and
+   indirect paths. Do not stop at a visually plausible function.
+6. Record concise original observations in a claim; never paste raw assembly or
+   decompiler output.
+7. Reopen only the exact stage-one coverage row if verified gameplay evidence
+   changes. Presentation-only findings use product evidence labels and need not
+   invalidate the closed gameplay ledger.
+8. Update `research/VIEWER_COVERAGE.tsv` independently for binary closure,
+   product implementation, and owner review. None implies either of the others.
 
-Because entry passes through boot/account/selection flow, do not start at the PE
-entry and recursively document everything. Anchor on chart command strings,
-file access, gameplay type dispatch, update-loop ownership, device reads, and
-judgement/result enums; then connect those islands.
+When a corpus keyword is absent from the current viewer/spec, begin with the
+live command descriptors/registrations and group dispatch, then trace its exact
+handler or rejection/ignore path. Do not normalize its spelling, invent an
+alias, or classify it as chart damage because it looks unfamiliar.
+
+When a presentation value is external, continue upstream through configuration
+selection and loading far enough to identify the source file/resource/table/key
+whenever the binary exposes it. If the raw value is genuinely absent, stop at
+that proved boundary and parameterize it; do not infer a canonical number from
+appearance.
+
+Because entry passes through boot/account/selection flow, do not start at the
+PE entry and recursively document everything. Anchor on the chart command or
+render state that produced the concrete discrepancy.
 
 ## Annotation discipline
 
 - Preserve default names until responsibility is supported.
-- Use explicit hypothesis comments/bookmarks for tentative roles.
-- Check all meaningful callers before changing a signature.
-- Infer structure fields from repeated base+offset access, width, and use; do not
-  invent semantic fields merely to make decompilation prettier.
-- Treat vtables/function pointers as coverage obligations. Enumerate possible
-  targets or document why a target cannot affect gameplay.
-- Record external-config consumers even when numeric values are absent.
-- Let MCP convention validation guide final symbol syntax; semantic certainty is
-  still the investigator's responsibility.
+- Use hypothesis comments/bookmarks for tentative roles.
+- Check meaningful callers before changing a signature.
+- Infer structure fields from repeated offset, width, ownership, and use; do
+  not invent semantic names to make output prettier.
+- Treat vtables/function pointers as coverage obligations when their targets
+  can affect the active question.
+- Distinguish executable logic from externally loaded parameters and from
+  asset contents that will not be recovered or shipped.
+- Let MCP convention validation guide symbol syntax; semantic certainty remains
+  the investigator's responsibility.
 
 ## Safe mutations
 
-Renames, comments, bookmarks, types, structs, and enums are acceptable after the
-confidence gate in `AGENTS.md`. Non-destructive scripts may inventory or analyze.
-Do not directly edit files under `chart.rep`, bulk-delete symbols, clear analysis,
-re-import the binary over the working program, or run debugger/dynamic endpoints.
+Renames, comments, bookmarks, types, structs, and enums are acceptable only
+after the confidence gate in `docs/EVIDENCE.md`. Apply them through Ghidra/MCP.
+Do not edit `chart.rep`, bulk-delete symbols, clear analysis, re-import over the
+working program, invoke debugger/dynamic endpoints, or execute the game.
 
-After mutations, re-decompile affected callers and callees to catch type-induced
-misinterpretations. Save the project and record the changes in the session note.
+After a mutation, re-decompile affected callers/callees, save the program, and
+record the change in the active claim/session handoff. One agent owns Ghidra
+writes at a time.

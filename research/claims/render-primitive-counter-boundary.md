@@ -23,7 +23,7 @@ or terminal state.
 - `game.exe @ RAM:00c326e0, FUN_00c326e0, current-and-peak clear during scene initialization`
 - `game.exe @ RAM:00c322b0, FUN_00c322b0, bounded primitive-count accumulator`
 - `game.exe @ RAM:00c32330, FUN_00c32330, sole accumulator wrapper`
-- `game.exe @ RAM:00c03c00, FUN_00c03c00, geometry builder and bucket 0/4-9 producer`
+- `game.exe @ RAM:00c03c00, FUN_00c03c00, geometry builder and diagnostic-category 0/4-9 producer, hash d2a412eb53cc16a40064b5d44527874fe83f9bfdfb64575d6282df16038a7ed6`
 - `game.exe @ RAM:00c08420, FUN_00c08420, geometry builder and bucket 0 producer`
 - `game.exe @ RAM:00c09d60, FUN_00c09d60, geometry builder and bucket 0 producer`
 - `game.exe @ RAM:00c0a3d0, FUN_00c0a3d0, geometry builder and bucket 1-3 producer`
@@ -72,8 +72,9 @@ manager loop therefore creates no hidden candidate or judgement ordering rule.
 
 ## Consequences
 
-- Ghidra mutations: none in the live project; GhidraMCP remains unavailable and
-  analysis used the temporary clone.
+- Ghidra mutations: supported-role comments at `00c322b0` and `00c03c00`
+  distinguish diagnostic triangle counting from the separate Joint graph
+  submission path; default symbols and types were retained.
 - Spec sections: `spec/timing.md` manager update ordering exclusion.
 - Reconstruction code: none; excluded render diagnostics are outside scope.
 - Tests: none; the exclusion is supported by a closed static reference set.
@@ -83,4 +84,7 @@ manager loop therefore creates no hidden candidate or judgement ordering rule.
 The accumulator's sole thunk, all eleven call sites, both reset functions, and
 the counter block's exact-address references were independently enumerated.
 The producers' vertex-container arithmetic was checked at each call site, and
-no gameplay feedback consumer was recovered.
+no gameplay feedback consumer was recovered. Current exact-project MCP review
+also followed type-9 geometry onward to the separate Joint GraphNode callback
+and dynamic-primitive command queue, confirming that the 7/9/8 counter calls
+are not submissions.

@@ -88,8 +88,9 @@ read derived profiles and scheduled records without reading manager-selected
 lane candidates. Evidence: `claim.note.air-slide-secondary-judgement`.
 
 Ordinary AirLadder uses the all-negative-sentinel candidate virtual. Its
-profile-7 checkpoints are all updated directly and do not participate in lane
-minimum reduction. Evidence: `claim.note.air-ladder-judgement`.
+profile-7 generated checkpoints are all updated directly and do not
+participate in lane minimum reduction. Evidence:
+`claim.note.air-ladder-generated-checkpoints`.
 
 SLD/SXD/SLC/SXC construct one type-2 root for a compatible control-point chain.
 At runtime, `SlideNote` exposes the shared TAP-style candidates only until its

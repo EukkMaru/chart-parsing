@@ -1,7 +1,7 @@
 # Claim: the independent post-fix closure review passes every completion gate
 
 - ID: `claim.audit.independent-post-fix-closure-review`
-- State: active
+- State: superseded
 - Maturity: verified
 - Confidence: high
 - Owner: closure_auditor
@@ -9,6 +9,15 @@
 - Last reviewed: 2026-08-03
 
 ## Statement
+
+Superseded on 2026-08-03 by the exact type-9 ALD producer-to-consumer traces in
+`claim.note.air-ladder-generated-checkpoints` and
+`claim.note.air-ladder-precalc-presentation`. The review did not distinguish
+the `0x24` authored-control vector from the `0x20` generated-checkpoint vector,
+nor identify the accepted-event precompute key and authored terminal schedule,
+so its no-remaining-gameplay-uncertainty verdict and administrative promotion
+are no longer current. The report remains preserved as historical audit
+evidence; `audit.closure` requires a new contradiction review after correction.
 
 A fresh read-only investigator audited the post-correction workspace against
 all twelve gates in `docs/COMPLETION.md` and found no remaining

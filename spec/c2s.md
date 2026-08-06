@@ -354,15 +354,19 @@ construction, and consumer rules are normative in
 `spec/notes/air_slide.md`. Evidence:
 `claim.note.air-slide-secondary-judgement`.
 
-`ALD` resolves to parsed type 9 and builds compatible chains of 0x20-byte
-control points. The runtime normally constructs AirLadderNote, but selector
-zero plus exact style `NON`/code 15 selects HeavenHoldNote. Ordinary chain,
-class-selection, and consumer rules are normative in
-`spec/notes/air_ladder.md`. A missing legacy style token becomes empty string /
-code 0 and does not select the exception. `HHD` and `HHX` have command IDs
+`ALD` resolves to parsed type 9. It appends compatible authored endpoints as
+`0x24`-byte controls, then rebuilds a distinct `0x20`-byte generated vector at
+the positive fixed-grid interval stored in ALD's fifth data field. The runtime
+normally constructs AirLadderNote and creates one checker per generated
+record; interval zero plus exact style `NON`/code 15 selects HeavenHoldNote.
+Ordinary chaining, generation, class selection, and consumer rules are
+normative in `spec/notes/air_ladder.md`. A missing legacy style token becomes
+empty string / code 0 and does not select the exception. `HHD` and `HHX` have
+command IDs
 `0x2c` and `0x2d`, resolve to parsed type 13, and always construct the same
 HeavenHoldNote class. Exact generation and consumer rules are normative in
-`spec/notes/heaven_hold.md`. Evidence: `claim.note.air-ladder-judgement` and
+`spec/notes/heaven_hold.md`. Evidence:
+`claim.note.air-ladder-generated-checkpoints` and
 `claim.note.heaven-hold-judgement`.
 
 `ASO` resolves to parsed type 10 and chains two-endpoint AirSolid paths. Its

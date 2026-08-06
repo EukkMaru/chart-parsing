@@ -19,7 +19,7 @@ snapshot contains two such lines in one chart, both SXD with the extended flag.
 The same runtime class also has one type-9 entry:
 
 ```text
-ALD selector == 0 && style_code == 15 (exact string NON)
+ALD sampling_interval == 0 && style_code == 15 (exact string NON)
 ```
 
 All type-13 records, including rewritten Slide chains, and that exact ALD
@@ -28,7 +28,7 @@ exception allocate `0x348` bytes and construct RTTI-identified
 token accessor returns an empty string and style lookup maps it to code 0, so
 legacy one-short records construct ordinary AirLadder. Evidence:
 `claim.note.slide-hld-heaven-retyping`, `claim.note.heaven-hold-judgement`, and
-`claim.note.air-ladder-judgement`.
+`claim.note.air-ladder-generated-checkpoints`.
 
 ## Generated path construction
 

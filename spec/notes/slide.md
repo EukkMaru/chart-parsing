@@ -1,8 +1,8 @@
 # Slide notes
 
 This section specifies parsed type 2, produced by `SLD`, `SXD`, `SLC`, and
-`SXC`. It reconstructs gameplay state only; path mesh, effects, and feedback
-resources are excluded except where their state crosses a result boundary.
+`SXC`. Gameplay state and the recovered resource-independent presentation
+classes are normative. External resource contents remain excluded.
 
 ## Parsing and path ownership
 
@@ -37,7 +37,8 @@ The second command-specific field is also a path-boundary marker:
 `SLD`/`SXD` set it and `SLC`/`SXC` clear it. The generated root boundary and
 final boundary are forced set; intermediate boundaries retain the authored
 field. These markers control one-shot path feedback, not shared judgement
-results.
+results. For ordinary Slide, an ending marker also exactly controls ownership
+of the persistent generated endpoint resource described below.
 
 One exact style is an exception to this type-2 path. Field 8 is decoded by an
 exact three-string table: `SLD` is code 0, `HLD` is code 1, and `GRN` is code
@@ -52,6 +53,110 @@ in `spec/notes/heaven_hold.md`.
 
 Evidence: `claim.note.slide-path-sustain-judgement` and
 `claim.note.slide-hld-heaven-retyping`.
+
+## Presentation classes and selectors
+
+The root/start resource, three shared path resources, and generated endpoint
+resources are distinct owners.
+
+- The root resource is selected from bounded width and decoded style. A root
+  authored as SXD/SXC enters the extended resource branch; SLD/SLC enters the
+  ordinary branch. The extended branch has a further runtime two-table
+  selector. Actual resources and that selector's player-facing label are
+  external or unresolved, so reconstruction retains the branch rather than
+  assigning a guessed image.
+- Style is bounded to codes 0 through 2 before selecting the three shared path
+  resource descriptors. Their primitive topology/mode values are 4, 3, and 3.
+  Exact `HLD` style has already left this path through the type-13 rewrite.
+- Every generated segment stores its preceding marker, ending marker, and
+  final-segment byte. The final ending marker is forced set. A generated
+  endpoint resource is preloaded and lazily allocated if and only if the
+  ending marker is set. Thus nonfinal SLD/SXD endpoints own the visible class;
+  nonfinal SLC/SXC controls are path-shaping only. The root start is separate,
+  and the final endpoint is present regardless of the last command spelling.
+- Each generated endpoint begins with result-table index `0xff`. Presentation
+  narrows the loaded `NotesJudgeResultTable` row count to one byte and requests
+  the endpoint visible exactly when the stored index is not below that count.
+  A due marked endpoint receives the current mapped result index. A due
+  unmarked segment stores hardcoded index 4 but owns no endpoint resource.
+  External rows/count must be explicit inputs for any simulated resolved state.
+
+Optional field 9 is decoded only for SXD/SXC roots by the exact string order
+`UP`, `DW`, `CE`, `RC`, `LC`, `RS`, `LS`, `BS`; missing or unknown values
+become zero. It is copied into runtime root state and selects an entry from one
+of two eight-entry result-feedback tables. Values outside unsigned range 0..7
+select no resource. It has no persistent path-geometry or endpoint-class
+consumer.
+
+Evidence: `claim.note.slide-presentation-classes`; reconstruction:
+`slide_generated_endpoint_resource_present`,
+`slide_generated_endpoint_resource_visible`, and related Slide presentation
+helpers; focused coverage: `tests/slide_path_test.cpp`.
+
+### Shared path mesh
+
+The type-2 builder supplies the shared path owner with one presentation point
+for every generated segment start and one forced final endpoint. Each point is
+the decoded width, `lane + width / 2` center, and preceding boundary marker.
+The runtime update independently supplies equal-length raw and projected
+position arrays for the root and every generated endpoint. Projection follows
+the endpoint's keyed schedule through the shared transform specified in
+`spec/timing.md`. If any of the three cardinalities differ, all three path
+streams are cleared.
+
+Adjacent points form segments. Render lateral center is
+`(lane_center - 8) * 4`; decoded width is retained separately. The first start
+marker and final end marker are forced. Between two ending markers, the
+longitudinal coordinate accumulates absolute raw segment length and divides by
+the absolute difference from the group's first raw start to its last raw end.
+The denominator is at least `0.00001`, and coordinates are clamped to `[0, 1]`.
+
+The first segment satisfying both `raw_start < 0.000001` and
+`raw_end > -0.000001` is split at the projected judgement plane. Lateral
+center, width, and longitudinal coordinate are interpolated there. The past
+copy stores raw start/end zero and clears its end marker; the future copy
+clears its start marker.
+
+Presentation mode is derived from the two Slide gameplay phases exactly:
+
+| Start phase | Path phase | Mode |
+| --- | --- | ---: |
+| any | 2 | 1 |
+| 4 | 3 | 2 |
+| 4 | any other value | 1 |
+| any other combination | any other value | 0 |
+
+Mode 1 removes a segment when its raw end is below `0.000001`; modes 0 and 2
+do not apply that removal. In every mode a segment is discarded if both
+projected endpoints are below -600 or both are above 50. A segment crossing
+either bound is clipped to exact range `[-600, 50]`, interpolating lateral
+center, width, and longitudinal coordinate from the original endpoints.
+
+The clipped segments fill three `0x18`-byte vertex streams in Joint construction
+and callback order 0, 1, 2:
+
+- Stream 0 is a vertical-zero, full-decoded-width trapezoid. Equal endpoint
+  widths emit six vertices. An absolute width difference at least
+  `1.1920929e-7` emits 18 vertices: a center quad at width scale `0.7` and
+  horizontal coordinates `0.15`/`0.85`, plus two side strips reaching 0/1.
+- Stream 1 is a vertical-zero six-vertex strip of fixed render-space half
+  extent 2, exactly one chart lane in total width.
+- Stream 2 is a vertical-zero, full-width six-vertex overlay emitted only in
+  mode 1, with packed color `0x20ffffff`.
+
+Triangle winding depends on projected endpoint order. Diagnostic categories
+1, 2, and 3 count triangles only; they are not layer identifiers. Mode 0 reads
+the base runtime packed color. Mode 1 uses the same color, adds stream 2, and
+applies intensity
+`sin(fmod(counter * 0.05, 1) * 2*pi) * 0.25 + 1.5`. Mode 2 reads a separate
+runtime packed color and omits stream 2. The two runtime color values,
+materials, textures, shaders, and final pixel composition are not statically
+available and remain explicit external presentation inputs.
+
+Evidence: `claim.note.slide-path-presentation-geometry`; reconstruction:
+`build_slide_presentation_geometry`, the three
+`build_slide_*_stream_vertices` helpers, and related constants; focused
+coverage: `tests/slide_path_test.cpp`.
 
 ## Construction and start judgement
 

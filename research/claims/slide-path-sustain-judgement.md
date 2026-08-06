@@ -31,7 +31,7 @@ field-8 style `HLD` is the pre-generation exception specified by
 - `game.exe @ RAM:00c0c720, FUN_00c0c720, SlideNote constructor and component resets`
 - `game.exe @ RAM:018d92d4, SlideNote primary vtable`
 - `game.exe @ RAM:01c323bc, SlideNote RTTI type descriptor`
-- `game.exe @ RAM:00c10720, FUN_00c10720, parsed-record load and checker/path initialization`
+- `game.exe @ RAM:00c10720, FUN_00c10720, parsed-record load and checker/path/presentation initialization`
 - `game.exe @ RAM:00c0dae0, FUN_00c0dae0, candidate clearing and start-candidate construction`
 - `game.exe @ RAM:00c0ea40, FUN_00c0ea40, shared TAP start gate and start result`
 - `game.exe @ RAM:00c0de10, FUN_00c0de10, path windows, source continuation, gap update, and checkpoints`
@@ -137,7 +137,9 @@ field-8 style `HLD` is the pre-generation exception specified by
   never calls the shared result dispatcher, active-result remap, note-result
   wrapper, or gap reset. Each record's consumed byte prevents repeat feedback.
   Generated markers therefore affect feedback timing but not judgement output
-  or the authored checkpoint queue.
+  or the authored checkpoint queue. Their separate persistent endpoint-
+  resource ownership and visibility are specified by
+  `claim.note.slide-presentation-classes`.
   The terminal predicate requires both start phase 4 and path phase 4. The main
   wrapper runs start first, path second, then requests base state 2 through the
   shared deferred finalizer. This ordering also means a same-substep start
@@ -168,15 +170,18 @@ not merely path proximity, as the active input to inactive-gap grading.
 
 ## Unknowns
 
-- The player-facing meanings of the two `SLD/SXD/SLC/SXC` command fields, the
-  `HLD` rewrite's code-10 discriminator, result bytes, source categories, and
-  phases 2/3 remain unresolved.
+- Player-facing names for the root command-form bit, the `HLD` rewrite's
+  code-10 discriminator, result bytes, source categories, and phases 2/3
+  remain unresolved. The second command-form bit's generated-boundary and
+  persistent endpoint-resource consumers are now closed by
+  `claim.note.slide-presentation-classes`.
 - The numerical contents, units, defaults, and player-facing schema of the
   runtime-loaded `+0x730` endpoint-profile block remain unavailable. Its exact
   selection and use are closed and parameterized.
-- The exact feedback/resource interpretation of generated boundary markers
-  remains outside scope after confirming their producer, one-shot lifetime,
-  and lack of shared judgement or gap-state mutation.
+- Generated-boundary feedback resource identity remains excluded, but its
+  selector, one-shot lifetime, persistent endpoint ownership, result-index
+  lifetime, and lack of shared judgement or gap-state mutation are closed by
+  `claim.note.slide-presentation-classes`.
 - The physical labels of the two source banks remain unassigned, but their
   complete snapshot synthesis and sustain-marker ownership are closed by
   `claim.input.snapshot-profile-synthesis` and

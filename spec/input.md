@@ -178,9 +178,10 @@ generated-record and ASD-checkpoint consumers are normative in
 `claim.note.air-slide-secondary-judgement`.
 
 Ordinary AirLadder initializes one retained-profile checker at fixed derived
-profile 7 for every parsed control point. It does not read lane candidates.
-Exact update cardinality is normative in `spec/notes/air_ladder.md`; evidence:
-`claim.note.air-ladder-judgement`.
+profile 7 for every generated sampled point. It does not read lane candidates.
+Exact generation and update cardinality are normative in
+`spec/notes/air_ladder.md`; evidence:
+`claim.note.air-ladder-generated-checkpoints`.
 
 HeavenHold uses paired physical-bank state across every lane in its span.
 Asserted banks are admission-checked in order until one succeeds. A success

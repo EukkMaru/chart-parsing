@@ -2,21 +2,76 @@
 
 ## Snapshot
 
-- Phase: all 28 gameplay coverage rows are verified. Exact-binary paths include live
-  command-descriptor vocabulary, parser/factory/lifecycle boundaries, all
-  runtime note families, TouchSlider/photo-sensor framing, complete input
-  snapshot/profile synthesis and history ownership, gameplay clock/tick
-  conversion, result routing, active/post-active updates, teardown, and final
-  result persistence. Every concrete blocker from the failed independent
-  review was reproduced and corrected; external values remain parameters
-  where the executable only selects resource fields. A fresh read-only
-  post-fix review passed all twelve gates in `docs/COMPLETION.md`; its dedicated
-  record is `claim.audit.independent-post-fix-closure-review`.
+- Research milestone: the corrected ALD presentation slice and ordinary Slide
+  endpoint/path presentation slices are complete.
+  `claim.note.air-ladder-precalc-presentation` closes authored/generated
+  ownership and asset-independent ALD geometry;
+  `claim.note.slide-presentation-classes` closes Slide endpoint ownership and
+  `claim.note.slide-path-presentation-geometry` closes its marker grouping,
+  zero split, projected clipping, three vertex streams, and Joint callback
+  order. Former ALD correction records and the old
+  independent closure verdict remain superseded. All other previously closed
+  paths remain standing unless the required fresh contradiction audit exposes
+  another dependency.
 - Binary: `game.exe`, SHA-256 `4e492489fb8e63c5b3ffad5267e78b02fcf8d74a261b058fc296a7e968516520`
 - Ghidra project: local project `chart`
 - Current Ghidra writer: none
-- Grand-goal status: complete for this exact snapshot at apparent tick
-  granularity
+- Stage-one status: the three affected parser/judgement/ownership rows are
+  corrected and verified by focused/full tests plus aggregate corpus and
+  viewer smoke coverage; only the independent closure-audit row remains open
+- Active product phase: build a canonical offline C2S chart-gameplay viewer for
+  arbitrary selected files, using original presentation and no shipped game
+  assets or charts
+- Stage-two status: open; the existing viewer is functional but contains fitted
+  and repo-only assumptions that often diverge from gameplay footage
+- Final acceptance authority: the owner, after hands-on review against real
+  gameplay footage and gameplay experience; automation cannot close this gate
+
+## Viewer product stage
+
+- Baseline: `scripts/c2s-viewer.html` parses selected files locally and renders
+  a deterministic corridor/playfield without embedding chart data.
+- Provenance limitation: its initial author could inspect this repository but
+  not `game.exe`. Existing renderer rules therefore range from recovered spec
+  behavior to corpus inference, footage fitting, and original placeholders.
+- Canonicalization method: use GitHub renderer issues and matched footage to
+  identify discrepancies, then resolve rules from active claims/specs or
+  focused Ghidra decompilation. Keep resource-only values configurable and
+  labeled instead of presenting a fit as binary fact.
+- Asset boundary: `music/` charts—official and unofficial—are local test inputs
+  only and are not shipped. No game artwork, audio, video, fonts, models,
+  effects, accounts, servers, or player records belong in the product.
+- Architecture goal: one arbitrary-file parser and normalized chart model feed
+  timing/playback and original render primitives; drawing code must not carry a
+  second field schema or chart-specific exceptions.
+- Durable stage-two handoff: `docs/VIEWER_ROADMAP.md` records the clean-room
+  product boundary, issue 1-5 triage, exact current Ghidra leads, and ordered
+  implementation/research queue.
+- Exhaustive ledger: `research/VIEWER_COVERAGE.tsv` separates exact-binary
+  closure, product implementation, and owner review. Known issues are seeds;
+  the final binary saturation audit must discover and close unreported paths.
+- Corpus/reference acceptance: use an aggregate feature inventory to render a
+  broad local suite. Each reviewed chart must reach zero undefined keywords,
+  unexplained primitives, heuristic fallbacks, appearance-only values, and
+  unclassified differences; feature saturation plus owner review determines
+  when the chart set is sufficient.
+- Current review queue: issue 1 is answered by the recovered SLP schedule and
+  needs a viewer regression/issue close; issue 2 remains an external-profile
+  semantic hypothesis; issue 3's generated ALD checker producer, authored main
+  geometry, clipping, stream layouts, effect transform, and effect-expiry
+  predicate are recovered. TextureTable selection, Joint traversal, and default
+  command submission are also closed; result-state integration remains partial,
+  while resource meaning/final pixels are external-data semantics. Issue 4's
+  ordinary Slide visible class, field-9 role, endpoint lifetime, path mesh,
+  local projection clipping, and three-Joint callback order are now closed.
+  Viewer runtime phase/result integration, external material/final-pixel
+  semantics, and separate HeavenHold presentation remain. Issue 5 requires
+  shared camera/viewport work.
+- Corrected ALD corpus check: all 7,752 local charts yielded 195,469 ALD lines
+  in the two known field shapes and 91,368 compatible chains. The recovered
+  interval producer gives 100,952 samples across 43,577 positive advancing
+  chains; 47,791 nonpositive-interval chains correctly produce none. Exact
+  endpoint landing and overshoot are both present, with no new disposition.
 
 ## Established findings
 
@@ -194,11 +249,48 @@
   performs the ordinary inactive-gap classification/reset before its emission
   byte prevents result submission, unlike AirHold's disabled-record path.
 - `ALD` maps to parsed type 9 and normally constructs candidate-free
-  RTTI-identified `projView::AirLadderNote`. Every parsed control point owns a
-  retained-profile-7 checker; one update visits the entire vector, so multiple
-  accepted points can submit source category 18 in one substep. Terminal state
-  waits for every checker and an inclusive external completion threshold.
-- The ALD factory has an exact alternate-class boundary: parsed selector zero
+  RTTI-identified `projView::AirLadderNote`. Authored endpoints occupy a
+  `0x24`-byte control vector; a distinct producer samples a `0x20`-byte vector
+  from the root at ALD's positive fixed-grid interval while interpolating lane,
+  vertical value, and decoded width. Every generated point owns a retained-
+  profile-7 checker. One update visits the entire runtime vector, so multiple
+  accepted samples can submit source category 18 in one substep. Terminal
+  state waits for every generated checker and the inclusive final authored
+  endpoint schedule stored by the type-9 precompute. Parsed `+0x84` is the
+  accepted-event identity used for that checked precompute lookup, not an
+  external configuration key.
+- AirLadder presentation keeps the two vectors separate. Generated samples own
+  individual checkpoint-effect records. The main type-9 geometry is built from
+  root plus authored-control endpoints, clipped to projected range `[-600,
+  50]`, and written to three resource vertex streams. The later 7, 9, 8 calls
+  are primitive-counter diagnostic categories, not proof of draw order. Exact
+  vertex layout, extents, winding, style compact flag, generated-effect
+  transform, and the result-table-index effect-expiry predicate are
+  reconstructed. Three consecutively registered Joint graph children reach
+  dynamic-primitive submission in stream order 0, 1, 2. Their runtime handles
+  are selected through checked `TextureTableRecord` rows whose filename/path
+  and material contents are external. Scene traversal, zero-handle suppression,
+  compatible adjacent batching, and default command append are closed; viewer
+  result-state integration remains open, while player-facing resource roles
+  and final pixel compositing are excluded external semantics.
+- The viewer's generated ALD records now carry the exact unresolved `0xff`
+  index and use the exact visibility predicate. The former after-line opacity
+  fade was removed. Resolved-state simulation remains open because profile-7
+  input and the external result-table count are not chart data; the viewer does
+  not fabricate them.
+- AirLadder authored roots/endpoints select SLA projection keys independently;
+  the viewer now uses each endpoint's own STP/SFL/SLP key instead of inheriting
+  the segment root. The formerly anonymous precompute float is therefore a
+  closed schedule selector. A separate final vertex coordinate comes from an
+  exact embedded 16-entry style table; its resource-facing name is deliberately
+  unassigned.
+- The corrected viewer path was smoke-tested across 15 coverage-spread ALD
+  charts selected from 1,627 files containing the command, including
+  positive-interval `NON` and an ALD-plus-SLA case; every chart loaded/rendered
+  headlessly and four materially different outputs were inspected. This establishes product-path
+  stability only, not canonical styling or closure of the explicit resource,
+  result-state integration, or external material semantics.
+- The ALD factory has an exact alternate-class boundary: sampling interval zero
   plus style code 15/exact string `NON` constructs `projView::HeavenHoldNote`,
   the same class used by parsed type 13. The local current-schema corpus exposes
   six ALD lines with that visible pair. Legacy one-short ALD omits the style
@@ -235,6 +327,25 @@
   HOLD two-bank continuation rule. Only center-window contact feeds the shared
   inactive-gap tracker. At most one due path checkpoint is consumed per
   substep, and both component phases must reach 4 before deferred termination.
+- Ordinary Slide presentation has separate root, shared-path, and generated
+  endpoint owners. A generated endpoint resource exists exactly for an ending
+  SLD/SXD marker, with the final ending marker forced; SLC/SXC nonfinal
+  controls only shape the path. Endpoint result index starts at `0xff` and the
+  resource remains visible exactly while that index is not below the byte-
+  narrowed external result-table count. The root X bit selects an extended
+  external resource branch. Exact field-9 strings UP/DW/CE/RC/LC/RS/LS/BS
+  select bounded result feedback and have no persistent geometry consumer.
+  The viewer now places marked endpoints at their segment ends and shows
+  unmarked controls only through an explicit debug toggle; its white endpoint
+  rule is an original asset-free presence placeholder, not a recovered glyph.
+- Ordinary Slide shared-path presentation builds adjacent straight endpoint
+  segments, marker-delimited longitudinal coordinates, one raw-zero split,
+  mode-dependent past culling, and exact projected clipping to `[-600, 50]`.
+  It emits a full-width 6/18-vertex main stream, a fixed one-lane-wide center
+  stream, and a mode-1-only full-width overlay through three registered Joint
+  callbacks in order 0, 1, 2. Categories 1/2/3 only count triangles. The two
+  main packed colours and material/final-pixel semantics are external; viewer
+  phase integration and shared camera/viewport calibration remain open.
 - The authoritative clock starts from integer milliseconds at 0.06 chart units
   per millisecond, applies exact ordinary/alternate float quantization and
   discrepancy correction, integrates a runtime rate, then subtracts a selected
@@ -428,10 +539,10 @@
 
 ## Active question
 
-None. The fresh independent post-fix review passed. Reopen the exact affected
-coverage row only if new binary evidence exposes a conflicting edge, writer,
-selector, reset path, malformed domain, corpus invariant, indirect target, or
-gameplay-affecting external value that bypasses the reconstructed interfaces.
+Which remaining viewer discrepancies are renderer/model bugs, which are
+resource-only fitted values, and which expose recoverable canonical behavior
+in the exact binary? Start with the open GitHub issues and preserve their
+evidence labels while resolving stale statements against the verified specs.
 
 ## Tooling handoff
 
@@ -441,12 +552,15 @@ gameplay-affecting external value that bypasses the reconstructed interfaces.
   `RAM:004b8fe0` to `InitializeSoundControllerArray` and records why its 51
   fixed wrappers and sole embedded `sound::Sound` vtable make the HOLD
   adjusted-end branch feedback/audio-only.
-- Follow `docs/GHIDRA.md` and run `python3 scripts/harness.py doctor` before
-  any later exact-snapshot re-audit.
+- Follow `docs/GHIDRA.md` and run `python3 scripts/harness.py doctor` before a
+  focused canonical-renderer investigation. Reopen stage-one coverage only if
+  exact-binary evidence changes verified gameplay behavior.
 
 ## Blockers
 
-- None under `docs/COMPLETION.md`.
+- Stage two is not complete: known renderer discrepancies and GitHub issues
+  remain unresolved, visual comparison coverage is incomplete, and an
+  independent product review has not occurred.
 
 Externally absent judgement/profile values remain parameters. Their selection,
 defaults where executable-owned, lifetime, and consumers are reconstructed, so
@@ -454,7 +568,9 @@ their absence is not itself a completion blocker.
 
 ## Next handoff
 
-Preserve the verified ledger and independent closure report. If the binary or
-corpus changes, treat it as a new snapshot and rerun identity, parser/corpus,
-entry-to-exit, indirect-call, state/reset, interaction, contradiction, and
-full test gates rather than carrying this verdict across versions.
+Preserve the verified stage-one ledger and independent closure report. Review
+the open renderer issues, select one bounded parser/model/render discrepancy,
+and trace it from C2S fields through the normalized schedule to the viewer.
+Use focused Ghidra analysis where the repository evidence cannot determine the
+canonical rule. Record only original prose/measurements; do not commit charts,
+footage, or extracted assets.

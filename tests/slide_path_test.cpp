@@ -11,20 +11,44 @@ int main() {
     using chart::reconstruction::SlideCheckpointProgress;
     using chart::reconstruction::SlideEndpointProfile;
     using chart::reconstruction::SlideGeneratedPath;
+    using chart::reconstruction::SlideGeometryVertex;
     using chart::reconstruction::SlidePathPoint;
     using chart::reconstruction::SlidePathPhase;
+    using chart::reconstruction::SlidePresentationMode;
+    using chart::reconstruction::SlidePresentationPoint;
+    using chart::reconstruction::SlidePresentationSegment;
     using chart::reconstruction::SlideStartPhase;
     using chart::reconstruction::SlideWindowPhase;
     using chart::reconstruction::classify_slide_window;
     using chart::reconstruction::build_slide_generated_path;
+    using chart::reconstruction::build_slide_center_stream_vertices;
+    using chart::reconstruction::build_slide_main_stream_vertices;
+    using chart::reconstruction::build_slide_overlay_stream_vertices;
+    using chart::reconstruction::build_slide_presentation_geometry;
+    using chart::reconstruction::clip_slide_presentation_segment;
     using chart::reconstruction::combine_slide_window_phases;
     using chart::reconstruction::slide_command_sets_path_marker;
     using chart::reconstruction::SlideCommandForm;
+    using chart::reconstruction::select_slide_feedback_resource;
+    using chart::reconstruction::slide_bounded_style_resource_index;
     using chart::reconstruction::slide_endpoint_profile_index;
+    using chart::reconstruction::slide_feedback_code;
+    using chart::reconstruction::slide_generated_endpoint_resource_present;
+    using chart::reconstruction::slide_generated_endpoint_resource_visible;
+    using chart::reconstruction::slide_generated_segment_result_table_index;
     using chart::reconstruction::slide_checkpoint_source_category;
     using chart::reconstruction::slide_exposes_candidate;
     using chart::reconstruction::slide_gap_active;
     using chart::reconstruction::slide_is_terminal;
+    using chart::reconstruction::slide_joint_submission_order;
+    using chart::reconstruction::slide_main_stream_color;
+    using chart::reconstruction::slide_mode_one_intensity;
+    using chart::reconstruction::slide_overlay_stream_color;
+    using chart::reconstruction::slide_presentation_mode;
+    using chart::reconstruction::slide_primitive_counter_categories;
+    using chart::reconstruction::slide_stream_topology_modes;
+    using chart::reconstruction::slide_root_uses_extended_resource;
+    using chart::reconstruction::slide_unresolved_result_table_index;
     using chart::reconstruction::require_slide_generated_path;
     using chart::reconstruction::update_hold_gap;
     using chart::reconstruction::update_slide_checkpoints;
@@ -61,6 +85,225 @@ int main() {
     assert(slide_command_sets_path_marker(SlideCommandForm::sxd));
     assert(!slide_command_sets_path_marker(SlideCommandForm::slc));
     assert(!slide_command_sets_path_marker(SlideCommandForm::sxc));
+    assert(!slide_root_uses_extended_resource(SlideCommandForm::sld));
+    assert(slide_root_uses_extended_resource(SlideCommandForm::sxd));
+    assert(!slide_root_uses_extended_resource(SlideCommandForm::slc));
+    assert(slide_root_uses_extended_resource(SlideCommandForm::sxc));
+    assert(slide_feedback_code("UP") == 0);
+    assert(slide_feedback_code("DW") == 1);
+    assert(slide_feedback_code("BS") == 7);
+    assert(slide_feedback_code("unknown") == 0);
+    assert(slide_bounded_style_resource_index(-1) == 0);
+    assert(slide_bounded_style_resource_index(0) == 0);
+    assert(slide_bounded_style_resource_index(2) == 2);
+    assert(slide_bounded_style_resource_index(9) == 2);
+    assert(slide_generated_endpoint_resource_present(true));
+    assert(!slide_generated_endpoint_resource_present(false));
+    assert(slide_unresolved_result_table_index == 0xff);
+    assert(slide_generated_segment_result_table_index(true, 2) == 2);
+    assert(slide_generated_segment_result_table_index(false, 2) == 4);
+    assert(slide_generated_endpoint_resource_visible(
+        slide_unresolved_result_table_index, 5));
+    assert(!slide_generated_endpoint_resource_visible(0, 5));
+    assert(!slide_generated_endpoint_resource_visible(4, 5));
+    assert(slide_generated_endpoint_resource_visible(5, 5));
+    assert(slide_generated_endpoint_resource_visible(0, 256));
+    assert(!slide_generated_endpoint_resource_visible(0, 257));
+    constexpr std::array<int, 8> primary{10, 11, 12, 13, 14, 15, 16, 17};
+    constexpr std::array<int, 8> alternate{20, 21, 22, 23, 24, 25, 26, 27};
+    assert(select_slide_feedback_resource(3, false, primary, alternate, -1) ==
+           13);
+    assert(select_slide_feedback_resource(3, true, primary, alternate, -1) ==
+           23);
+    assert(select_slide_feedback_resource(-1, false, primary, alternate, -1) ==
+           -1);
+    assert(select_slide_feedback_resource(8, false, primary, alternate, -1) ==
+           -1);
+
+    assert(slide_presentation_mode(SlideStartPhase::awaiting_result,
+                                   SlidePathPhase::before_start) ==
+           SlidePresentationMode::base);
+    assert(slide_presentation_mode(SlideStartPhase::awaiting_result,
+                                   SlidePathPhase::best_current_gap) ==
+           SlidePresentationMode::hide_past_with_overlay);
+    assert(slide_presentation_mode(SlideStartPhase::resolved,
+                                   SlidePathPhase::other_current_gap) ==
+           SlidePresentationMode::alternate_color);
+    assert(slide_presentation_mode(SlideStartPhase::resolved,
+                                   SlidePathPhase::complete) ==
+           SlidePresentationMode::hide_past_with_overlay);
+    assert(slide_presentation_mode(SlideStartPhase::awaiting_result,
+                                   SlidePathPhase::complete) ==
+           SlidePresentationMode::base);
+    assert(slide_primitive_counter_categories ==
+           (std::array<std::int32_t, 3>{1, 2, 3}));
+    assert(slide_stream_topology_modes ==
+           (std::array<std::int32_t, 3>{4, 3, 3}));
+    assert(slide_joint_submission_order ==
+           (std::array<std::int32_t, 3>{0, 1, 2}));
+    assert(slide_main_stream_color(SlidePresentationMode::base,
+                                   0x11U, 0x22U) == 0x11U);
+    assert(slide_main_stream_color(SlidePresentationMode::alternate_color,
+                                   0x11U, 0x22U) == 0x22U);
+    assert(slide_main_stream_color(
+               SlidePresentationMode::hide_past_with_overlay,
+               0x11U, 0x22U) == 0x11U);
+    assert(std::fabs(slide_mode_one_intensity(0.0F) - 1.5F) < 0.0001F);
+    assert(std::fabs(slide_mode_one_intensity(5.0F) - 1.75F) < 0.0001F);
+    assert(std::fabs(slide_mode_one_intensity(10.0F) - 1.5F) < 0.0001F);
+
+    const std::array presentation_points{
+        SlidePresentationPoint{2.0F, 2.0F, false},
+        SlidePresentationPoint{2.0F, 4.0F, false},
+        SlidePresentationPoint{4.0F, 6.0F, true},
+    };
+    const std::array raw_positions{10.0F, 20.0F, 50.0F};
+    const std::array projected_positions{-100.0F, -50.0F, 0.0F};
+    auto presentation = build_slide_presentation_geometry(
+        presentation_points, raw_positions, projected_positions,
+        SlidePresentationMode::base, -65.0F);
+    assert(presentation.cardinality_valid);
+    assert(presentation.segments.size() == 2);
+    assert(presentation.segments[0].start_marker);
+    assert(!presentation.segments[0].end_marker);
+    assert(presentation.segments[1].end_marker);
+    assert(std::fabs(presentation.segments[0].coordinate_start - 0.0F) <
+           0.0001F);
+    assert(std::fabs(presentation.segments[0].coordinate_end - 0.25F) <
+           0.0001F);
+    assert(std::fabs(presentation.segments[1].coordinate_start - 0.25F) <
+           0.0001F);
+    assert(std::fabs(presentation.segments[1].coordinate_end - 1.0F) <
+           0.0001F);
+    const std::array grouped_points{
+        SlidePresentationPoint{2.0F, 1.0F, false},
+        SlidePresentationPoint{2.0F, 2.0F, true},
+        SlidePresentationPoint{2.0F, 3.0F, false},
+        SlidePresentationPoint{2.0F, 4.0F, false},
+    };
+    const std::array grouped_raw{10.0F, 20.0F, 40.0F, 60.0F};
+    const std::array grouped_projected{-150.0F, -100.0F, -50.0F, 0.0F};
+    const auto grouped = build_slide_presentation_geometry(
+        grouped_points, grouped_raw, grouped_projected,
+        SlidePresentationMode::base, -65.0F);
+    assert(grouped.segments.size() == 3);
+    assert(grouped.segments[0].end_marker);
+    assert(grouped.segments[1].start_marker);
+    assert(std::fabs(grouped.segments[0].coordinate_end - 1.0F) < 0.0001F);
+    assert(std::fabs(grouped.segments[1].coordinate_start - 0.0F) < 0.0001F);
+    assert(std::fabs(grouped.segments[1].coordinate_end - 0.5F) < 0.0001F);
+    assert(std::fabs(grouped.segments[2].coordinate_end - 1.0F) < 0.0001F);
+    const std::array invalid_projected{-100.0F, -50.0F};
+    assert(!build_slide_presentation_geometry(
+                presentation_points, raw_positions, invalid_projected,
+                SlidePresentationMode::base, -65.0F)
+                .cardinality_valid);
+
+    const std::array crossing_points{
+        SlidePresentationPoint{2.0F, 2.0F, false},
+        SlidePresentationPoint{4.0F, 6.0F, true},
+    };
+    const std::array crossing_raw{-10.0F, 10.0F};
+    const std::array crossing_projected{-100.0F, 0.0F};
+    auto crossing = build_slide_presentation_geometry(
+        crossing_points, crossing_raw, crossing_projected,
+        SlidePresentationMode::base, -65.0F);
+    assert(crossing.segments.size() == 2);
+    assert(crossing.segments[0].raw_start == 0.0F);
+    assert(crossing.segments[0].raw_end == 0.0F);
+    assert(std::fabs(crossing.segments[0].projected_end + 65.0F) < 0.0001F);
+    assert(std::fabs(crossing.segments[1].projected_start + 65.0F) < 0.0001F);
+    assert(std::fabs(crossing.segments[0].coordinate_end - 0.5F) < 0.0001F);
+    assert(std::fabs(crossing.segments[1].coordinate_start - 0.5F) <
+           0.0001F);
+    crossing = build_slide_presentation_geometry(
+        crossing_points, crossing_raw, crossing_projected,
+        SlidePresentationMode::hide_past_with_overlay, -65.0F);
+    assert(!crossing.segments[0].visible);
+    assert(crossing.segments[1].visible);
+
+    SlidePresentationSegment clipped{
+        .visible = true,
+        .projected_start = 100.0F,
+        .projected_end = -700.0F,
+        .lateral_start = 0.0F,
+        .lateral_end = 80.0F,
+        .width_start = 2.0F,
+        .width_end = 4.0F,
+        .coordinate_start = 0.0F,
+        .coordinate_end = 1.0F,
+    };
+    clip_slide_presentation_segment(clipped);
+    assert(clipped.visible);
+    assert(std::fabs(clipped.projected_start - 50.0F) < 0.0001F);
+    assert(std::fabs(clipped.projected_end + 600.0F) < 0.0001F);
+    assert(std::fabs(clipped.lateral_start - 5.0F) < 0.0001F);
+    assert(std::fabs(clipped.lateral_end - 70.0F) < 0.0001F);
+    assert(std::fabs(clipped.coordinate_start - 0.0625F) < 0.0001F);
+    assert(std::fabs(clipped.coordinate_end - 0.875F) < 0.0001F);
+    clipped = {
+        .visible = true,
+        .projected_start = -700.0F,
+        .projected_end = 100.0F,
+        .lateral_start = 0.0F,
+        .lateral_end = 80.0F,
+        .width_start = 2.0F,
+        .width_end = 4.0F,
+        .coordinate_start = 0.0F,
+        .coordinate_end = 1.0F,
+    };
+    clip_slide_presentation_segment(clipped);
+    assert(clipped.visible);
+    assert(std::fabs(clipped.projected_start + 600.0F) < 0.0001F);
+    assert(std::fabs(clipped.projected_end - 50.0F) < 0.0001F);
+    assert(std::fabs(clipped.lateral_start - 10.0F) < 0.0001F);
+    assert(std::fabs(clipped.lateral_end - 75.0F) < 0.0001F);
+
+    SlidePresentationSegment render_segment{
+        .visible = true,
+        .projected_start = 0.0F,
+        .projected_end = 10.0F,
+        .lateral_start = 0.0F,
+        .lateral_end = 4.0F,
+        .width_start = 2.0F,
+        .width_end = 2.0F,
+        .coordinate_start = 0.0F,
+        .coordinate_end = 1.0F,
+    };
+    auto main_vertices =
+        build_slide_main_stream_vertices(render_segment, 0x12345678U);
+    assert(main_vertices.size() == 6);
+    assert(std::fabs(main_vertices[0].lateral + 4.0F) < 0.0001F);
+    assert(main_vertices[0].color == 0x12345678U);
+    assert(main_vertices[0].coordinate_u == 0.0F);
+    assert(main_vertices[2].coordinate_u == 1.0F);
+    render_segment.width_end = 4.0F;
+    main_vertices =
+        build_slide_main_stream_vertices(render_segment, 0x12345678U);
+    assert(main_vertices.size() == 18);
+    assert(std::fabs(main_vertices[0].coordinate_u - 0.15F) < 0.0001F);
+    assert(std::fabs(main_vertices[2].coordinate_u - 0.85F) < 0.0001F);
+    render_segment.width_end = 2.0F;
+    render_segment.projected_start = 10.0F;
+    render_segment.projected_end = 0.0F;
+    main_vertices =
+        build_slide_main_stream_vertices(render_segment, 0x12345678U);
+    assert(main_vertices.size() == 6);
+    assert(std::fabs(main_vertices[1].lateral - 8.0F) < 0.0001F);
+    assert(std::fabs(main_vertices[2].lateral - 0.0F) < 0.0001F);
+    const auto center_vertices =
+        build_slide_center_stream_vertices(render_segment, 0xabcdef01U);
+    assert(center_vertices.size() == 6);
+    assert(std::fabs(center_vertices[0].lateral + 2.0F) < 0.0001F);
+    assert(build_slide_overlay_stream_vertices(
+               render_segment, SlidePresentationMode::base)
+               .empty());
+    const auto overlay_vertices = build_slide_overlay_stream_vertices(
+        render_segment, SlidePresentationMode::hide_past_with_overlay);
+    assert(overlay_vertices.size() == 6);
+    for (const SlideGeometryVertex& vertex : overlay_vertices) {
+        assert(vertex.color == slide_overlay_stream_color);
+    }
     assert(slide_endpoint_profile_index(-10) == 15);
     assert(slide_endpoint_profile_index(1) == 15);
     assert(slide_endpoint_profile_index(16) == 0);

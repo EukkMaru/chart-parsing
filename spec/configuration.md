@@ -328,12 +328,15 @@ remain parameters. Exact consumers are normative in
 `claim.parser.header-default-dispatch`; tests:
 `tests/air_slide_judgement_test.cpp`.
 
-Ordinary AirLadder uses the parsed configuration key at `+0x84` to select an
-external record. That record supplies retained-profile support data and the
-completion threshold copied to runtime `+0x118`. Values, units, defaults, and
-selection ownership remain parameters. Exact consumers are normative in
-`spec/notes/air_ladder.md`. Evidence: `claim.note.air-ladder-judgement`;
-tests: `tests/air_ladder_judgement_test.cpp`.
+Ordinary AirLadder parsed offset `+0x84` is not a configuration key. The parser
+writes the accepted-event ordinal there; `NotesPreCalcManager` uses it as the
+checked identity for an authored type-9 precompute. The final authored endpoint
+schedule from that precompute is copied to runtime `+0x118`, so no unavailable
+completion-threshold value belongs in the configuration boundary. Numerical
+retained-profile-7 support remains externally configured as described in the
+input sections. Exact consumers are normative in `spec/notes/air_ladder.md`.
+Evidence: `claim.note.air-ladder-precalc-presentation`; tests:
+`tests/air_ladder_judgement_test.cpp`.
 
 HeavenHold's start checker selects externally supplied profile records 0/1 for
 HHD and exceptional ALD or 2/3 for HHX. Its inactive-gap path consumes the

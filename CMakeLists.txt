@@ -150,6 +150,12 @@ if(PROJECT_IS_TOP_LEVEL)
         add_test(NAME chart.air_ladder_judgement
                  COMMAND air_ladder_judgement_test)
 
+        add_executable(air_ladder_presentation_test
+                       tests/air_ladder_presentation_test.cpp)
+        target_link_libraries(air_ladder_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.air_ladder_presentation
+                 COMMAND air_ladder_presentation_test)
+
         add_executable(heaven_hold_judgement_test
                        tests/heaven_hold_judgement_test.cpp)
         target_link_libraries(heaven_hold_judgement_test PRIVATE chart_logic)

@@ -15,7 +15,9 @@ Queries fully contained by overlapping regions receive the greatest positive
 tag. The region itself has no runtime-note factory case, but its selected root
 and endpoint tags choose keyed STP/SFL/SLP schedules in the far-path
 materialization predicate and can therefore change when an ordinary note first
-becomes able to participate in candidates, input, and judgement.
+becomes able to participate in candidates, input, and judgement. AirLadder
+precompute also selects a key independently for every authored root/endpoint;
+presentation uses those per-endpoint keys for main-path projection.
 
 ## Anchors
 
@@ -47,6 +49,10 @@ becomes able to participate in candidates, input, and judgement.
   `FUN_00b29c90` reads a nonnegative root or endpoint tag, passes it as the
   exact keyed-schedule lookup key, and uses the transformed target in its
   inclusive far projection bounds.
+- `FUN_00b236a0` applies `FUN_011c1030` separately to the AirLadder root and
+  each authored endpoint. `FUN_00c12350` later projects an endpoint schedule
+  with that endpoint's stored key before main type-9 geometry construction.
+  Generated AirLadder samples retain the separate tolerant float-span query.
 - A failed far bound retains the pending record; a passed bound constructs and
   erases it. The established runtime-note dispatch permits candidate and
   type-specific gameplay only on later manager substeps.
@@ -78,7 +84,8 @@ runtime note exists on a later input/judgement substep.
 - Ghidra mutations: the schedule comparator function boundary at
   `RAM:011c3c60` was recovered during the same audit; no SLA rename was made.
 - Supersedes: `claim.parser.sla-region-selection`.
-- Spec sections: `spec/c2s.md`, `spec/timing.md`.
+- Spec sections: `spec/c2s.md`, `spec/timing.md`, and
+  `spec/notes/air_ladder.md`.
 - Reconstruction code: `C2sSlaRegion`, both tag selectors,
   `C2sProjectionSchedule`, and
   `runtime_materialization_probe_from_schedule`.

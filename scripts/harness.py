@@ -32,8 +32,10 @@ REQUIRED_FILES = (
     "docs/EVIDENCE.md",
     "docs/GHIDRA.md",
     "docs/COMPLETION.md",
+    "docs/VIEWER_ROADMAP.md",
     "research/STATUS.md",
     "research/COVERAGE.tsv",
+    "research/VIEWER_COVERAGE.tsv",
     "spec/README.md",
     "CMakeLists.txt",
 )

@@ -1,7 +1,7 @@
 # Claim: every blocker from the failed independent review has a reproduced correction
 
 - ID: `claim.audit.primary-closure-corrections`
-- State: active
+- State: superseded
 - Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
@@ -9,6 +9,12 @@
 - Last reviewed: 2026-08-03
 
 ## Statement
+
+Superseded on 2026-08-03 first by
+`claim.audit.primary-ald-checkpoint-correction` and then by
+`claim.audit.primary-ald-precalc-correction`. The listed earlier corrections
+remain historical facts, but the conclusion that no known gameplay path
+remained open was falsified by the two type-9 ALD contradiction traces.
 
 The primary investigator reproduced every concrete blocker and open path named
 by `claim.audit.independent-closure-review` against the exact local binary,

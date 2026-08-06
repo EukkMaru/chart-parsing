@@ -1,7 +1,18 @@
 # Temp handoff: what a render-comparison session turned up
 
 Temporary note, not normative. Delete once its contents are either promoted to
-claims or dismissed. Nothing here satisfies a gate in `docs/COMPLETION.md`.
+claims/product rules or dismissed.
+
+Stage-two transition note: statements below that call rendering “out of scope”
+describe the former reconstruction-only contract. Rendering is now the active
+product scope. The observations and fits still do not rewrite verified gameplay
+claims by themselves; use the evidence labels and canonicalization workflow in
+`docs/EVIDENCE.md` and `docs/WORKFLOW.md`.
+
+All priority, inference, and “cheapest next move” language below is historical
+and is superseded by `docs/VIEWER_ROADMAP.md`. In particular, the later binary
+trace contradicts the lead that ALD generates extra judged checkpoints. Retain
+this file only for its raw written observations and unresolved field leads.
 
 ## What this session was
 
@@ -27,19 +38,17 @@ issues is the observer's, not this project's.
 
 ## Leads, roughly by value
 
-**1. `ALD` appears to generate judged checkpoints (issue #3).**
-`spec/notes/air_ladder.md` says one runtime checker per parsed control point
-and documents no path generation at all, unlike types 5, 8 and 13. Observation
-disagrees twice over: a section with four authored control points shows
-twelve to sixteen discrete blocks, and a single record spanning two height
-units shows three. The recovered Air-family adaptive step does not account for
-it — at 219 BPM against a 240 reference it yields 48 ticks, roughly three
-samples where a dozen were seen.
+**1. `ALD` generated judged checkpoints are recovered (issue #3).**
+The earlier spec was wrong. Type-9 ALD has a `0x24` authored-control vector and
+a separate `0x20` generated vector. `FUN_011c6a50` samples from the root at the
+positive fifth-data-field interval, interpolates lane, vertical value, and
+decoded width, and the runtime builds one profile-7 checker per generated
+sample. The replacement claim is
+`claim.note.air-ladder-generated-checkpoints`; the original claim remains
+preserved as superseded history.
 
-Cheapest first move: re-walk the type-9 load at the anchors already in
-`claim.note.air-ladder-judgement`, looking for a generated-record vector
-analogous to type 13's, or for a load that expands one parsed point into
-several runtime records.
+Next move: finish the exact roles of the three type-9 presentation streams in
+`FUN_00c03c00`; the fixed 32-division and whole-height viewer rules are invalid.
 
 **2. Slide checkpoints split into two rendered classes (issue #4).**
 Some intermediate control points draw as a note and fire a cue at their own
@@ -63,13 +72,11 @@ Weakest of the three, and explicitly filed as a hypothesis. Rests on the
 65/215 sentinel asymmetry, the reset seeding to 65, and two player reports.
 Falsifiable as described in the issue.
 
-**4. The `ALD` connection selector partitions behaviour cleanly.**
-Across three charts the selector separates records that render as travelling
-lines from records that render as discrete blocks, with zero crossover in one
-555-record chart. `claim.note.air-ladder-judgement` lists its meaning under
-Unknowns. Values seen: 0, 1, 2, 4, 6, 12, 16, 24, and 38400. The last appears
-in every chart examined and always on flat single-tick records, which makes it
-look like a sentinel rather than an authoring artifact.
+**4. The former `ALD` connection-selector hypothesis was misnamed.**
+The field is the exact fixed-grid sampling interval. Values such as 1, 2, 4,
+6, 12, 16, 24, and 38400 directly control generated sample cadence; zero also
+participates in the exact zero/`NON` HeavenHold class-selection branch. The
+viewer must treat it as recovered model input, not a visual class guess.
 
 ## Friction worth fixing while you are in there
 

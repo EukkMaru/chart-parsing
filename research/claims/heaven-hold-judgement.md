@@ -64,7 +64,7 @@ generated queue. Only both component phases reaching 4 makes the note terminal.
   domain. The clean-room evaluators report these cases without running unsafe
   loops.
 - The factory always sends type 13 to the `0x348`-byte HeavenHold class. Type 9
-  reaches the same constructor only for selector zero and style code 15
+  reaches the same constructor only for sampling interval zero and style code 15
   (`NON`). Load copies parsed primary vector `+0x158` to runtime `+0x168`.
 - Legacy ALD records that omit the style token receive the accessor's empty
   string. Style lookup returns code 0 for an empty string, so those records do

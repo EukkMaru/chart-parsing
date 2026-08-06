@@ -2,10 +2,26 @@
 
 ## Mission
 
-Recover all gameplay-affecting behavior between `.c2s` chart ingestion and
-judgement outcome from the exact local `game.exe` snapshot. Produce an auditable
-behavioral specification and a clean-room C++ reconstruction. Fidelity is at
-the game's apparent tick granularity.
+Build a clean-room, offline C2S chart-gameplay viewer from the completed
+gameplay reconstruction in this repository. The product must accept arbitrary
+user-selected `.c2s` files, parse them locally, reproduce the recovered chart
+timeline and note behavior, and render a faithful original presentation without
+shipping or depending on the game's copyrighted art, audio, video, fonts, or
+other resources.
+
+In plain terms, this phase recreates only the CHUNITHM-style chart gameplay
+surface: chart parsing, scheduling, note/path behavior, playback, inspection,
+and—where exposed—local logical-input/judgement simulation. It does not recreate
+accounts, online services, player records, unlocks, song delivery, proprietary
+media, or cabinet/server infrastructure. It is not affiliated with or presented
+as an official game client.
+
+Stage one—the exact-snapshot gameplay reconstruction—is complete and remains
+the evidence foundation. Stage two—the offline viewer—is the active goal. The
+five known GitHub issues are starting leads, not the bounds of stage two. Keep
+expanding and closing the binary-backed presentation map until a deliberate
+saturation audit finds no unexplored gameplay-render path, field consumer,
+indirect behavior, state transition, or relevant external-parameter selection.
 
 Read, in order:
 
@@ -14,71 +30,137 @@ Read, in order:
 3. `docs/EVIDENCE.md`
 4. `docs/GHIDRA.md`
 5. `docs/COMPLETION.md`
-6. `research/STATUS.md` and `research/COVERAGE.tsv`
+6. `docs/VIEWER_ROADMAP.md`
+7. `research/STATUS.md`, `research/COVERAGE.tsv`, and
+   `research/VIEWER_COVERAGE.tsv`
+8. `_temp_handoff_render_comparison.md` while its leads remain unresolved
 
-Then run `python3 scripts/harness.py doctor`, `validate`, and `next`.
+Then run `python3 scripts/harness.py validate`, build the reconstruction, and
+run its tests. Run `python3 scripts/harness.py doctor` before any new Ghidra
+work.
 
 ## Non-negotiable rules
 
-- Static analysis only. Do not execute `game.exe`, use Wine, attach a debugger,
-  emulate the whole program, or attempt to bypass its boot checks. Isolated
-  Ghidra P-code reasoning is allowed only when it does not execute the game or
-  mutate source artifacts.
-- Do not run Git commands or modify Git state. This is a local research
-  workspace even though a `.git` directory exists.
-- Treat `game.exe`, `music.zip`, `music/`, and the Ghidra project as local source
-  material. Do not copy raw game data, assembly listings, decompiler dumps, or
-  mechanically translated game code into workspace documents or source files.
-- Public information is a lead, never proof. Confirm behavior in this binary.
-- Constants may be externally loaded and absent from the executable. Distinguish
-  the location/selection logic from the unavailable runtime value.
-- The chart corpus comes from this snapshot but contains backward-compatible
-  charts authored under older resource versions. Do not mistake chart version
-  variation for executable version variation.
-- Never describe a behavior as verified because it merely looks conventional.
-- Do not broaden work into rendering, UI, accounts, skills, or scoring unless a
-  traced dependency can alter gameplay generation or judgement.
+- Do not execute `game.exe`, use Wine, attach a debugger, emulate the whole
+  program, or bypass its boot checks. Static Ghidra analysis remains allowed.
+- Treat `game.exe`, `music.zip`, `music/`, the Ghidra project, and any gameplay
+  footage as local reference material. Do not ship, publish, embed, or copy
+  them into product code, fixtures, documentation, screenshots, or releases.
+- `music/` contains official and unofficial charts solely for local testing,
+  aggregate analysis, and human comparison. The product must not require that
+  directory and must work with arbitrary `.c2s` files selected at runtime.
+- Never embed real chart lines or large derived tables from the corpus. Commit
+  only small synthetic fixtures authored from the clean-room specification.
+- Do not copy game textures, models, artwork, logos, sounds, video frames,
+  fonts, shaders, or binary resources. Use original primitives, colors,
+  geometry, labels, and optional user-supplied media outside the repository.
+- The viewer is offline-first. A selected chart stays in the local process or
+  browser; do not upload it or add telemetry/network calls without a separate,
+  explicit product decision from the owner.
+- Accounts, server protocols, persistent player records, leaderboards, unlocks,
+  monetization, and proprietary song/media playback are out of scope.
+- Keep evidence labels honest. Recovered rules, corpus invariants, footage
+  observations, fitted visual parameters, and original product choices are
+  different kinds of knowledge and must never be presented as interchangeable.
+- Never call behavior verified because it looks conventional or resembles the
+  original footage. Gameplay/spec changes require exact-snapshot evidence;
+  visual fidelity may use documented human comparison under `docs/EVIDENCE.md`.
+- Every claimed canonical behavior—including visible shape, motion, lifetime,
+  layering, and feedback triggers—must close to this exact binary. Corpus data,
+  footage, conventions, and existing viewer code may locate a question but may
+  not answer it. A reasoned interpretation is acceptable only when its binary
+  observations, control/data flow, alternatives, and falsifiers are recorded;
+  unsupported deduction is not an implementation rule.
+- Public/community information and player reports are useful leads, not proof
+  of hidden gameplay rules.
+- A keyword present in a local chart is never dismissed as a typo merely because
+  the current viewer or spec does not recognize it. These charts are accepted
+  by the base game. Locate the exact registration, parser/compatibility handler,
+  or proven ignore path and document what the keyword does or why it has no
+  gameplay-visible effect.
+- “This looks appropriate” and “the current viewer draws it this way” are
+  failures, not evidence. For each rendered primitive/configuration, cite the
+  binary selection path and the construction/update behavior it reaches. For
+  an unavailable external value, trace the executable's loader/source identity,
+  table/key/index selection, fallback, and consumer before parameterizing it.
+- Git reads are allowed. Commit, push, history rewrite, branch changes, or other
+  Git mutations require explicit user authorization for that operation.
 
-## Ghidra write policy
+## Product architecture boundary
 
-Ghidra renames, types, enums, structs, comments, and bookmarks are encouraged
-when they improve persistent analysis. Apply them only through Ghidra/MCP, not
-by editing `chart.rep` files.
+Keep these layers separable even if the prototype remains a single HTML file:
 
-- Tentative role: keep the default symbol; add a hypothesis bookmark/comment.
-- Supported role: rename only after compatible callers, callees, and data use
-  establish the function's responsibility.
-- Type or structure: apply only when observed field accesses, widths, calling
-  convention, and relevant call sites agree.
-- Before a broad or batch mutation, inspect a representative sample and ensure
-  the operation is reversible inside Ghidra.
-- Record meaningful mutations in the active session note and relevant claim.
+```text
+C2S bytes/text
+  -> parser and diagnostics
+  -> normalized chart model
+  -> tempo/measure/projection and generated-note schedules
+  -> deterministic playback/gameplay state
+  -> original render scene/primitives
+  -> offline viewer controls and inspection
+```
+
+The renderer must consume the normalized model rather than reinterpret raw
+token positions independently. Timing, mirroring, continuation, generated
+checkpoints, and note-family semantics belong in shared model/playback logic so
+tests and future frontends can reuse them.
+
+## Ghidra policy in stage two
+
+The exact binary is authoritative for canonical presentation behavior. Organize
+Ghidra work as focused, auditable slices rather than undirected exploration,
+but do not bypass it with corpus inference, footage fitting, or existing-viewer
+assumptions where active claims/specs do not already close the presentation
+path. Finish with the systematic saturation audit required by
+`docs/COMPLETION.md`.
+
+Renames, types, enums, structs, comments, and bookmarks remain allowed only
+through Ghidra/MCP and only after the confidence gate in `docs/EVIDENCE.md`.
+Do not edit `chart.rep` files directly. Do not extract or reproduce proprietary
+assets while investigating presentation behavior. Record meaningful mutations
+in a claim and session note, and reopen only the exact affected stage-one
+coverage row when new binary evidence contradicts it.
 
 ## Work loop
 
-1. Check binary identity and MCP health with `harness.py doctor`.
-2. Select work from `harness.py next`; do not chase an unrelated interesting
-   string while a blocking call-path question is active.
-3. Mark the target `investigating` and name its owner in `COVERAGE.tsv`.
-4. Trace both upstream and downstream control/data flow. Inspect negative/error
-   paths, indirect calls, state ownership, reset paths, and timing dependencies.
-5. Write compact claims using `research/templates/CLAIM.md`. Cite stable Ghidra
-   anchors and explain reasoning without pasting raw output.
-6. Update Ghidra annotations using the confidence gate above.
-7. Update the relevant clean-room spec. Add C++ only for reconstructed behavior;
-   add tests when an observable rule can be stated.
-8. Run `harness.py validate`, build, and tests. Update coverage and status.
-9. End every session with a handoff using `research/templates/SESSION.md`.
+1. Read the current viewer handoff/status and inspect the existing behavior
+   before choosing a bounded discrepancy or product slice.
+2. State the expected behavior and its evidence class: recovered, corpus-
+   supported, footage-observed, fitted, or original product choice.
+3. Reproduce the issue with a minimal synthetic chart when possible. Local
+   `music/` charts may be used without copying them into the repository.
+4. Trace the rule through parser, normalized model, schedule/playback, and
+   renderer. Fix the owning layer instead of adding a chart-specific render
+   exception.
+5. Add focused automated tests for parsable/model behavior and lightweight
+   renderer assertions where practical. Do not use copyrighted golden images.
+6. Compare representative local charts and, for visual claims, human-observed
+   gameplay footage at matched chart/time/speed conditions. Record written
+   measurements and discrepancies, not copied frames.
+7. If the discrepancy reveals a spec conflict, separate viewer bugs from
+   research gaps. Reopen stage-one evidence only after exact-binary analysis.
+8. Run `harness.py validate`, build, and tests. Update product status and a
+   concise handoff; remove temporary handoffs after their content is promoted
+   or dismissed.
+9. After the known queue is empty, perform a fresh saturation pass over all
+   note/view classes, parsed-field consumers, virtual/indirect calls, reset and
+   destruction paths, configuration sources, cross-note ordering, and error
+   paths. “No issue remains” is not equivalent to “nothing remains to explore.”
+10. Continuously render a coverage-selected set from `music/`. Every reviewed
+    chart must finish with zero undefined keywords, unexplained primitives,
+    heuristic fallbacks, or unproven constants. Any one of those is a failed
+    chart and creates or reopens a research row.
 
-Use the hybrid research strategy in `docs/WORKFLOW.md`: maintain the broad
-gameplay map, then complete vertical note-type slices. One agent owns Ghidra
-writes at a time; parallel agents, when explicitly requested, perform bounded
-read-only investigations with disjoint targets.
+Use one owner per implementation slice. Parallel agents, when explicitly
+requested, should receive disjoint parser, model, renderer, or read-only
+research targets.
 
 ## Definition of done
 
-Do not claim the grand goal is met until every gate in `docs/COMPLETION.md`
-passes. “No more hidden logic” must be supported by closed entry-to-exit call
-paths, resolved indirect behavior, complete state ownership/reset analysis,
-cross-note interaction coverage, corpus compatibility, and an independent
-contradiction audit. A high decompiler-completeness score alone is insufficient.
+Do not claim the viewer goal is complete until the active stage-two gates in
+`docs/COMPLETION.md` pass and the owner accepts the result after reviewing it
+against real gameplay footage and gameplay experience. Stage-one's verified
+coverage remains necessary but is not sufficient. Automation supports but
+cannot replace this acceptance. Completion also requires an independent binary
+saturation audit showing that no gameplay-render behavior remains merely
+assumed, conventional, or unexplored.
