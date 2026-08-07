@@ -50,22 +50,22 @@ preserved as superseded history.
 Next move: finish the exact roles of the three type-9 presentation streams in
 `FUN_00c03c00`; the fixed 32-division and whole-height viewer rules are invalid.
 
-**2. Slide checkpoints split into two rendered classes (issue #4).**
-Some intermediate control points draw as a note and fire a cue at their own
-scheduled time; others draw nothing and only bend the path. The path-boundary
-marker is the obvious discriminator and is demonstrably *not* it: three
-records in one chart are all `SXD`, all marker-set, all chain-final, and one
-renders while two do not.
-
-Cheapest first move: locate the **parsed connection field**. `spec/notes/slide.md`
-names it in the continuation test but never gives it a token index or an
-offset, so it is currently unreadable from outside. It is the leading
-candidate. Second candidate: the trailing token after the style string, present
-in some charts and absent in others.
-
-Note the scope argument before dismissing this as rendering. A cue scheduled at
-a checkpoint's *authored* time is not rendering — it is a gameplay-pipeline
-event keyed to a checkpoint.
+**2. Slide checkpoint classes are recovered and the counterexample is
+retracted (issue #4, closed 2026-08-07).**
+The ending boundary marker IS the discriminator
+(`claim.note.slide-presentation-classes`): segment byte `+0x35` from the
+command that ENDS the segment, root and final forced set, endpoint resource
+allocated iff nonzero, guide feedback through a disjoint one-shot consumer on
+the same predicate. The "demonstrably not it" counterexample (2891_03 bars
+48/59/62) was an artifact of the then-viewer anchoring markers at record
+STARTS; the binary anchors them at ENDS. Re-derived end-anchored, all three
+footage observations confirm the rule: the bar 59/62 junctions are ended by
+unmarked `SXC` segments, and the `SXD` marks land one junction later. The
+"parsed connection field" is field 8, the decoded `SLD`/`HLD`/`GRN` style
+code. Residual observation, tracked under `render.slide`: at 2891_03 bar 53
+the shrink-point note appeared at the pre-shrink width; the claim records
+endpoint selection only "by bounded width" without pinning which endpoint's
+width.
 
 **3. Profile 7 may test absence of upward exit (issue #2).**
 Weakest of the three, and explicitly filed as a hypothesis. Rests on the
