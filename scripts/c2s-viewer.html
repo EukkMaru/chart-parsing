@@ -219,7 +219,7 @@
 
   <div class="stage">
     <div class="viewport">
-      <canvas id="field" width="1120" height="740"></canvas>
+      <canvas id="field" width="1280" height="720"></canvas>
       <div class="drop" id="drop">
         <strong>Drop a .c2s file</strong>
         <span>Or click to choose one. The file stays on your machine — this page reads it locally and keeps no copy.</span>
@@ -256,6 +256,10 @@
           <div class="lab"><span>Playback rate</span><b id="rval">1.00×</b></div>
           <input id="rate" type="range" min="10" max="200" value="100" step="5" aria-label="Playback rate">
         </div>
+        <div class="ctl">
+          <div class="lab"><span><button id="tGuide" type="button" aria-pressed="true" title="Synthesized guide clicks at owner-specified cue instants. The judgement line pulses at each click for silent environments.">Guide</button> <button id="tMetro" type="button" aria-pressed="false" title="Woodblock metronome on the meter-aware beat grid, downbeat accented.">Metro</button></span><b id="gmval">0 ms</b></div>
+          <input id="gmerge" type="range" min="-200" max="200" value="0" step="5" aria-label="Sound delay">
+        </div>
       </div>
 
       <div class="card">
@@ -265,6 +269,7 @@
           <button id="tAir" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
           <button id="tShape" type="button" aria-pressed="false" title="Show shape-only SLC/SXC controls as faint debug rules. Binary-backed SLD/SXD endpoint resources remain visible.">Shape pts</button>
+          <button id="tStripe" type="button" aria-pressed="false" title="One-lane bright stripe along the sustain path center. Recovered as JointSlide stream 1 for slides; holds share it only as an untraced substitute.">Center stripe</button>
           <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
           <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
           <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
@@ -289,7 +294,7 @@
         </div>
         <div class="ctl">
           <div class="lab"><span>Air plane height</span><b id="aval">0.31</b></div>
-          <input id="airh" type="range" min="5" max="90" value="31" step="1" aria-label="Air plane height">
+          <input id="airh" type="range" min="5" max="90" value="25" step="1" aria-label="Air plane height">
         </div>
       </div>
 
@@ -329,6 +334,11 @@
   // Field layouts read off real records; index 0 is the first token after the
   // command name. Colours follow the cabinet's own family conventions.
   const ACTION = "#ff5ce0";     // air action markers on air hold / air slide paths
+  // Observed: the cabinet draws marked SLD/SXD endpoints as solid notes, so
+  // the endpoint resource renders as a note body, not a rule. The colour is a
+  // product choice (the original glyph/material is external data): slide blue,
+  // darkened so a checkpoint never reads as another root.
+  const SLIDE_ENDPOINT = "#2a55b8";
   const AIRUP = "#7ef08a";      // air-up green, also the air hold centre line
   // Product-choice colors applied to the three recovered asset-independent
   // ALD stream geometries. The original packed colors/resources are external
@@ -364,6 +374,7 @@
     ADL: { kind: "air",   color: "#ff5ce0", label: "Air down-left" },
     ADR: { kind: "air",   color: "#ff5ce0", label: "Air down-right" },
     AHD: { kind: "ahold", color: "#7ef08a", label: "Air hold" },
+    AHX: { kind: "ahold", color: "#7ef08a", label: "Air hold action" },
     ASC: { kind: "aslide",color: "#7ef08a", label: "Air slide" },
     ASD: { kind: "aslide",color: "#7ef08a", label: "Air slide" },
     ALD: { kind: "ald",   color: "#a35cff", label: "Air crush" },
@@ -400,6 +411,10 @@
   // ---- parsing ------------------------------------------------------------
   const c2sInt = value => Number.isNaN(Number.parseInt(value, 10))
     ? 0 : Number.parseInt(value, 10);
+  const c2sFloat = value => {
+    const parsed = Number.parseFloat(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
   const c2sWidth = value => Math.max(1, Math.min(16, c2sInt(value)));
   const exactIndexOrZero = (table, value) => {
     const index = table.indexOf(value || "");
@@ -414,7 +429,7 @@
 
   function parseC2s(text) {
     const lines = text.split(/\r?\n/);
-    const head = { resolution: 384, bpmDef: 120, metNum: 4, metDen: 4, creator: "", version: "" };
+    const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
     const bpmEvents = [], metEvents = [], notes = [], markers = [], regions = [];
     const counts = new Map(), unknown = new Map();
 
@@ -427,22 +442,22 @@
       // This snapshot recognizes RESOLUTION but has no accepting header case;
       // reset-owned 384 remains in force. CLK_DEF does not replace it either.
       if (cmd === "RESOLUTION" || cmd === "CLK_DEF") continue;
-      if (cmd === "BPM_DEF") { head.bpmDef = +f[0] || head.bpmDef; continue; }
-      if (cmd === "MET_DEF") { head.metNum = +f[0] || 4; head.metDen = +f[1] || 4; continue; }
+      if (cmd === "BPM_DEF") { head.bpmDef = c2sFloat(f[0]) || head.bpmDef; continue; }
+      if (cmd === "MET_DEF") { head.metNum = c2sInt(f[0]) || 4; head.metDen = c2sInt(f[1]) || 4; continue; }
       if (cmd === "CREATOR") { head.creator = f.join(" "); continue; }
       if (cmd === "VERSION") { head.version = f[0] || ""; continue; }
-      if (cmd === "BPM") { bpmEvents.push({ m: +f[0], t: +f[1], bpm: +f[2] }); continue; }
-      if (cmd === "MET") { metEvents.push({ m: +f[0], t: +f[1], n: +f[2], d: +f[3] }); continue; }
+      if (cmd === "BPM") { bpmEvents.push({ m: c2sInt(f[0]), t: c2sInt(f[1]), bpm: c2sFloat(f[2]) }); continue; }
+      if (cmd === "MET") { metEvents.push({ m: c2sInt(f[0]), t: c2sInt(f[1]), n: c2sInt(f[2]), d: c2sInt(f[3]) }); continue; }
 
       const reg = REGION[cmd];
       if (reg) {
         regions.push({
           cmd, def: reg,
           sourceOrder: regions.length,
-          m: +f[0], t: +f[1],
-          dur: reg.point ? 0 : (+f[2] || 0),
-          factor: reg.factor ? (+f[3] || 0) : null,
-          key: reg.key ? (+f[4] || 0) : 0,
+          m: c2sInt(f[0]), t: c2sInt(f[1]),
+          dur: reg.point ? 0 : c2sInt(f[2]),
+          factor: reg.factor ? c2sFloat(f[3]) : null,
+          key: reg.key ? c2sInt(f[4]) : 0,
         });
         continue;
       }
@@ -465,14 +480,14 @@
 
       const n = {
         cmd, kind: fam.kind, color: fam.color,
-        m: +f[0], t: +f[1], lane: +f[2], width: +f[3] || 1,
+        m: c2sInt(f[0]), t: c2sInt(f[1]), lane: c2sInt(f[2]), width: c2sWidth(f[3]),
         dur: 0, endLane: null, endWidth: null, h0: 0, h1: 0, style: "", root: "",
       };
 
       switch (fam.kind) {
-        case "hold": n.dur = +f[4] || 0; n.style = f[5] || ""; break;
+        case "hold": n.dur = c2sInt(f[4]); n.style = f[5] || ""; break;
         case "slide":
-          n.dur = +f[4] || 0; n.endLane = +f[5]; n.endWidth = +f[6] || 1;
+          n.dur = c2sInt(f[4]); n.endLane = c2sInt(f[5]); n.endWidth = c2sWidth(f[6]);
           n.style = f[7] || "";
           n.slideStyleCode = exactIndexOrZero(SLIDE_STYLE, n.style);
           n.slideExtendedRoot = cmd === "SXD" || cmd === "SXC";
@@ -486,11 +501,11 @@
         // air action. AHD and ASC extend the path and submit nothing, exactly
         // as SLC/SXC shape a slide without a bar.
         case "ahold":
-          n.root = f[4] || ""; n.dur = +f[5] || 0; n.style = f[6] || "";
+          n.root = f[4] || ""; n.dur = c2sInt(f[5]); n.style = f[6] || "";
           n.isAction = cmd === "AHX"; break;
         case "aslide":
-          n.root = f[4] || ""; n.h0 = +f[5] || 0; n.dur = +f[6] || 0;
-          n.endLane = +f[7]; n.endWidth = +f[8] || 1; n.h1 = +f[9] || 0;
+          n.root = f[4] || ""; n.h0 = c2sFloat(f[5]); n.dur = c2sInt(f[6]);
+          n.endLane = c2sInt(f[7]); n.endWidth = c2sWidth(f[8]); n.h1 = c2sFloat(f[9]);
           n.style = f[10] || ""; n.isAction = cmd === "ASD"; break;
         case "ald":
           n.lane = c2sInt(f[2]); n.width = c2sWidth(f[3]);
@@ -503,13 +518,13 @@
             ? "heaven_hold" : "air_ladder";
           break;
         case "asolid":
-          n.dur = +f[6] || 0; n.endLane = +f[7]; n.endWidth = +f[8] || 1;
+          n.dur = c2sInt(f[6]); n.endLane = c2sInt(f[7]); n.endWidth = c2sWidth(f[8]);
           n.style = f[11] || ""; break;
         // SLA: major, minor, lane, width, duration, tag. A time/lane region
         // carrying an integer tag; no runtime object, but the tag selects a
-        // keyed scroll schedule.
+        // keyed scroll schedule. Width rides the common clamp above.
         case "region":
-          n.dur = +f[4] || 0; n.tag = +f[5] || 0; break;
+          n.dur = c2sInt(f[4]); n.tag = c2sInt(f[5]); break;
         default: break;
       }
       notes.push(n);
@@ -519,16 +534,22 @@
     const R = head.resolution;
     const pos = e => e.m * R + e.t;
     bpmEvents.sort((a, b) => pos(a) - pos(b));
-    if (!bpmEvents.length || pos(bpmEvents[0]) > 0) bpmEvents.unshift({ m: 0, t: 0, bpm: head.bpmDef });
+    // The first sorted record's own BPM covers chart zero to its position;
+    // BPM_DEF never synthesizes a tempo record, and with no BPM records
+    // every scheduled lookup returns zero (spec/timing.md).
+    if (bpmEvents.length && pos(bpmEvents[0]) > 0) {
+      bpmEvents.unshift({ m: 0, t: 0, bpm: bpmEvents[0].bpm });
+    }
 
     const seg = [];
     let acc = 0;
     for (let i = 0; i < bpmEvents.length; i++) {
       const p = pos(bpmEvents[i]);
-      const msPerTick = 240000 / (bpmEvents[i].bpm * R);
+      const msPerTick = bpmEvents[i].bpm > 0 ? 240000 / (bpmEvents[i].bpm * R) : 0;
       if (i > 0) acc += (p - seg[i - 1].p) * seg[i - 1].msPerTick;
       seg.push({ p, ms: acc, msPerTick, bpm: bpmEvents[i].bpm });
     }
+    if (!seg.length) seg.push({ p: 0, ms: 0, msPerTick: 0, bpm: 0 });
     const timeAt = p => {
       let s = seg[0];
       for (let i = 1; i < seg.length && seg[i].p <= p; i++) s = seg[i];
@@ -538,7 +559,7 @@
     const posAt = ms => {
       let s = seg[0];
       for (let i = 1; i < seg.length && seg[i].ms <= ms; i++) s = seg[i];
-      return s.p + (ms - s.ms) / s.msPerTick;
+      return s.msPerTick > 0 ? s.p + (ms - s.ms) / s.msPerTick : s.p;
     };
 
     for (const n of notes) {
@@ -575,7 +596,9 @@
       for (let i = 1; i < metEvents.length && metEvents[i].m * R + metEvents[i].t <= p; i++) {
         e = metEvents[i];
       }
-      return e.d > 0 ? e.d : 0; // second field is the count; zero stops subdivision
+      // A zero in EITHER meter component stops subdivision generation
+      // (spec/timing.md); the count field is the second integer.
+      return (e.n > 0 && e.d > 0) ? e.d : 0;
     };
 
     // Bar boundaries stay every R ticks — position is major*R + minor whatever
@@ -646,13 +669,15 @@
     for (const n of notes) {
       if (n.kind === "region") continue;
       n.slaKey = selectSlaKey(n.p, n.lane, n.width);
-      if (n.kind === "ald") {
-        // Type-9 precompute selects the integer-span SLA key independently at
-        // every authored endpoint. Generated samples use the tolerant float-
-        // span selector below; neither path inherits the chain root's key.
-        n.endSlaKey = selectSlaKey(
-          n.p + n.dur, n.endLane ?? n.lane, n.endWidth ?? n.width);
-      }
+      // Every sustained record projects its far end through the endpoint's
+      // own independently selected key, never the root's. Recovered outright
+      // for Slide (spec/notes/slide.md, endpoint keyed schedule; footage
+      // 2898_03 m27) and for ALD authored endpoints; for hold/ASO/HeavenHold
+      // the recovered statement is the materialization endpoint-retry key,
+      // and using it for drawn projection is inference — issue #12.
+      n.endSlaKey = n.dur > 0
+        ? selectSlaKey(n.p + n.dur, n.endLane ?? n.lane, n.endWidth ?? n.width)
+        : n.slaKey;
     }
     for (const sample of aldSamples) {
       sample.slaKey = selectSlaKey(
@@ -709,6 +734,41 @@
       n.bar = n.isRoot || n.endpointResource;
       n.forcedBar = n.slideRuntime === "slide" && !n.marker && n.isFinal;
     }
+  }
+
+  // Guide cue instants, owner-specified 2026-08-07. Cued: tap/ExTap/flick
+  // starts; hold roots and ends; slide roots, marked endpoint resources, and
+  // ends; air up/down; air actions (ASD/AHX endpoints); every generated
+  // air-crush checkpoint. Silent: damage (MNE), traces (ASO), shape-only
+  // SLC/SXC controls, air hold/slide sustain, and the hold/slide gap-tracker
+  // judgement stream.
+  function buildGuideEvents(chart) {
+    const out = [];
+    for (const n of chart.notes) {
+      switch (n.kind) {
+        case "tap":
+          if (n.cmd !== "MNE") out.push(n.time);
+          break;
+        case "hold":
+          out.push(n.time, n.endTime);
+          break;
+        case "slide":
+          if (n.isRoot) out.push(n.time);
+          if (n.endpointResource) out.push(n.endTime);
+          break;
+        case "air":
+          out.push(n.time);
+          break;
+        case "ahold":
+        case "aslide":
+          if (n.isAction) out.push(n.endTime);
+          break;
+        default:
+          break; // ald checkpoints arrive via generated samples; asolid silent
+      }
+    }
+    for (const sample of chart.aldSamples) out.push(sample.time);
+    return out.sort((a, b) => a - b);
   }
 
   // AirHold and AirSlide own an air-up start component: air_hold_start_profile
@@ -883,8 +943,21 @@
   const strip = document.getElementById("strip");
   const sx2 = strip.getContext("2d");
 
-  const PROJ_H = 740; // projection space height; the canvas is cropped from it
-  const GEO = { yNear: 0.88, yFar: 0.26, halfNear: 0.46, z0: 1, Z: 3.4, airTop: 0.31 };
+  // Projection space is 16:9 to match the cabinet frame, so the per-axis
+  // fractions below compose isotropically.
+  const PROJ_H = 720;
+  // Observed 2026-08-07: fitted to a hand-measured 1725x971 cabinet frame
+  // (judgement line y=897 spanning x 338..1387, field far edge y=159
+  // spanning 734..988, frame-bottom span 300..1425, air plane y=656).
+  // The three depths are collinear per edge within 2px, so the single
+  // depth-parameter camera reproduces the shape exactly; Z comes from the
+  // far/near width ratio 254/1049. airTop is the measured 241/971 and
+  // agrees within 6% with the recovered lateral/vertical transforms under
+  // an isotropic camera (15.574/32 units). Observed-constrained fit, not
+  // recovered: the depth-to-TIME mapping still assumes the recovered
+  // linear projected formula plus a pinhole camera, which a still frame
+  // cannot distinguish from a reparameterization.
+  const GEO = { yNear: 0.9238, yFar: 0.1637, halfNear: 0.30406, z0: 1, Z: 3.1299, airTop: 0.2482 };
   // The ceiling of the air region, in lift units. Every air element is placed
   // at or below it and nothing may exceed it; the slider scales the whole
   // region by moving GEO.airTop.
@@ -897,15 +970,17 @@
   const FAR = 1.9;
 
   // Authored height 1.0 is the lane surface: charts park a path at 1.0 while
-  // it runs along the floor beside a hold. The far end is anchored to the
-  // ordinary air height rather than to the chart maximum, because a handful of
-  // extreme records would otherwise squash every ordinary note onto the floor.
-  // Taller records genuinely rise above the plane, capped so they stay on
-  // screen.
-  const AIR_OVERSHOOT = 2.0;
+  // it runs along the floor beside a hold. The vertical scale is fixed and
+  // chart-independent: the recovered ALD stream-1 threshold of 15.574 render
+  // units equals (5 - 1) * 3.8934999, so authored value 5 IS the ordinary
+  // air height. Recovered for ALD; anchoring air slide/hold heights to the
+  // same scale is inference plus footage (2121_03) — issue #12. Taller
+  // records genuinely rise above the plane, unclamped (the binary's
+  // transform has no cap; the screen clip trims what leaves the frame).
+  const ALD_UNITS_PER_LIFT = 15.574;                   // render units at the plane
+  const ALD_EFFECT_LIFT = 0.14999962 / ALD_UNITS_PER_LIFT;
   function liftHeight(v) {
-    const span = Math.max(0.5, airUnit - 1);
-    return Math.max(0, Math.min(AIR_OVERSHOOT, ((v || 1) - 1) / span));
+    return Math.max(0, ((v || 1) - 1) / 4);
   }
 
   function persp(t) { return GEO.z0 / (GEO.z0 + t * GEO.Z); }
@@ -916,7 +991,7 @@
   // bird's eye. Toward 0 the travel collapses to nothing while the scaling
   // sharpens, so notes hold one screen position and only swell as they arrive.
   const TILT_DEFAULT = 0.62;
-  const TILT_MID = { yNear: 0.88, yFar: 0.26, Z: 3.4, halfNear: 0.46 };
+  const TILT_MID = { yNear: 0.9238, yFar: 0.1637, Z: 3.1299, halfNear: 0.30406 };
   const TILT_TOP = { yNear: 0.94, yFar: 0.06, Z: 0.001, halfNear: 0.44 };
   const TILT_EYE = { yNear: 0.60, yFar: 0.60, Z: 14, halfNear: 0.30 };
 
@@ -943,10 +1018,11 @@
 
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
-  let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, airUnit = 5, gridAlpha = 0.35;
+  let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, gridAlpha = 0.35;
   let overlayN = 0, overlayPat = null;
   const show = { wings: false, air: true, grid: true, bars: false,
-                 airNotes: true, cosmetic: true, autoplay: true, applySlp: true };
+                 airNotes: true, cosmetic: true, autoplay: true, applySlp: true,
+                 stripe: false };
   const AIR_KINDS = new Set(["air", "ald", "aslide", "ahold", "asolid"]);
   const solidKeys = new Set(); // per-frame dedup of solid slide/hold notes
 
@@ -993,8 +1069,13 @@
   // little overhang past it keeps a hit visible as it leaves. Sustained bodies
   // clip at the plane, so a hold is eaten progressively rather than sliding
   // through.
-  const nearClip = () => show.autoplay ? 0 : -0.05;
-  const tapClip = () => show.autoplay ? 0 : -0.12;
+  // Recovered ratio: the render clip planes sit at projected +50 (near)
+  // and -600 (far) with the judgement line at -65, so notes survive past
+  // the line for 115/535 of the corridor before the binary clips them. On
+  // the cabinet the frame bottom cuts earlier; here the canvas does.
+  const OVERHANG = 115 / 535;
+  const nearClip = () => show.autoplay ? 0 : -OVERHANG;
+  const tapClip = () => show.autoplay ? 0 : -OVERHANG;
   // Visible lookahead at speed 1.0, derived rather than chosen. The recovered
   // materialization projection is
   //   projected = -65 - 1.5 * (base_offset + delta) * speed * factor
@@ -1007,6 +1088,174 @@
   const el = id => document.getElementById(id);
 
   function lookahead() { return LOOK_BASE / speed; }
+
+  // ---- guide clicks -------------------------------------------------------
+  // Cue instants are owner-specified (2026-08-07): a guide is a cue, not a
+  // per-judgement sound. Two synthesized voices, both product choices with no
+  // asset shipped: guides use a toneless filtered-noise stick click, the
+  // optional metronome a woodblock on the meter-aware beat grid with the
+  // downbeat rate-shifted up. Events within the merge window of the last
+  // emitted click collapse to one playback, so coincident stacks and sub-tick
+  // generated cadences read as single hits. Guides fire at authored time: the
+  // scroll transforms move where a note is drawn, not when it is due.
+  // Sub-tick collapse is fixed: an interval-1 generated cadence is denser
+  // than a cue can be heard as, and the owner accepted collapsing anything
+  // below one authored tick. The exposed control is output delay instead,
+  // for compensating output latency on the reviewer's own machine.
+  const GUIDE_MERGE_MS = 8;
+  let guideOn = true, metroOn = false, guideDelayMs = 0;
+  let audioCtx = null, master = null;
+  let clickBuf = null, stickBuf = null, guidePrimedTo = Infinity;
+  const scheduledClicks = new Set();
+  let guideCache = { win: -1, src: null, list: [] };
+
+  // Metronome ring must outlast the guide click (~20 ms of broadband noise
+  // covering 0.35-5 kHz) or a coincident beat is masked into inaudibility;
+  // the tone carries the beat in the window after the click dies.
+  function makeWoodblock(ctx) {
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.16);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      let v = Math.sin(2 * Math.PI * 1780 * t) * 0.8 * Math.exp(-t / 0.030)
+            + Math.sin(2 * Math.PI * 2710 * t) * 0.3 * Math.exp(-t / 0.012);
+      if (t < 0.002) v += (Math.random() * 2 - 1) * 0.25 * (1 - t / 0.002);
+      d[i] = Math.tanh(v * 1.4) * 0.85;
+    }
+    return buf;
+  }
+
+  // Guide click: drumstick-on-drumstick. Toneless by construction — pure
+  // band-limited noise (difference of two one-pole lowpasses, ~1.5-7 kHz)
+  // under a 4 ms decay with a small 12 ms tail; no sinusoidal partial exists
+  // for the ear to assign a pitch to. Product choice.
+  function makeStickClick(ctx) {
+    const sr = ctx.sampleRate, len = Math.floor(sr * 0.05);
+    const buf = ctx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    // two noise bands: a snap (1.2-5 kHz) and a damped low-mid body
+    // (350-1500 Hz) that carries the wood. Still no sinusoidal partial.
+    let s1 = 0, s2 = 0, b1 = 0, b2 = 0;
+    const a5000 = Math.exp(-2 * Math.PI * 5000 / sr);
+    const a1200 = Math.exp(-2 * Math.PI * 1200 / sr);
+    const a1500 = Math.exp(-2 * Math.PI * 1500 / sr);
+    const a350 = Math.exp(-2 * Math.PI * 350 / sr);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      const x = Math.random() * 2 - 1;
+      s1 = (1 - a5000) * x + a5000 * s1;
+      s2 = (1 - a1200) * x + a1200 * s2;
+      b1 = (1 - a1500) * x + a1500 * b1;
+      b2 = (1 - a350) * x + a350 * b2;
+      const snap = (s1 - s2) * Math.exp(-t / 0.005);
+      const body = (b1 - b2) * 0.9 * Math.exp(-t / 0.016);
+      d[i] = Math.tanh((snap + body) * 6) * 0.95;
+    }
+    return buf;
+  }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      audioCtx = new AC();
+      clickBuf = makeWoodblock(audioCtx);   // metronome voice
+      stickBuf = makeStickClick(audioCtx);  // guide voice
+      // Dense sections stack several voices at once. Summing them straight
+      // into the destination clips the bus, which reads as distortion and as
+      // swallowed hits; a limiter plus headroom keeps overlap clean, so the
+      // clicks stack instead of fighting. Headroom is sized so a guide click
+      // plus a coincident metronome beat stays under the threshold and sums
+      // linearly — only genuine pileups engage the limiter.
+      master = audioCtx.createGain();
+      master.gain.value = 0.4;
+      const limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = -3;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.001;
+      limiter.release.value = 0.05;
+      master.connect(limiter).connect(audioCtx.destination);
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function collapsedGuides() {
+    if (guideCache.win === GUIDE_MERGE_MS && guideCache.src === chart.guideEvents) {
+      return guideCache.list;
+    }
+    const list = [];
+    let lastAt = -Infinity;
+    for (const t of chart.guideEvents) {
+      if (t - lastAt <= GUIDE_MERGE_MS) continue;
+      list.push(t);
+      lastAt = t;
+    }
+    guideCache = { win: GUIDE_MERGE_MS, src: chart.guideEvents, list };
+    return list;
+  }
+
+  // Any discontinuity — seek, pause, rate or window change — voids what is
+  // already queued on the audio clock.
+  // Stopping a source mid-ring truncates the waveform, and a step
+  // discontinuity IS a pop. Voices already sounding are released over 8ms
+  // instead; voices not yet started are dropped outright.
+  function cancelGuides() {
+    const t = audioCtx ? audioCtx.currentTime : 0;
+    for (const entry of scheduledClicks) {
+      try {
+        if (entry.at > t) { entry.src.stop(); }
+        else {
+          entry.gain.gain.cancelScheduledValues(t);
+          entry.gain.gain.setValueAtTime(entry.gain.gain.value, t);
+          entry.gain.gain.linearRampToValueAtTime(0, t + 0.008);
+          entry.src.stop(t + 0.01);
+        }
+      } catch (e) {}
+    }
+    scheduledClicks.clear();
+    guidePrimedTo = Infinity;
+  }
+
+  function scheduleGuides() {
+    if (!playing || !chart || (!guideOn && !metroOn)) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    if (!isFinite(guidePrimedTo)) guidePrimedTo = now; // never replay the past
+    const horizon = now + 250 * rate; // a quarter second of real time ahead
+
+    const queue = (list, timeOf, buffer, gainOf, rateOf) => {
+      let lo = 0, hi = list.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (timeOf(list[m]) <= guidePrimedTo) lo = m + 1; else hi = m; }
+      for (; lo < list.length && timeOf(list[lo]) <= horizon; lo++) {
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        if (rateOf) src.playbackRate.value = rateOf(list[lo]);
+        const g = ctx.createGain();
+        g.gain.value = gainOf(list[lo]);
+        src.connect(g).connect(master);
+        const at = ctx.currentTime
+          + Math.max(0, (timeOf(list[lo]) - now) / rate / 1000)
+          + guideDelayMs / 1000;
+        src.start(Math.max(ctx.currentTime, at));
+        const entry = { src, gain: g, at };
+        scheduledClicks.add(entry);
+        src.onended = () => scheduledClicks.delete(entry);
+      }
+    };
+
+    if (guideOn && chart.guideEvents.length) {
+      queue(collapsedGuides(), t => t, stickBuf, () => 0.85);
+    }
+    // Metronome: the meter-aware beat grid, woodblock voice, downbeat accented.
+    if (metroOn && chart.beats.length) {
+      queue(chart.beats, b => b.time, clickBuf,
+            b => b.bar ? 0.9 : 0.85, b => b.bar ? 1.5 : 1);
+    }
+    guidePrimedTo = horizon;
+  }
 
   function draw() {
     const W = cv.width, H = PROJ_H;
@@ -1022,7 +1271,7 @@
     if (!chart) return;
 
     const LA = lookahead();
-    const back = show.autoplay ? 0 : LA * 0.10;
+    const back = show.autoplay ? 0 : LA * OVERHANG;
     const backT = back / LA;
 
     // Corridor depth for any chart time. Key 0 is the whole-field schedule, so
@@ -1042,7 +1291,14 @@
     cx2.clip();
 
     // --- corridor floor
-    const c0 = project(0, 0, 0, W, H), c16 = project(0, 16, 0, W, H);
+    // The cabinet's field runs past the judgement line to the frame bottom
+    // (measured: 74px of 971 at default pitch). Extend the floor to whatever
+    // negative depth reaches the canvas edge under the current camera.
+    const sFarNow = persp(1);
+    const kBottom = (GEO.yNear - 1) / (GEO.yNear - GEO.yFar);
+    const sBottom = 1 - kBottom * (1 - sFarNow);
+    const tFloor = (sBottom > 0 && GEO.Z > 0.01) ? (1 / sBottom - 1) / GEO.Z : 0;
+    const c0 = project(tFloor, 0, 0, W, H), c16 = project(tFloor, 16, 0, W, H);
     const f0 = project(FAR, 0, 0, W, H), f16 = project(FAR, 16, 0, W, H);
     const g = cx2.createLinearGradient(0, f0.y, 0, c0.y);
     g.addColorStop(0, "#10131d");
@@ -1055,7 +1311,7 @@
 
     // --- lane dividers
     for (let l = 0; l <= 16; l++) {
-      const a = project(0, l, 0, W, H), b = project(FAR, l, 0, W, H);
+      const a = project(tFloor, l, 0, W, H), b = project(FAR, l, 0, W, H);
       cx2.strokeStyle = l % 4 === 0 ? "rgba(150,162,200,.30)" : "rgba(150,162,200,.11)";
       cx2.lineWidth = l % 4 === 0 ? 1.4 : 1;
       cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
@@ -1109,7 +1365,10 @@
         // its own grid line down the corridor.
         if (bt.bar) {
           // Set slightly later in time so the glyph clears its own line.
-          const edge = project(Math.min(1, t + 0.014), 0, 0, W, H);
+          // Ride the gridline's own depth: the screen-space trim clips the
+          // label until the line enters the field, so it falls in with it
+          // instead of waiting pinned at the far edge.
+          const edge = project(t + 0.014, 0, 0, W, H);
           const size = Math.max(20, Math.round(34 * edge.s));
           cx2.fillStyle = `rgba(150,162,200,${Math.min(1, gridAlpha * 1.9).toFixed(3)})`;
           cx2.font = `600 ${size}px ui-monospace, Menlo, monospace`;
@@ -1232,8 +1491,7 @@
     for (const n of chart.notes) {
       if (n.kind === "region") continue;
       n.vt0 = scrolledTime(n.time, now, n.slaKey);
-      n.vt1 = scrolledTime(
-        n.endTime, now, n.kind === "ald" ? n.endSlaKey : n.slaKey);
+      n.vt1 = scrolledTime(n.endTime, now, n.endSlaKey ?? n.slaKey);
       let dStart = n.vt0 - now, dEnd = n.vt1 - now;
       // Cull against the factored distance, or a slowed note gets dropped
       // while still on screen and a hastened one is kept after leaving.
@@ -1263,7 +1521,10 @@
     for (const n of vis) {
       const capped = n.kind === "hold" || (n.kind === "slide" && n.isFinal);
       if (!capped) continue;
-      const tEnd = (n.vt1 - now) / LA;
+      // The cap rides the same shared transform as the band end it closes —
+      // keyed schedule plus projection factor — or it detaches from the body
+      // under any DCM/keyed region (footage: 0961_03 m105, 2310_03 m106).
+      const tEnd = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
       if (tEnd < tapClip() || tEnd > FAR) continue;
       const lane = n.endLane ?? n.lane;
       // A cap that lands on a note the chain already draws is that note.
@@ -1273,7 +1534,7 @@
       solidKeys.add(k);
       if (n.kind === "slide") {
         if (slideEndpointResourceVisible(n.slideResultTableIndex)) {
-          drawBoundary(n, tEnd, W, H, true, 0, lane, n.endWidth ?? n.width);
+          drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, SLIDE_ENDPOINT);
         }
       } else {
         drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, n.color);
@@ -1284,8 +1545,7 @@
       // The projection factor multiplies distance, so a fast note is pushed
       // further out for the same time delta and covers more ground per tick.
       const t0 = depthAt(n.time, n.slaKey);
-      const t1 = depthAt(
-        n.endTime, n.kind === "ald" ? n.endSlaKey : n.slaKey);
+      const t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
 
       if (AIR_KINDS.has(n.kind) && !show.airNotes) continue;
       if (n.kind === "asolid" && !show.cosmetic) continue;
@@ -1335,6 +1595,22 @@
     cx2.beginPath(); cx2.moveTo(j0.x, j0.y); cx2.lineTo(j16.x, j16.y); cx2.stroke();
     cx2.fillStyle = "rgba(232,163,61,.14)";
     cx2.fillRect(j0.x, j0.y, j16.x - j0.x, 5);
+
+    // The line flashes at each collapsed guide instant — the verification
+    // channel for silent environments, driven by the schedule, not the audio.
+    if (guideOn && chart.guideEvents && chart.guideEvents.length) {
+      const list = collapsedGuides();
+      let lo = 0, hi = list.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (list[m] <= now) lo = m + 1; else hi = m; }
+      const age = lo > 0 ? now - list[lo - 1] : Infinity;
+      if (age < 120) {
+        cx2.globalAlpha = 1 - age / 120;
+        cx2.strokeStyle = "#ffffff";
+        cx2.lineWidth = 3.5;
+        cx2.beginPath(); cx2.moveTo(j0.x, j0.y); cx2.lineTo(j16.x, j16.y); cx2.stroke();
+        cx2.globalAlpha = 1;
+      }
+    }
   }
 
   function laneQuad(t, lane, width, W, H, h) {
@@ -1391,7 +1667,7 @@
     if (t < tapClip() || t > FAR) return;
     const [a, b] = laneQuad(t, lane ?? n.lane, width ?? n.width, W, H, 0);
     const th = Math.max(3, 16 * a.s);
-    const alpha = t < 0 ? Math.max(0, 1 + t / 0.12) : 1;
+    const alpha = t < 0 ? Math.max(0, 1 + t / OVERHANG) : 1;
     // Damage carries a soft rise above the bar, laid down first so the bar
     // sits on top of it. Enough to catch the eye without becoming an effect.
     if (n.cmd === "MNE") {
@@ -1456,22 +1732,26 @@
     // Stream colours/materials are external, so these two fills are neutral
     // asset-free silhouettes. The binary's 18-vertex width-change subdivision
     // changes resource coordinates but not this outer Canvas silhouette.
-    const centerLeft = [
-      project(a.t, a.center - 0.5, 0, W, H),
-      project(b.t, b.center - 0.5, 0, W, H),
-    ];
-    const centerRight = [
-      project(a.t, a.center + 0.5, 0, W, H),
-      project(b.t, b.center + 0.5, 0, W, H),
-    ];
-    cx2.beginPath();
-    centerLeft.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
-    for (let i = centerRight.length - 1; i >= 0; i--) {
-      cx2.lineTo(centerRight[i].x, centerRight[i].y);
+    // The stream is recovered for slides only; holds share this code path
+    // while render.hold is untraced, so the stripe is opt-in.
+    if (show.stripe) {
+      const centerLeft = [
+        project(a.t, a.center - 0.5, 0, W, H),
+        project(b.t, b.center - 0.5, 0, W, H),
+      ];
+      const centerRight = [
+        project(a.t, a.center + 0.5, 0, W, H),
+        project(b.t, b.center + 0.5, 0, W, H),
+      ];
+      cx2.beginPath();
+      centerLeft.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
+      for (let i = centerRight.length - 1; i >= 0; i--) {
+        cx2.lineTo(centerRight[i].x, centerRight[i].y);
+      }
+      cx2.closePath();
+      cx2.fillStyle = n.color + "77";
+      cx2.fill();
     }
-    cx2.closePath();
-    cx2.fillStyle = n.color + "77";
-    cx2.fill();
 
     // Stream 2 exists only in presentation mode 1. This chart-only viewer does
     // not yet simulate the start/path judgement phases, so it does not guess
@@ -1493,7 +1773,11 @@
       const endLane = n.endLane ?? n.lane;
       const endWidth = n.endWidth ?? n.width;
       if (n.marker && slideEndpointResourceVisible(n.slideResultTableIndex)) {
-        drawBoundary(n, t1, W, H, true, 0, endLane, endWidth);
+        const k = `${Math.round(n.vt1 / 8)}:${endLane}`;
+        if (!solidKeys.has(k)) {
+          solidKeys.add(k);
+          drawTap(n, t1, W, H, endLane, endWidth, SLIDE_ENDPOINT);
+        }
       } else if (show.bars) {
         drawBoundary(n, t1, W, H, false, 0, endLane, endWidth);
       }
@@ -1669,9 +1953,11 @@
       const t = sample.drawDepth;
       if (t < tapClip() || t > FAR) continue;
       if (!aldCheckpointEffectVisible(sample.resultTableIndex)) continue;
-      const p = project(t, sample.lane, liftHeight(sample.h), W, H);
-      const q = project(t, sample.lane + sample.width,
-                        liftHeight(sample.h), W, H);
+      // Checkpoint effects carry the recovered +0.14999962 render-unit
+      // vertical offset above the interpolated sample height.
+      const sampleLift = liftHeight(sample.h) + ALD_EFFECT_LIFT;
+      const p = project(t, sample.lane, sampleLift, W, H);
+      const q = project(t, sample.lane + sample.width, sampleLift, W, H);
       const th = Math.max(6, 26 * p.s);
       // The binary selects distinct first/later resource tables. Their assets
       // are intentionally unavailable, so this original bar style is shared
@@ -1756,7 +2042,13 @@
 
   function drawAirArrow(n, t, W, H) {
     const up = n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR";
-    drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, LATERAL[n.cmd] || 0);
+    // The shear anchors at the lane surface, so it displaces an up arrow's
+    // head but a down arrow's tail — which mirrors the read direction. Flip
+    // the lateral for down arrows so the chevron points where the motion
+    // goes (owner-verified against footage at 2517_03 m71: ADL/ADR read
+    // swapped without this).
+    const lat = (LATERAL[n.cmd] || 0) * (up ? 1 : -1);
+    drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, lat);
   }
 
   function drawArrow(t, lane, width, color, up, W, H, topH, lateral) {
@@ -1923,11 +2215,11 @@
       ["Length", (chart.duration / 1000).toFixed(1) + " s"],
       ["Records", noteTotal],
       ["ALD samples", chart.aldSamples.length],
+      ["Guide clicks", chart.guideEvents ? collapsedGuides().length + " of " + chart.guideEvents.length : "0"],
       ["ALD no-sample chains", chart.aldChains.filter(
         c => c.generationDisposition !== "generated").length],
       ["Slide bars", chart.notes.filter(n => n.kind === "slide" && n.bar).length],
       ["Shaping pts", chart.notes.filter(n => n.kind === "slide" && !n.bar).length],
-      ["Air unit", airUnit],
       ["Regions", chart.regions.length],
       ["SLA regions", chart.slas.length],
       ["Scroll keys", [...chart.regionsByKey.keys()].sort((a, b) => a - b).join(",") || "—"],
@@ -1982,21 +2274,9 @@
     computeTrims(chart.notes);
     markAirChainStarts(chart.notes);
     markSlideBoundaries(chart.notes);
+    chart.guideEvents = buildGuideEvents(chart);
+    cancelGuides();
     maxH = Math.max(1, ...chart.notes.map(n => Math.max(n.h0 || 0, n.h1 || 0)));
-    // Ordinary air height, taken from the most common air-slide height. Air
-    // slides sit at the same height a plain AIR note does, and AIR records
-    // carry no height field to read it from.
-    // Height 1.0 is the lane surface, so it is not a candidate for the air
-    // anchor — a chart that parks air slides on the floor as often as it flies
-    // them would otherwise collapse the scale and send every real height to
-    // the clamp.
-    const tally = new Map();
-    for (const n of chart.notes) {
-      if (n.kind !== "aslide") continue;
-      for (const h of [n.h0, n.h1]) if (h > 1) tally.set(h, (tally.get(h) || 0) + 1);
-    }
-    const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
-    airUnit = top && top[0] > 1 ? top[0] : 5;
     now = 0;
     el("time").max = String(Math.max(1, Math.round(chart.duration)));
     el("drop").classList.add("hidden");
@@ -2017,6 +2297,7 @@
     el("rval").textContent = rate.toFixed(2) + "×";
     el("wval").textContent = winMs + " ms";
     el("aval").textContent = GEO.airTop.toFixed(2);
+    el("gmval").textContent = (guideDelayMs > 0 ? "+" : "") + guideDelayMs + " ms";
     el("gval").textContent = Math.round(gridAlpha * 100) + "%";
     const tv = +el("tilt").value;
     el("tiltval").textContent = tv === 62 ? "default"
@@ -2051,9 +2332,9 @@
     if (f) f.text().then(load);
   });
 
-  el("time").addEventListener("input", e => { now = +e.target.value; sync(); });
+  el("time").addEventListener("input", e => { now = +e.target.value; cancelGuides(); sync(); });
   el("speed").addEventListener("input", e => { speed = +e.target.value / 10; sync(); });
-  el("rate").addEventListener("input", e => { rate = +e.target.value / 100; sync(); });
+  el("rate").addEventListener("input", e => { rate = +e.target.value / 100; cancelGuides(); sync(); });
   el("win").addEventListener("input", e => { winMs = +e.target.value; sync(); });
   el("airh").addEventListener("input", e => { GEO.airTop = +e.target.value / 100; sync(); });
   el("gridop").addEventListener("input", e => { gridAlpha = +e.target.value / 100; sync(); });
@@ -2067,7 +2348,8 @@
     playing = !playing;
     el("play").textContent = playing ? "Pause" : "Play";
     last = performance.now();
-    if (playing) requestAnimationFrame(tick);
+    if (playing) { ensureAudio(); requestAnimationFrame(tick); }
+    else cancelGuides();
   });
   // Grid seek. Snaps to the next or previous line of the chosen division
   // rather than nudging by a fixed offset, so repeated presses stay on grid
@@ -2091,14 +2373,15 @@
       ? (Math.floor(p / step + eps) + 1) * step
       : (Math.ceil(p / step - eps) - 1) * step;
     now = Math.max(0, chart.timeAt(Math.max(0, target)));
+    cancelGuides();
     sync();
   };
   el("seekPrev").addEventListener("click", () => seek(-1));
   el("seekNext").addEventListener("click", () => seek(1));
 
-  el("back").addEventListener("click", () => { now = Math.max(0, now - 1000); sync(); });
-  el("fwd").addEventListener("click", () => { now += 1000; sync(); });
-  el("reset").addEventListener("click", () => { now = 0; sync(); });
+  el("back").addEventListener("click", () => { now = Math.max(0, now - 1000); cancelGuides(); sync(); });
+  el("fwd").addEventListener("click", () => { now += 1000; cancelGuides(); sync(); });
+  el("reset").addEventListener("click", () => { now = 0; cancelGuides(); sync(); });
 
   const toggle = (id, key) => el(id).addEventListener("click", () => {
     show[key] = !show[key];
@@ -2107,12 +2390,31 @@
   });
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
-  toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp");
+  toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
+  el("tGuide").addEventListener("click", () => {
+    guideOn = !guideOn;
+    el("tGuide").setAttribute("aria-pressed", String(guideOn));
+    cancelGuides();
+    if (guideOn && playing) ensureAudio();
+    draw();
+  });
+  el("tMetro").addEventListener("click", () => {
+    metroOn = !metroOn;
+    el("tMetro").setAttribute("aria-pressed", String(metroOn));
+    cancelGuides();
+    if (metroOn && playing) ensureAudio();
+  });
+  el("gmerge").addEventListener("input", e => {
+    guideDelayMs = +e.target.value;
+    cancelGuides();
+    sync();
+  });
 
   strip.addEventListener("click", e => {
     if (!chart || !chart.duration) return;
     const r = strip.getBoundingClientRect();
     now = ((e.clientX - r.left) / r.width) * chart.duration;
+    cancelGuides();
     sync();
   });
 
@@ -2120,7 +2422,8 @@
     if (!playing) return;
     const dt = ts - last; last = ts;
     now += dt * rate;
-    if (chart && now > chart.duration + 2000) { now = 0; }
+    if (chart && now > chart.duration + 2000) { now = 0; cancelGuides(); }
+    scheduleGuides();
     sync();
     requestAnimationFrame(tick);
   }
