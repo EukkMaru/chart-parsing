@@ -1,5 +1,26 @@
 # Gameplay configuration
 
+## Result-feedback presentation tables
+
+The common result-feedback path consumes three externally loaded selector
+indices and three corresponding loaded record counts. Results 3/4 use the
+first selector/count, result 2 the second, and result 1 the third. Each index
+clamps to `count - 1` before indexing an executable-owned four-entry mask. The
+binary assumes every count is nonzero and the resulting index is below four;
+the clean-room interface rejects other domains instead of reading adjacent
+memory. Exact masks and effects are normative in `spec/presentation.md`.
+
+The source-category row also supplies resource IDs at byte offsets `+0x0c`,
+`+0x1c`, `+0x20`, `+0x28`, `+0x2c`, `+0x30`, `+0x34`, `+0x38`, and `+0x3c`.
+The executable fixes which span/effect uses each field, bounds every selected
+ID against the loaded resource-table count, and suppresses ID zero. The row
+values and the referenced players/materials are absent and remain explicit
+inputs. Slide extended-result feedback additionally selects either the
+executable table `0,1,2,4,3,6,5,7` or a writable eight-entry runtime table;
+the runtime values and both external effect-row resources remain inputs.
+Evidence: `claim.presentation.shared-result-feedback`; focused test:
+`tests/shared_feedback_presentation_test.cpp`.
+
 ## Runtime materialization projection interface
 
 The pending-record materialization gate uses executable constants `30.0F`,

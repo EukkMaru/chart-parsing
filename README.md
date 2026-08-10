@@ -34,14 +34,15 @@ as an official client.
 
 Agents and contributors should read [AGENTS.md](AGENTS.md) and the required
 documents in its stated order. The durable product/issue handoff is
-[docs/VIEWER_ROADMAP.md](docs/VIEWER_ROADMAP.md); session-local renderer leads
-remain in [_temp_handoff_render_comparison.md](_temp_handoff_render_comparison.md)
-until they are resolved or promoted.
+[docs/VIEWER_ROADMAP.md](docs/VIEWER_ROADMAP.md); the complete 12-issue and
+temporary-handoff verdict is
+[research/GITHUB_ISSUE_VERIFICATION.md](research/GITHUB_ISSUE_VERIFICATION.md).
 
 Run the clean-room validation and reconstruction tests with:
 
 ```bash
 python3 scripts/harness.py validate
+python3 scripts/harness.py viewer-audit
 cmake --preset dev
 cmake --build --preset dev
 ctest --preset dev

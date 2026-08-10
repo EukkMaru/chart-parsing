@@ -2,20 +2,30 @@
 
 ## Snapshot
 
-- Research milestone: the corrected ALD presentation slice and ordinary Slide
-  endpoint/path presentation slices are complete.
+- Research milestone: all 12 GitHub issues and both temporary handoff notes
+  have been investigated against the exact snapshot. The corrected ALD
+  presentation slice, ordinary Slide endpoint/path presentation, and
+  HeavenHold authored presentation slices are complete.
   `claim.note.air-ladder-precalc-presentation` closes authored/generated
   ownership and asset-independent ALD geometry;
   `claim.note.slide-presentation-classes` closes Slide endpoint ownership and
   `claim.note.slide-path-presentation-geometry` closes its marker grouping,
   zero split, projected clipping, three vertex streams, and Joint callback
-  order. Former ALD correction records and the old
+  order. `claim.presentation.heaven-hold-authored-mesh` closes the direct
+  HHD/HHX schema, all three factory origins, authored single-stream path,
+  selectors, phase visibility, clipping, submission, and reset. Former ALD
+  correction records and the old
   independent closure verdict remain superseded. All other previously closed
   paths remain standing unless the required fresh contradiction audit exposes
   another dependency.
+- GitHub issue 12 was rechecked on 2026-08-09: its body is unchanged, it has no
+  comments, and all seven requested checks still map to active exact-binary
+  claims. Its open GitHub state reflects remaining product boundaries, not a
+  newly reported or unanswered binary question.
 - Binary: `game.exe`, SHA-256 `4e492489fb8e63c5b3ffad5267e78b02fcf8d74a261b058fc296a7e968516520`
 - Ghidra project: local project `chart`
-- Current Ghidra writer: none
+- Current Ghidra writer: codex-root (binary saturation and external-source
+  closure)
 - Stage-one status: the three affected parser/judgement/ownership rows are
   corrected and verified by focused/full tests plus aggregate corpus and
   viewer smoke coverage; only the independent closure-audit row remains open
@@ -47,6 +57,55 @@
 - Durable stage-two handoff: `docs/VIEWER_ROADMAP.md` records the clean-room
   product boundary, issue 1-5 triage, exact current Ghidra leads, and ordered
   implementation/research queue.
+- Shared scene/camera behavior is now binary-backed by
+  `claim.presentation.common-scene-camera`: BgScene priority 9900 traverses
+  before MainScene priority 10000; active BasicCamera ownership, constructor
+  fallback values, aspect selection, projection/view matrices, and viewport
+  conversion are exact. The generic SVO/UVC loader and its controls/failure
+  behavior are also closed. Field setup selects rows 43/47/46 from externally
+  loaded `AcroartsTableRecord.bin`, prefixes every row string with `acroarts/`,
+  and uses the empty string on an invalid row; Forester `2DLayer` separately
+  comes from rows 6/29/29 of `LayerTableRecord.bin` with zero as the invalid
+  fallback. The prior claim that only two resource paths used the prefix is
+  corrected. The graph linkage and motion samples are absent external data, so
+  the final gameplay pose remains an explicit calibrated parameter rather than
+  a recovered constant; no camera selector/consumer/fallback remains open in
+  `game.exe`.
+- Shared scene pass behavior is now binary-backed by
+  `claim.presentation.common-scene-pass-ordering`: active external `BasePass`
+  objects are stably planned by `PassIndex`, submissions take the first exact
+  Type/User/Range match, all eight per-pass sort modes and their 32-record
+  insertion/adaptive-merge boundary are reconstructed, and draw-index 0..31
+  traversal/reset is closed. Concrete pass rows and material-selected
+  depth/blend/shader/texture/final-pixel state remain external and are the next
+  static-analysis boundary.
+- Material-to-pass behavior is now binary-backed by
+  `claim.presentation.material-pass-flags`: all three generic submission kinds,
+  exact Opaque/Punch/Trans/2D/Reduce and four-bit User selection, the two-word
+  Sort 0/1 callback/default paths, and pass/submission color/depth offscreen
+  request propagation are closed through the pre-draw filter calls. This also
+  corrects the former unsupported name for the sort key's low word. Concrete
+  material/filter graph rows and final backend depth/blend/shader/texture/pixel
+  state remain external rather than recoverable constants.
+- Cross-family chart mirroring is now binary-closed by
+  `claim.presentation.chart-mirror-transform`: all roots and distinct control
+  fields are reflected once during parsing with wrapped `16-lane-width`, AIR
+  direction pairs/signs are exact, and every reconstructed family consumes the
+  resulting coordinates through the same centered lateral basis or affine path
+  operations. HeavenHold's authored selector transform and feedback X flip are
+  explicitly separate. Viewer mirror selection and final camera/asset review
+  remain product/owner work, not an open binary rule.
+- Cross-family update/composition is now binary-closed by
+  `claim.presentation.cross-family-update-composition`. The audit corrected an
+  older single-vector model: roots and AIR-family attachments live in distinct
+  vectors, and every primary update precedes every secondary update. All
+  catch-up substeps finish before one ten-list effect pass; pending
+  materialization and scene exports follow. Feedback serials/overlay writes
+  retain that update order, while final draw overlap is separately governed by
+  scene priority and the exact externally configured pass keys. The synthetic
+  interaction matrix covers both equal-key stability and unequal-key
+  reordering. External resource values and owner pixel review remain explicit
+  boundaries rather than guessed binary facts.
 - Exhaustive ledger: `research/VIEWER_COVERAGE.tsv` separates exact-binary
   closure, product implementation, and owner review. Known issues are seeds;
   the final binary saturation audit must discover and close unreported paths.
@@ -55,18 +114,30 @@
   unexplained primitives, heuristic fallbacks, appearance-only values, and
   unclassified differences; feature saturation plus owner review determines
   when the chart set is sufficient.
-- Current review queue: issue 1 is answered by the recovered SLP schedule and
-  needs a viewer regression/issue close; issue 2 remains an external-profile
-  semantic hypothesis; issue 3's generated ALD checker producer, authored main
-  geometry, clipping, stream layouts, effect transform, and effect-expiry
-  predicate are recovered. TextureTable selection, Joint traversal, and default
-  command submission are also closed; result-state integration remains partial,
-  while resource meaning/final pixels are external-data semantics. Issue 4's
-  ordinary Slide visible class, field-9 role, endpoint lifetime, path mesh,
-  local projection clipping, and three-Joint callback order are now closed.
-  Viewer runtime phase/result integration, external material/final-pixel
-  semantics, and separate HeavenHold presentation remain. Issue 5 requires
-  shared camera/viewport work.
+- Complete issue verdicts and handoff answers are durable in
+  `research/GITHUB_ISSUE_VERIFICATION.md`. The pass recovered presentation-side
+  endpoint SLA consumers for sustain types 1/10/13, Slide's post-shrink
+  endpoint width, MET unit/count arithmetic, common Air vertical transforms,
+  AIR direction resource-mirror pairing, exact DCM query scope, the full
+  91-name registry, and orphan-secondary rejection. The viewer now uses
+  source-order first-compatible Slide chains and AIR-family attachment,
+  preserves the six-field legacy Slide endpoint-width inheritance, suppresses
+  rejected orphans, exposes unknown `T_*`, removes its synthetic position-zero
+  BPM record, ports the snapshot's three-way introsort, generates meter-aware
+  beats/bars, fixes ordinary AirHold's vertical origin, and offsets AirSlide
+  actions. HeavenHold/type-13 now has its distinct authored-control mesh,
+  direct HHD/HHX schema/chaining, all three factory origins, selector
+  transforms, clipping, and two-resource lifetime reconstructed and routed in
+  the viewer. Its exact phase-state simulation remains a product gap alongside
+  malformed numeric parity, seek-equivalent playback state, shared
+  camera/viewport recovery, and result-state/external-resource integration.
+- Browser parser verification is now automatic: `harness.py viewer-audit`
+  serves the actual viewer to isolated headless Firefox and fails on parser
+  exceptions, unknown records, or rejected AIR-family associations. The full
+  7,752-chart corpus passed with zero in every failure category. A separate
+  20-chart coverage-spread render smoke plus focused legacy/modern renders
+  loaded successfully with empty unknown panels. This does not close visual
+  fidelity or owner review.
 - Corrected ALD corpus check: all 7,752 local charts yielded 195,469 ALD lines
   in the two known field shapes and 91,368 compatible chains. The recovered
   interval producer gives 100,952 samples across 43,577 positive advancing
@@ -146,12 +217,40 @@
   exists for candidates, input, and judgement, without rewriting that note's
   clock or windows.
 - `ASO` maps to parsed type 10 and chains twelve-field two-endpoint paths.
-  Widths clamp independently, mirroring uses each endpoint span, four anonymous
-  floats become integer tenths with `int(value * 10 + 0.5)`, and the final
-  exact style string selects a 16-entry color table. Its RTTI-identified
-  `projView::AirSolidNote` builds only projected resource state, emits all
-  candidate sentinels, reads no gameplay input, submits no result, and has no
-  recovered terminal-state request.
+  Widths clamp independently, mirroring uses each endpoint span, four
+  structural floats become integer tenths with `int(value * 10 + 0.5)`, and
+  the final exact style string selects a 16-entry coordinate table. Its
+  RTTI-identified `projView::AirSolidNote` emits all candidate sentinels, reads
+  no gameplay input, and submits no result. The family-local presentation path
+  is now closed: the structural properties form two vertical shell surfaces;
+  endpoint-SLA projection, `NON` resource suppression, raw-origin seam,
+  clipping, bridge/shell topology, winding, and destruction are exact. Its
+  scheduled update directly calls the authored-end predicate and requests the
+  common deferred terminal state at `end <= current`, correcting the earlier
+  no-terminal conclusion.
+- AirSlide's family-local presentation path is closed. Its root uses separate
+  placement and authored-root scale values, type-13 replaces only the placement
+  value, and ASD controls alone own two width-indexed action resources. Runtime
+  segments retain previous/current endpoints; root plus all authored controls
+  feed the shared three-stream geometry, while parallel adjusted/raw schedules
+  are rebuilt every update. Exact phase modes, feedback flag, animation gate,
+  style rows, stream topologies/counters, preload, maintenance, reset, terminal
+  guard, and destruction are recorded by
+  `claim.presentation.air-slide-model-path`. Remaining AirSlide work is viewer
+  state integration and shared downstream camera/material/layer composition,
+  not an untraced family branch.
+- Shared result feedback is closed through the external player/scene boundary.
+  Every note vtable reaches the same pre-dispatch consumer. Ten `+0x48` slots
+  use the common one-position wrapper; Mine and Flick use opcode-identical
+  wrappers that apply the shared active result-control remap to the incoming
+  result byte before calling it. Mine's held-lane average is confined to its
+  separate zero-result success effect. Transient result masks, three ordinary
+  effect gates and submit order, lane serial-group ownership, post-dispatch cue
+  timing, Slide's two extended feedback effects, ten fixed effect-list
+  capacities and cooldowns, normal/preload admission, lifetime update order,
+  scene selection, and monotonic player sequence are reconstructed by
+  `claim.presentation.shared-result-feedback`. External resource rows and
+  final scene/material/camera composition remain explicit downstream work.
 - Parsed type 0 constructs RTTI-identified `projView::TapNote`, with a start
   lane, table-decoded width, scheduled time, and embedded 16-lane checker. Its
   scheduled position is the parsed position converted directly to float and
@@ -297,9 +396,20 @@
   token; empty-string lookup yields code 0, so it remains ordinary AirLadder.
 - `HHD`/`HHX` map directly to parsed type 13. A separate ordered postparser
   branch changes any completed type-2 Slide chain with exact field-8 style
-  `HLD`/code 1 to type 13 before path generation, writing discriminator code
-  10 to its root and every control point. The local corpus exercises this path
-  with two SXD/HLD lines in one chart.
+  `HLD`/code 1 to type 13 before path generation, writing path-scalar integer
+  10 to its root and every control point. Precompute consumes that value as
+  `1.0`; it is not the separate presentation selector at parsed `+0xb0`, which
+  remains zero. The local corpus exercises this path with two SXD/HLD lines in
+  one chart.
+- HeavenHold precomputes one body span per authored control and never takes
+  body geometry from generated judgement records. Direct HHD/HHX token 10
+  selects embedded endpoint-mirror and geometry-mode tables; HLD-origin and
+  zero/`NON` ALD use selector zero. The single body stream clips to projected
+  `[-600, 50]` and emits six `0x18`-byte vertices per surviving span. Root and
+  body resources have separate start/path phase visibility. The clean-room
+  API and focused tests cover nonzero-mode origin trimming/reflection, phase
+  modes, resource selection, and reset; the viewer routes all three origins
+  through this path with asset-free styling.
 - All type-13 origins construct HeavenHoldNote. Its TAP-style start exposes
   candidates and preserves the source command-form flag: HHD and rewritten
   SLD/SLC select profile pair 0/1, while HHX and rewritten SXD/SXC select pair
@@ -343,9 +453,20 @@
   mode-dependent past culling, and exact projected clipping to `[-600, 50]`.
   It emits a full-width 6/18-vertex main stream, a fixed one-lane-wide center
   stream, and a mode-1-only full-width overlay through three registered Joint
-  callbacks in order 0, 1, 2. Categories 1/2/3 only count triangles. The two
-  main packed colours and material/final-pixel semantics are external; viewer
-  phase integration and shared camera/viewport calibration remain open.
+  callbacks in order 0, 1, 2. Categories 1/2/3 only count triangles. A fresh
+  saturation pass recovered three missed static initializers: exact packed
+  colors are base white `0xffffffff`, shared low-alpha white `0x40ffffff`, and
+  alternate gray `0xff666666`. Complete data-xref closure proves the same
+  constants feed Hold, HeavenHold, AirSolid, and shared AirLadder/AirSlide
+  geometry as well as Slide; they are binary constants, not external inputs.
+  Material/final-pixel semantics remain external; phase simulation is product
+  work, while the shared camera/viewport binary boundary is closed.
+- The Mine zero-result success-effect width selector is corrected from an
+  alleged external 17-value table to an exact binary startup table. A missed
+  registered initializer at `004be800` leaves entries 0/1 zero and writes
+  entries 2..16 as 1..15, so the consumer returns
+  `max(clamp(width,0,16)-1,0)`. Claims, spec, reconstruction, tests, and Ghidra
+  comments now use the binary-owned value.
 - The authoritative clock starts from integer milliseconds at 0.06 chart units
   per millisecond, applies exact ordinary/alternate float quantization and
   discrepancy correction, integrates a runtime rate, then subtracts a selected
@@ -558,9 +679,11 @@ evidence labels while resolving stale statements against the verified specs.
 
 ## Blockers
 
-- Stage two is not complete: known renderer discrepancies and GitHub issues
-  remain unresolved, visual comparison coverage is incomplete, and an
-  independent product review has not occurred.
+- Stage two is not complete: issue-derived product gaps and systematic
+  presentation rows remain unresolved, visual comparison coverage is
+  incomplete, and an independent product review has not occurred. The twelve
+  issue bodies' listed binary questions are answered; an issue remaining open
+  on GitHub does not by itself mean its binary question is open.
 
 Externally absent judgement/profile values remain parameters. Their selection,
 defaults where executable-owned, lifetime, and consumers are reconstructed, so
@@ -568,9 +691,10 @@ their absence is not itself a completion blocker.
 
 ## Next handoff
 
-Preserve the verified stage-one ledger and independent closure report. Review
-the open renderer issues, select one bounded parser/model/render discrepancy,
-and trace it from C2S fields through the normalized schedule to the viewer.
-Use focused Ghidra analysis where the repository evidence cannot determine the
-canonical rule. Record only original prose/measurements; do not commit charts,
-footage, or extracted assets.
+Preserve the verified stage-one ledger and the corrected HeavenHold field
+separation. Build the `pipeline.presentation_boundary` inventory from exact
+factories, managers, vtables, callbacks, shared transforms, resource loaders,
+and reset owners. Use it to order the remaining concrete presentation slices;
+do not run the final independent contradiction audit until those rows and the
+binary saturation pass are ready. Record only original prose/measurements; do
+not commit charts, footage, or extracted assets.

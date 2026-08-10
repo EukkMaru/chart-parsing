@@ -184,10 +184,29 @@ first record if none compare at or before the query.
 It is parsed only after BPM finalization and receives its scheduled value from
 the same lookup. Meter postprocessing sorts and deduplicates MET positions,
 synthesizes position zero from `MET_DEF` when necessary, and creates four
-scheduled meter/grid vectors. A zero meter component stops further subdivision
-generation. These values do not enter the BPM lookup, note schedule fields, or
-adaptive Air cadence; their traced consumers maintain meter/grid index and
-interpolation state.
+scheduled meter/grid vectors. The first meter integer is the beat unit and the
+second is the count. At fixed resolution 384, the producer computes unsigned
+integer steps:
+
+```text
+beat_step = 384 / beat_unit
+bar_step  = count * 384 / beat_unit
+```
+
+Thus `MET ... 4 3` yields 96-tick beats and 288-tick bars. Each MET position
+restarts the generated sequences. A zero in either component stops all further
+subdivision generation before division. Low-32-bit multiplication and unsigned
+division define nonzero negative/extreme domains; a resulting zero step is a
+source nonprogress domain and must not be replaced with a guessed grid. These
+values do not enter the BPM lookup, note schedule fields, or adaptive Air
+cadence; their traced consumers maintain meter/grid index and interpolation
+state. Reconstruction: `c2s_meter_grid_steps`; focused test:
+`tests/tempo_map_test.cpp`.
+
+The first finalized BPM record is not a synthetic position-zero record. Its
+own BPM integrates the cumulative schedule from chart zero to that record, but
+a position lookup before every qualifying BPM record returns zero. `BPM_DEF`
+never seeds the authoritative schedule.
 
 The outer gameplay update has one direct generated-grid consumer immediately
 after lazy materialization. It selects projected positions from one meter/grid
@@ -538,8 +557,9 @@ their endpoint and separate region key. Types 0, 1, 2, 4, 6, 9, 10, 11, and
 13 have primary factory cases. Attachment types 3, 5, and 8 are created only
 after a supported root; type 12 is consumed without a runtime note.
 
-New primaries append in scan/index order, with an attached secondary appended
-immediately after its root. Because the manager has already completed all
+New primaries append to the primary vector in scan/index order, while optional
+attachments append to a separate secondary vector in encounter order. Because
+the manager has already completed all
 substeps for that outer call, new objects cannot expose candidates, consume
 input, submit results, or request terminal state until the following outer
 update. Runtime speed is the float-narrowed, `0.1F`-clamped value from the
@@ -550,12 +570,14 @@ values remain explicit inputs. Because SLA-selected keys feed this predicate,
 an SLA directive can alter the construction update and therefore later
 gameplay participation even though type 12 itself has no runtime object.
 
-Existing active objects remain ahead of every new append. Across outer updates,
-active-vector order is therefore dynamic construction order; within one scan
-it is pending-index order with each secondary immediately after its root. The
-later candidate and note-update passes preserve this order. Candidate reduction
-itself is a minimum and has no order tie-break, while simultaneous result
-dispatch does use this order. Evidence:
+Existing active objects remain ahead of every new append within their owner.
+Across outer updates, each vector therefore follows dynamic construction
+order; within one scan, both vectors follow pending-index encounter order. The
+candidate pass visits primaries only. Every note substep then updates the
+complete primary vector before the complete secondary vector, so a root and
+its attachment are not adjacent when another primary exists. Candidate
+reduction itself is a minimum and has no order tie-break, while simultaneous
+result dispatch uses this primary-first/secondary-second order. Evidence:
 `claim.interactions.cross-family-candidate-result-order`.
 
 Every factory-reachable primary and attached-secondary class then follows the

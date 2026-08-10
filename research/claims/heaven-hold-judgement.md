@@ -38,13 +38,15 @@ generated queue. Only both component phases reaching 4 makes the note terminal.
 ## Observations
 
 - HHD and HHX have command IDs `0x2c` and `0x2d` and enter parsed type 13.
-  HHD stores discriminator zero; HHX stores one and parses an additional
-  table-selected field. Continuation requires a compatible type-13 chain,
-  discriminator, saved endpoint fields, and command-specific metadata.
+  HHD clears the command-form byte; HHX sets it and parses an additional
+  table-selected field. Both parse a separate integer presentation selector.
+  Continuation requires a compatible type-13 chain, command form, selector,
+  selector parity, saved endpoint fields, and command-specific metadata.
 - Slide field 8 maps exact `HLD` to style code 1. Before generated-record
   construction, the ordinary postparser changes matching completed type-2
-  chains to type 13 and normalizes their root/control discriminator slots to
-  code 10. The SLD/SLC versus SXD/SXC command-form flag remains clear/set.
+  chains to type 13 and normalizes their root/control path-scalar slots to
+  integer 10. The SLD/SLC versus SXD/SXC command-form flag remains clear/set;
+  the separate presentation selector retains zero.
 - The common parsed-record constructor clears both `+0x158` and `+0x168`
   vectors. The chart postprocessor populates primary vector `+0x158` for root
   types 1, 2, and 13. Parsed type 9 bypasses every primary-vector producer.
@@ -123,9 +125,9 @@ authoritative result dispatcher.
 - HHD/HHX are absent from the local corpus, so their direct authored parser
   support cannot be sampled. The local corpus does exercise the alternate
   type-13 origin with two extended-form SXD/HLD lines in one chart.
-- The player-facing meanings of the HHX extra table field, the runtime input
-  variant that chooses the member of each profile pair, and result resources
-  remain unresolved.
+- The player-facing meanings of the direct HHD/HHX presentation selector, the
+  HHX extra table field, the runtime input variant that chooses the member of
+  each profile pair, and result resources remain unresolved.
 
 ## Consequences
 

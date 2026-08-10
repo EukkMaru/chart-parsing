@@ -19,7 +19,11 @@ this repository and could not inspect `game.exe`; several presentation rules
 and fitted constants are consequently provisional and often disagree with
 actual gameplay footage.
 
-The five GitHub issues are seed reports only. Work does not end when they close.
+All 12 GitHub issues and the two former temporary handoffs were investigated on
+2026-08-07. Their current binary/product verdict is
+`research/GITHUB_ISSUE_VERIFICATION.md`; that matrix supersedes older “next
+action” language in the issue-1-through-5 historical sections below. The
+issues are seed reports only. Work does not end when they close.
 Continue until every applicable row in `research/VIEWER_COVERAGE.tsv` has
 binary and product closure, a fresh reachability/field-consumer saturation
 audit finds no new gameplay-visible behavior, and the owner completes the final
@@ -224,8 +228,9 @@ provisional product behavior.
 [Issue 4: Slide checkpoints: two rendered classes](https://github.com/EukkMaru/chart-parsing/issues/4)
 
 **Status: ordinary Slide visual classes, endpoint lifetime, resource-independent
-path mesh, clipping, and three-Joint submission are recovered. Runtime phase
-integration, external styling/final pixels, and HeavenHold remain open.**
+path mesh, clipping, and three-Joint submission are recovered. HLD-styled
+chains now route through the separately recovered one-stream HeavenHold mesh.
+Runtime phase integration and external styling/final pixels remain open.**
 
 The issue observes that some intermediate Slide controls look like visible
 notes or trigger guide feedback while others appear to shape the path only.
@@ -306,19 +311,23 @@ chart time and speed; do not extract models, textures, or footage frames.
 
 ## Ordered implementation/research queue
 
-1. **Make issue 1 true in the product.** Audit the viewer parser/model against
-   the recovered SLP schedule rule and add a synthetic regression test.
-2. **Close ALD presentation ownership.** Complete the focused trace described
-   in issue 3, write a compact claim or presentation note, then implement its
-   typed model and primitives.
-3. **Close Slide visual discrimination.** Map parsed fields through the
-   presentation consumer before replacing the viewer's heuristic classes.
-4. **Separate projection layers.** Isolate chart-space/projected coordinates
-   from camera/viewport transforms, then investigate issue 5 and calibrate only
-   the unavailable final parameters.
-5. **Normalize the prototype.** Move raw-token interpretation out of drawing,
-   remove chart-specific assumptions, and make parser/model/render seams
-   independently testable.
+1. **Finish parser parity.** The snapshot's exact MSVC timing sort and observed
+   legacy Slide width branch are implemented, and the actual viewer parser
+   passes all 7,752 local charts with no error/unknown/rejection. Reproduce the
+   remaining numeric no-conversion/range failures and hostile signed/unsigned
+   domains without hiding them behind JS coercion.
+2. **Integrate type-13 phase state.** HHD/HHX, HLD-style Slide, and exact
+   zero/NON ALD now route through the recovered HeavenHold path instead of
+   ordinary Slide or omission. Connect the recovered start/path phases to
+   preview state so base/animated/alternate modes and separate root/body
+   visibility are driven by simulated gameplay state.
+3. **Separate projection layers.** Isolate chart-space/projected coordinates
+   from camera/viewport transforms, recover every resource-independent matrix
+   and clip step, and keep unavailable final parameters fitted/configurable.
+4. **Normalize the prototype.** Move remaining raw-token interpretation out of
+   drawing and make parser/model/render seams independently testable.
+5. **Integrate logical state.** Connect recovered phase/result/resource
+   lifetime predicates without inventing external table contents.
 6. **Complete note-family slices.** Repeat parse/model/schedule/state/render
    verification for every constructible family and legacy/current form.
 7. **Build the comparison matrix.** Cover all families, simultaneous and

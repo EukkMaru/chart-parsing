@@ -10,7 +10,7 @@
   `judgement.types`, `judgement.windows`, `judgement.miss`,
   `note.other_variants`, `state.ownership`, `config.external`,
   `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -52,10 +52,13 @@ generated-record, and authored-checkpoint work is complete.
   existing type-8 secondary with a nonempty control vector, equality of the
   last control's position/lane/width fields, and a last marker matching the
   referenced family. Other resolved families take the root-attachment path,
-  which also requires equal position/lane/width and an unset secondary slot.
+  which requires equal current-endpoint position/lane/width and an unset
+  secondary slot. HOLD supplies its endpoint and Slide its current final path
+  record; point roots' current endpoint equals their start.
   No match takes the parser diagnostic path.
 - Factory case 8 allocates `0x258` bytes, constructs AirSlideNote, loads it via
-  virtual slot `+0x24`, links it from the root, and appends root then secondary.
+  virtual slot `+0x24`, links it from the root, appends the root to the primary
+  vector, and appends AirSlideNote to the separate secondary vector.
   Constructor/reset owns both phase fields, generated/control vectors, gap
   state, checker resources, and presentation resources; destruction releases
   those owned objects. The candidate virtual is the shared all-sentinel

@@ -7,9 +7,10 @@ standalone root record. The sixth event token names the record family being
 attached or extended.
 
 For an initial attachment, the parser searches for a root whose type equals
-that token's resolved type, whose lane and width equal the command fields, and
-whose chart position equals the command position under the parser epsilon
-comparison. The root must not already have an in-range secondary type. The
+that token's resolved type and whose current-endpoint position, lane, and width
+equal the command fields under the parser epsilon comparison. HOLD supplies
+its endpoint and Slide its current final path record. The root must not already
+have an in-range secondary type. The
 supported root families observed in the exact binary/corpus path are TAP, HLD,
 SLD, CHR, FLK, and MNE (parsed types 0, 1, 2, 4, 6, and 11). Failure to find a
 match takes the parser diagnostic path.
@@ -25,8 +26,9 @@ timing checkpoint; AHX does both. Reconstruction:
 `air_hold_runtime_checkpoint_count`.
 
 The runtime factory allocates a separate `projView::AirHoldNote`, links it from
-the root, and appends the root followed by AirHoldNote to the active vector.
-AirHoldNote owns its component state and can outlive a root removed earlier.
+the root, appends the root to the primary vector, and appends AirHoldNote to the
+separate secondary vector. AirHoldNote owns its component state and can outlive
+a root removed earlier. The manager updates all primaries before any secondary.
 Evidence: `claim.note.air-hold-secondary-judgement`.
 
 ## Start component
@@ -171,3 +173,105 @@ accept them. If terminal routing is already active, they take the shared
 observer-only path. Reconstruction: `air_hold_*_source_category`,
 `air_hold_path_complete`, and `air_hold_is_terminal`; focused tests:
 `tests/air_hold_judgement_test.cpp`.
+
+## Presentation resources and vertical origin
+
+AirHold authors no independent vertical field. Its constructor initializes the
+presentation value to 1, so ordinary roots reach exact common transform
+`(1 - 1) * 3.8934999 = 0`. A type-13 root replaces the value from its final
+control before the same transform. A viewer must not substitute an authored
+value-5 plane as though it were binary state.
+
+Decoded width selects external table index:
+
+```text
+clamp(decoded width - 1, 0, 15)
+```
+
+The root lateral position is `4*lane + 2*width - 32`. Its lateral resource
+scale is 1 when external native width is below 1, otherwise
+`decoded width / external native width`. The attached load creates two
+width-indexed and two fixed resources for the root/path plus two width-indexed
+resources for every authored AHX checker. Resource identities and intrinsic
+geometry are external data; their consumers and transforms are normative.
+
+The selected resource wrapper supplies three external offsets. The root
+transform is:
+
+```text
+position = (base lateral + offset X,
+            base vertical + offset Y,
+            projected start + offset Z)
+scale = (width/native width, 1, 1)
+visible = start phase != 5
+```
+
+Every unresolved AHX checker projects its own stored schedule/SLA tag. Its two
+resources share:
+
+```text
+position = (base lateral + offset X,
+            15.724 + offset Y,
+            checkpoint projection + offset Z)
+scale = (width/native width, 1, 1)
+```
+
+Resolution hides both resources and removes that point from the presentation
+envelope. Load-time resource attachment verticals are exactly:
+
+```text
+0, 15.574, 15.574, 0, 15.724, -15.574
+```
+
+They are attachment coordinates, not a claim about unavailable model extents.
+
+## Projected path envelope
+
+While nonterminal, presentation folds projected start, projected end, and all
+unresolved AHX projections into an ordered minimum/maximum. It also records
+whether authored end or any unresolved checkpoint remains in the future. If so
+and the start phase is already 5, the cached projection of raw position zero is
+included in the envelope.
+
+Both path resources use:
+
+```text
+position = (base lateral + offset X + 0.0001,
+            base vertical + offset Y,
+            maximum projection + offset Z)
+projected scale = (maximum projection - minimum projection) * 0.25
+```
+
+The first path resource has lateral scale 1. The second has the root's
+width/native-width lateral scale. Both are shown while the note is
+nonterminal.
+
+Path phase selects external resources and feedback:
+
+| Path phase | Resource variant | First scale | Field-feedback flag |
+| ---: | --- | ---: | --- |
+| 3 | best current gap | 1 | set |
+| 4 | other current gap | 0.5 | clear |
+| all other values | default | 1 | clear |
+
+The second resource in each selected pair uses unit scale. A shared
+schedule-visibility probe controls animation/state advancement: raw delta below
+30 succeeds immediately; farther values must project inside inclusive
+`[-550, 550]`. This is presentation state only.
+
+Gameplay/lifetime update precedes presentation in a scheduled tick. Once start
+and path phases both equal 5, the first half requests deferred terminal and the
+presentation half returns without submitting new transforms. It does not issue
+an immediate hide. Maintenance/final removal owns resource finalization and
+destruction.
+
+Preload steps 0 through 4 cover width-indexed/fixed root and checkpoint model
+families. Steps 5 through 8 cover four path/feedback families. Steps 9 through
+14 are idle; readiness is reported after step 14. Reset releases and hides the
+preload objects.
+
+Evidence: `claim.presentation.common-air-transform` and
+`claim.presentation.air-hold-model-path`. Reconstruction:
+`air_hold_resource_width_index`, `AirHoldResourceTransform`,
+`build_air_hold_*`, and the phase/envelope helpers. Focused test:
+`tests/air_hold_presentation_test.cpp`.

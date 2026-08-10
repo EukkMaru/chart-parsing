@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.events`, `input.logical_state`, `input.buffering`, `matching.candidates`, `judgement.types`, `judgement.windows`, `judgement.miss`, `note.slide`, `state.ownership`, `config.external`, `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-07-27
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -45,6 +45,12 @@ field-8 style `HLD` is the pre-generation exception specified by
 
 - `SLD`, `SXD`, `SLC`, and `SXC` resolve to parsed type 2 and pass a six-field
   validation path. Their handler builds `0x24`-byte control-point entries. A
+  six-field data vector retains the root width copied during control
+  construction. The source comparison counts the command token too, so a raw
+  vector longer than seven tokens—seven or more data fields—reads, clamps, and
+  stores field 7 as the endpoint width. Thus the six-field legacy form's
+  omitted endpoint width inherits its root width rather than becoming width 1.
+  A
   command continues an existing record only when its connection field, last
   point lane, width, and chart position match; otherwise it appends a new
   `0x174`-byte parsed record. Mirroring transforms the lane origin before the

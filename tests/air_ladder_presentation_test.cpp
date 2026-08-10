@@ -60,6 +60,12 @@ int main() {
                 air_ladder_style_vertex_coordinate(0)));
     assert(near(air_ladder_render_lateral(10.0F), 8.0F));
     assert(near(air_ladder_render_vertical(2.0F), 3.8934999F));
+    assert(near(common_air_render_vertical(1.0F), 0.0F));
+    assert(near(common_air_action_render_vertical(1.0F), 0.14999962F));
+    assert(air_direction_resource_scale_sign(1) == 1.0F);
+    assert(air_direction_resource_scale_sign(2) == -1.0F);
+    assert(air_direction_resource_scale_sign(4) == -1.0F);
+    assert(air_direction_resource_scale_sign(5) == 1.0F);
     assert(near(air_ladder_stream_zero_half_extent(2.0F), 3.0F));
     assert(near(air_ladder_stream_one_scale(0.0F), 0.75F));
     assert(near(air_ladder_stream_one_scale(15.574F), 0.65F));
@@ -158,28 +164,30 @@ int main() {
     primitive.start.decoded_width = 2.0F;
     primitive.end.decoded_width = 4.0F;
     const auto stream_zero =
-        build_air_ladder_stream_zero_vertices(primitive, 0x12345678U);
+        build_air_ladder_stream_zero_vertices(
+            primitive, SharedAirPathPresentationMode::base);
     assert(stream_zero.size() == 6);
     assert(near(stream_zero[0].lateral, 1.0F));
     assert(near(stream_zero[1].lateral, 14.0F));
     assert(near(stream_zero[2].lateral, 2.0F));
     assert(near(stream_zero[0].vertical, primitive.start.vertical));
-    assert(stream_zero[0].color == 0x12345678U);
+    assert(stream_zero[0].color == presentation_static_base_color);
     assert(near(stream_zero[0].coordinate_u,
                 primitive.start.normalized_left));
     assert(near(stream_zero[0].coordinate_v,
                 primitive.start.style_coordinate));
 
     const auto stream_one =
-        build_air_ladder_stream_one_vertices(primitive, 0x89abcdefU);
+        build_air_ladder_stream_one_vertices(
+            primitive, SharedAirPathPresentationMode::alternate);
     assert(stream_one.size() == 6);
     for (const auto& vertex : stream_one) {
         assert(near(vertex.vertical, 0.0F));
-        assert(vertex.color == 0x89abcdefU);
+        assert(vertex.color == presentation_static_alternate_color);
     }
 
     const auto stream_two =
-        build_air_ladder_stream_two_vertices(primitive, 0x10203040U, false);
+        build_air_ladder_stream_two_vertices(primitive, false);
     assert(stream_two.size() == 12);
     assert(near(stream_two[0].lateral, 2.04F));
     assert(near(stream_two[1].lateral, 6.04F));
@@ -189,4 +197,12 @@ int main() {
     assert(near(stream_two[6].lateral, stream_two[0].lateral));
     assert(near(stream_two[7].lateral, stream_two[2].lateral));
     assert(near(stream_two[8].lateral, stream_two[1].lateral));
+    for (const auto& vertex : stream_two) {
+        assert(vertex.color == presentation_static_low_alpha_color);
+    }
+
+    const auto animated_stream =
+        build_air_ladder_stream_zero_vertices(
+            primitive, SharedAirPathPresentationMode::animated);
+    assert(animated_stream[0].color == presentation_static_base_color);
 }

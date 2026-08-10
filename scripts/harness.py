@@ -10,11 +10,16 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import json
 import os
 from pathlib import Path
 import shutil
 import socket
+import subprocess
 import sys
+import tempfile
+import threading
 from urllib.parse import urlparse
 
 
@@ -29,11 +34,13 @@ REQUIRED_FILES = (
     "AGENTS.md",
     "docs/SCOPE.md",
     "docs/WORKFLOW.md",
+    "docs/HARNESS.md",
     "docs/EVIDENCE.md",
     "docs/GHIDRA.md",
     "docs/COMPLETION.md",
     "docs/VIEWER_ROADMAP.md",
     "research/STATUS.md",
+    "research/GITHUB_ISSUE_VERIFICATION.md",
     "research/COVERAGE.tsv",
     "research/VIEWER_COVERAGE.tsv",
     "spec/README.md",
@@ -315,6 +322,148 @@ def command_corpus(_: argparse.Namespace) -> int:
     return 1 if unreadable else 0
 
 
+def command_viewer_audit(args: argparse.Namespace) -> int:
+    """Run the actual browser parser over a content-free corpus manifest."""
+    firefox = shutil.which("firefox")
+    if firefox is None:
+        print("viewer audit FAILED: firefox is missing")
+        return 1
+
+    charts = sorted((ROOT / "music").rglob("*.c2s"))
+    if args.limit > 0:
+        charts = charts[:args.limit]
+    manifest = ["/" + path.relative_to(ROOT).as_posix() for path in charts]
+    report_holder: list[dict[str, int]] = []
+    report_ready = threading.Event()
+
+    class AuditHandler(SimpleHTTPRequestHandler):
+        def __init__(self, *handler_args: object, **handler_kwargs: object) -> None:
+            super().__init__(*handler_args, directory=str(ROOT), **handler_kwargs)
+
+        def log_message(self, _format: str, *log_args: object) -> None:
+            if args.verbose:
+                print(_format % log_args, flush=True)
+            return
+
+        def do_GET(self) -> None:
+            if self.path == "/__viewer_manifest__":
+                payload = json.dumps(manifest).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
+            super().do_GET()
+
+        def do_POST(self) -> None:
+            if self.path != "/__viewer_report__":
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("report is not an object")
+                report_holder.append(payload)
+                report_ready.set()
+                self.send_response(204)
+                self.end_headers()
+            except (OSError, UnicodeError, ValueError, json.JSONDecodeError):
+                self.send_error(400)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AuditHandler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    port = server.server_address[1]
+    url = (
+        f"http://127.0.0.1:{port}/scripts/c2s-viewer.html"
+        "?auditManifest=/__viewer_manifest__&auditReport=/__viewer_report__"
+    )
+    if args.verbose:
+        print(f"viewer audit URL {url}", flush=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="c2s-viewer-audit-") as temporary:
+            profile = Path(temporary) / "profile"
+            profile.mkdir()
+            browser = subprocess.Popen(
+                [
+                    firefox, "--headless", "--no-remote",
+                    "--profile", str(profile),
+                    url,
+                ],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            completed = report_ready.wait(timeout=args.timeout)
+            browser.terminate()
+            try:
+                browser.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                browser.kill()
+                browser.wait(timeout=5)
+            if not completed:
+                if args.verbose:
+                    stdout, stderr = browser.communicate(timeout=2)
+                    if stdout:
+                        print(stdout, end="")
+                    if stderr:
+                        print(stderr, end="", file=sys.stderr)
+                print(f"viewer audit FAILED: browser returned no report in {args.timeout} seconds")
+                return 1
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=2)
+
+    if not report_holder:
+        print("viewer audit FAILED: browser returned no parser report")
+        return 1
+
+    report = report_holder[-1]
+    fields = (
+        "charts", "parseErrors", "unknownRecords",
+        "rejectedAssociations", "harnessErrors",
+    )
+    if any(not isinstance(report.get(field), int) for field in fields):
+        print("viewer audit FAILED: malformed parser report")
+        return 1
+    rejected_by_command = report.get("rejectedByCommand", {})
+    if (not isinstance(rejected_by_command, dict) or
+            any(not isinstance(command, str) or not isinstance(count, int)
+                for command, count in rejected_by_command.items())):
+        print("viewer audit FAILED: malformed rejection breakdown")
+        return 1
+    rejected_by_reference = report.get("rejectedByReference", {})
+    if (not isinstance(rejected_by_reference, dict) or
+            any(not isinstance(reference, str) or not isinstance(count, int)
+                for reference, count in rejected_by_reference.items())):
+        print("viewer audit FAILED: malformed reference breakdown")
+        return 1
+    print(f"viewer charts          {report['charts']}")
+    print(f"parse errors           {report['parseErrors']}")
+    print(f"unknown records        {report['unknownRecords']}")
+    print(f"rejected associations  {report['rejectedAssociations']}")
+    if rejected_by_command:
+        breakdown = " ".join(
+            f"{command}={rejected_by_command[command]}"
+            for command in sorted(rejected_by_command)
+        )
+        print(f"rejected by command    {breakdown}")
+    if rejected_by_reference:
+        breakdown = " ".join(
+            f"{reference}={rejected_by_reference[reference]}"
+            for reference in sorted(rejected_by_reference)
+        )
+        print(f"rejected by reference  {breakdown}")
+    print(f"harness errors         {report['harnessErrors']}")
+    failures = (
+        report["charts"] != len(manifest) or
+        any(report[field] != 0 for field in fields[1:])
+    )
+    print("viewer audit " + ("FAILED" if failures else "OK"))
+    return 1 if failures else 0
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
@@ -324,6 +473,23 @@ def parser() -> argparse.ArgumentParser:
     next_parser.add_argument("--count", type=int, default=5)
     next_parser.set_defaults(run=command_next)
     commands.add_parser("corpus", help="print aggregate corpus versions and command vocabulary").set_defaults(run=command_corpus)
+    viewer_parser = commands.add_parser(
+        "viewer-audit",
+        help="run the actual browser parser over the local chart corpus",
+    )
+    viewer_parser.add_argument(
+        "--limit", type=int, default=0,
+        help="audit only the first N sorted charts; zero audits the full corpus",
+    )
+    viewer_parser.add_argument(
+        "--timeout", type=int, default=300,
+        help="browser timeout in seconds",
+    )
+    viewer_parser.add_argument(
+        "--verbose", action="store_true",
+        help="print loopback HTTP requests while diagnosing the audit",
+    )
+    viewer_parser.set_defaults(run=command_viewer_audit)
     return result
 
 

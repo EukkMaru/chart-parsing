@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.discovery`, `parser.events`, `timing.clock`, `state.ownership`, `interactions.cross_note`, `config.external`
-- Last reviewed: 2026-07-27
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -31,6 +31,7 @@ gameplay consumer.
 - `game.exe @ RAM:011c7040, FUN_011c7040, reset entry, hash 85e469f01af6c35d128516dd25bdab6d72eabe497b619db19768a06671a8304c`
 - `game.exe @ RAM:011c3850, FUN_011c3850, container clears, hash cae07a08b8c01fc9f13a1881b624673fd479f02c29b80f6d30c8104a6696449b`
 - `game.exe @ RAM:00b29c90, FUN_00b29c90, materialization consumer, hash 88a81914b32218d202582c3aa46579ad51e4dec0f6a32da750c57cce674a7584`
+- `game.exe @ RAM:00b28890, FUN_00b28890, active presentation projection and DCM query`
 
 ## Observations
 
@@ -67,6 +68,13 @@ gameplay consumer.
   converts back with `0.06F`, and consults DCM only for a positive adjusted
   delta. Its ordered `30.0F <= raw` guard and two ordered out-of-bounds
   comparisons make unordered-NaN raw or projected values eligible.
+- The DCM query time is the keyed-adjusted entity time represented by
+  `(manager + adjusted_delta) * 16.666666F`. Endpoint retry recomputes the
+  adjusted delta from the endpoint schedule/key and queries DCM at that
+  endpoint time. The common active presentation helper uses the same
+  manager-plus-positive-delta query before applying the base projection
+  offset. No root-time, interval-relative, or manager-only DCM anchor exists
+  on these paths.
 
 ## Reasoning
 
@@ -74,7 +82,9 @@ Descriptor registration, handler construction, owned-container reset and
 sorting, both lookup algorithms, and the materialization call site close the
 producer-to-consumer path. STP/SFL/SLP and DCM are therefore not merely scroll
 rendering metadata: their output can decide whether a parsed record stays
-pending or is constructed during the current outer update.
+pending or is constructed during the current outer update. The independent
+active presentation consumer also closes the DCM query scope requested by the
+viewer handoff.
 
 ## Alternatives and falsifiers
 

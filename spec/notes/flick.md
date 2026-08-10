@@ -73,6 +73,29 @@ upper bound. At or above it, phase 3 wins over a same-sample motion outcome.
 The reconstruction is `FlickMotionTracker`, `update_flick_motion`, and
 `advance_flick_phase`; tests are in `tests/flick_motion_test.cpp`.
 
+## Root presentation
+
+The root is one model selected from an executable-owned, width-indexed row
+table. Clamp `decoded_width - 1` to `[0, 15]` and subtract it from 129, yielding
+rows 129 through 114 for widths 1 through 16. These integers select external
+model records; their meshes and materials are not reconstructed assets.
+
+The model uses the common lane-span center
+`4 * start_lane + 2 * decoded_width - 32`. Its initial depth is `-10000`.
+Lateral scale is `decoded_width / external_native_width`, with `1.0` when the
+external native width is below one. Depth-axis scale is the executable-selected
+`1.0` or `1.3` platform value. While the owned phase is 0 or 1, each active
+update replaces depth with the shared scheduled-time projection, including
+base offset and positive-delta DCM. Phases 2 through 5 are terminal and hide
+the model; reset also hides it. Direction phases do not select a different root
+row or transform.
+
+Preload step zero stages all sixteen model rows. Later steps stage feedback
+resources, which remain assigned to the shared feedback/layering specification.
+Reconstruction: `flick_model_resource_row`, `flick_phase_is_terminal`, and the
+shared Tap transform helpers. Focused tests: `tests/flick_presentation_test.cpp`.
+Evidence: `claim.presentation.flick-root-model`.
+
 ## Results and lifetime
 
 Phases 0/1 are nonterminal. Phase 2 is edge timeout, phase 3 is motion timeout,
@@ -87,6 +110,12 @@ map for sums 0 through 10 is `0,1,1,2,2,4,4,4,4,4,4`; control code 4 forces
 side code 0. The provisional downstream result remains the start coarse tier
 and can be modified by active result-control state before shared result routing.
 Exact composition is `compose_flick_direction_result`.
+
+Flick's shared-feedback `+0x48` wrapper is opcode-identical to Mine's. It
+applies active result-control remapping to the incoming result byte and then
+forwards the unchanged remaining arguments to the common one-position wrapper.
+The operation is idempotent when the ordinary producer has already applied it;
+it does not transform direction or position.
 
 Manager forced-result state bypasses edge and motion after an external timing
 point. It submits the forced byte with side code 0 and alternates phase 4 then 5

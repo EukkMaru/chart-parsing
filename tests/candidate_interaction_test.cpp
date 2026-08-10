@@ -9,6 +9,7 @@ int main() {
     using chart::reconstruction::LaneCandidateParticipant;
     using chart::reconstruction::RuntimeAppendEvent;
     using chart::reconstruction::RuntimeAppendRole;
+    using chart::reconstruction::RuntimeActiveVectors;
     using chart::reconstruction::SharedResultRoute;
     using chart::reconstruction::SharedResultRoutingState;
     using chart::reconstruction::append_runtime_factory_events;
@@ -16,6 +17,7 @@ int main() {
     using chart::reconstruction::evaluate_lane_candidate_fanout;
     using chart::reconstruction::lane_candidate_gate_allows_start;
     using chart::reconstruction::reduce_lane_candidate;
+    using chart::reconstruction::runtime_manager_update_order;
 
     // An earlier FLK becomes the lane minimum. Its own edge path remains
     // eligible, while a later TAP/HOLD/Slide-style start is candidate-gated.
@@ -78,22 +80,28 @@ int main() {
     assert(!local_decision.accepts[1]);
     assert(local_decision.accepts[2]);
 
-    // Runtime storage order is dynamic construction order. Existing objects
-    // remain first; a root is immediately followed by its attached secondary;
-    // a factory-default parsed record contributes no object.
-    std::vector<RuntimeAppendEvent> active_order{
-        {2, RuntimeAppendRole::primary},
+    // Runtime storage uses distinct primary and attached-secondary vectors.
+    // Existing objects remain first within each vector; a factory-default
+    // parsed record contributes no object. The manager later drains the whole
+    // primary vector before the whole attached-secondary vector.
+    RuntimeActiveVectors active{
+        .primaries = {2},
+        .attached_secondaries = {2},
     };
-    append_runtime_factory_events(active_order, 5, true, true);
-    append_runtime_factory_events(active_order, 6, false, true);
-    append_runtime_factory_events(active_order, 7, true, false);
-    assert(active_order.size() == 4);
-    assert(active_order[0].parsed_index == 2);
-    assert(active_order[1].parsed_index == 5 &&
-           active_order[1].role == RuntimeAppendRole::primary);
-    assert(active_order[2].parsed_index == 5 &&
-           active_order[2].role == RuntimeAppendRole::attached_secondary);
-    assert(active_order[3].parsed_index == 7);
+    append_runtime_factory_events(active, 5, true, true);
+    append_runtime_factory_events(active, 6, false, true);
+    append_runtime_factory_events(active, 7, true, false);
+    assert((active.primaries == std::vector<std::int32_t>{2, 5, 7}));
+    assert((active.attached_secondaries ==
+            std::vector<std::int32_t>{2, 5}));
+    const auto active_order = runtime_manager_update_order(active);
+    assert((active_order == std::vector<RuntimeAppendEvent>{
+                                {2, RuntimeAppendRole::primary},
+                                {5, RuntimeAppendRole::primary},
+                                {7, RuntimeAppendRole::primary},
+                                {2, RuntimeAppendRole::attached_secondary},
+                                {5, RuntimeAppendRole::attached_secondary},
+                            }));
 
     // The later full-vector update preserves that order for simultaneous
     // results. Once the first event activates terminal routing, the next

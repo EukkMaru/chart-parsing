@@ -88,6 +88,11 @@ motion deadline completes through distinct terminal states.
   result remains the start coarse tier and passes through the active result
   controller before the shared result wrapper. Timeouts submit fixed anonymous
   bytes 0/1 with side code 2.
+- Flick's `+0x48` wrapper is opcode-identical to Mine's: it applies the same
+  active result-control remap to its incoming result byte, then forwards the
+  unchanged remaining arguments to the common one-position feedback wrapper.
+  Reapplication after an ordinary producer-side remap is idempotent; the
+  wrapper is not a direction or position transform.
 - Active forced-result mode bypasses both edge and motion. After an external
   timing point, it selects the manager's forced result byte and alternates
   phases 4/5 through a single global flag. Construction writes that flag true;

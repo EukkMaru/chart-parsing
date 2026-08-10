@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `timing.tempo_measure`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -17,6 +17,8 @@ of the BPM values used by AirHold, AirSlide, and HeavenHold adaptive sampling.
 `MET` records consume that schedule to build meter/grid data but do not alter
 note schedules or cadence. Duplicate ordering and malformed numeric domains
 follow the exact compiled sort and unguarded IEEE arithmetic described below.
+The first MET integer is the beat unit and the second is the count; they
+generate 384/unit beat steps and count*384/unit bar steps.
 
 ## Anchors
 
@@ -82,8 +84,12 @@ follow the exact compiled sort and unguarded IEEE arithmetic described below.
   and schedules each 0x18-byte record through the same lookup, then stores its
   two meter integers. The meter postprocessor sorts these records, removes
   equivalent adjacent positions, and synthesizes a position-zero record from
-  `MET_DEF` when needed. It populates four scheduled grid vectors; a zero in
-  either meter component stops further meter subdivision generation.
+  `MET_DEF` when needed. Its generated beat step is unsigned integer
+  `resolution / first_meter_integer`; its generated bar step is unsigned
+  integer `second_meter_integer * resolution / first_meter_integer`. At fixed
+  resolution 384, `4 3` therefore produces 96-tick beats and 288-tick bars.
+  Each MET position restarts the sequences. A zero in either component breaks
+  further subdivision generation before division.
 - The shared final schedule refresh rewrites scheduled fields for MET, note,
   path/control, and generated grid records through the BPM lookup. MET values
   are never an input to that lookup.
@@ -126,10 +132,9 @@ separates gameplay scheduling from the meter-derived grid consumers.
 
 ## Unknowns
 
-- Meter field player-facing names and the rendering/audio meanings of all four
-  generated grid vectors are not assigned. Their lack of input to note
-  scheduling and adaptive cadence is normative; presentation behavior is out
-  of scope unless a later judgement dependency appears.
+- The exact player-facing labels and complete rendering/audio meanings of all
+  four generated grid vectors are not assigned. The arithmetic roles of the
+  two fields and the post-materialization render-only consumer are closed.
 
 ## Consequences
 
@@ -140,8 +145,8 @@ separates gameplay scheduling from the meter-derived grid consumers.
   references.
 - Reconstruction code: `ChartPosition`, `BpmScheduleRecord`,
   `snapshot_bpm_sort`, position normalization, BPM finalization,
-  position-to-schedule, scheduled-BPM selection, and malformed adaptive-step
-  evaluators.
+  position-to-schedule, scheduled-BPM selection, `c2s_meter_grid_steps`, and
+  malformed adaptive-step evaluators.
 - Tests: `tests/tempo_map_test.cpp`.
 
 ## Verification

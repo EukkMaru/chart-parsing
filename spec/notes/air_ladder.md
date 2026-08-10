@@ -152,8 +152,10 @@ segments to projected range `[-600, 50]` and fills three resource-owned vertex
 streams. It then calls the render diagnostic accumulator in category order 7,
 9, 8; this counts vertex triples and is not a draw-order interface. Every
 vertex is `0x18` bytes with render lateral,
-vertical and projected coordinates, a packed external color, and two neutral
-coordinates. Stream 0 is one full-vertical six-vertex quad with decoded-width
+vertical and projected coordinates, an executable-owned packed color, and two
+neutral coordinates. Streams 0 and 1 use exact white `0xffffffff`; stream 2
+uses exact low-alpha white `0x40ffffff`. Stream 0 is one full-vertical
+six-vertex quad with decoded-width
 half extent `1.5 * width`. Stream 1 is one six-vertex quad on vertical zero;
 its width scale is `0.75` below/equal zero, `0.65` at/above `15.574`, and the
 recovered linear expression between. Stream 2 is a full-vertical quad emitted

@@ -352,7 +352,16 @@
     "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
   ];
   const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
+  const SLIDE_HLD_STYLE_CODE = 1;
   const SLIDE_FEEDBACK = ["UP", "DW", "CE", "RC", "LC", "RS", "LS", "BS"];
+  const HEAVEN_GEOMETRY_FLAGS = [0, 1, 0, 1, 0];
+  const HEAVEN_GEOMETRY_MODES = [0, 0, 1, 1, 0x83];
+  const heavenGeometryFlag = discriminator =>
+    0 <= discriminator && discriminator < HEAVEN_GEOMETRY_FLAGS.length
+      ? HEAVEN_GEOMETRY_FLAGS[discriminator] : 0;
+  const heavenGeometryMode = discriminator =>
+    0 <= discriminator && discriminator < HEAVEN_GEOMETRY_MODES.length
+      ? HEAVEN_GEOMETRY_MODES[discriminator] : 0x83;
   const FAM = {
     TAP: { kind: "tap",   color: "#ff4d4d", label: "Tap" },
     CHR: { kind: "tap",   color: "#ffd633", label: "ExTap" },
@@ -379,10 +388,18 @@
     ASD: { kind: "aslide",color: "#7ef08a", label: "Air slide" },
     ALD: { kind: "ald",   color: "#a35cff", label: "Air crush" },
     ASO: { kind: "asolid",color: "#8891ad", label: "Air solid" },
-    HHD: { kind: "hold",  color: "#ffa9e0", label: "Heaven hold" },
-    HHX: { kind: "hold",  color: "#ffa9e0", label: "Heaven hold" },
+    HHD: { kind: "heaven",color: "#ffa9e0", label: "Heaven hold" },
+    HHX: { kind: "heaven",color: "#ffa9e0", label: "Heaven hold" },
     SLA: { kind: "region",color: "#5b6176", label: "Region" },
   };
+  const PARSED_TYPE = {
+    TAP: 0, HLD: 1, HXD: 1,
+    SLD: 2, SXD: 2, SLC: 2, SXC: 2,
+    AIR: 3, AUR: 3, AUL: 3, ADW: 3, ADR: 3, ADL: 3,
+    CHR: 4, AHD: 5, AHX: 5, FLK: 6, ASD: 8, ASC: 8,
+    ALD: 9, ASO: 10, MNE: 11, SLA: 12, HHD: 13, HHX: 13,
+  };
+  const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11]);
 
   // Group-1 chart-region forms. These rewrite a pending note's scheduled
   // position before the materialization test, above the 30.0F raw-delta
@@ -397,16 +414,33 @@
     CLK: { label: "Click",       color: "#8891ad", factor: false, key: false, point: true },
   };
 
-  // Commands the reconstruction accounts for outside the note families.
-  const HEADER_CMDS = new Set([
+  // Exact descriptor IDs 0x00..0x5a from the executable. Prefixes are never
+  // accepted: an unknown T_* spelling is unknown, not an inert statistic.
+  const DERIVED_CMDS = [
+    "T_REC_TAP","T_REC_CHR","T_REC_FLK","T_REC_MNE","T_REC_HLD","T_REC_SLD","T_REC_AIR","T_REC_AHD","T_REC_ALL",
+    "T_NOTE_TAP","T_NOTE_CHR","T_NOTE_FLK","T_NOTE_MNE","T_NOTE_HLD","T_NOTE_SLD","T_NOTE_AIR","T_NOTE_AHD","T_NOTE_ALL",
+    "T_NUM_TAP","T_NUM_CHR","T_NUM_FLK","T_NUM_MNE","T_NUM_HLD","T_NUM_SLD","T_NUM_AIR","T_NUM_AHD","T_NUM_AAC",
+    "T_CHRTYPE_UP","T_CHRTYPE_DW","T_CHRTYPE_CE","T_CHRTYPE_RC","T_CHRTYPE_LC","T_CHRTYPE_RS","T_CHRTYPE_LS","T_CHRTYPE_BS",
+    "T_LEN_HLD","T_LEN_SLD","T_LEN_AHD","T_LEN_ALL",
+    "T_JUDGE_TAP","T_JUDGE_HLD","T_JUDGE_SLD","T_JUDGE_AIR","T_JUDGE_FLK","T_JUDGE_ALL",
+  ];
+  const HEADER_CMDS = [
     "VERSION","MUSIC","SEQUENCEID","DIFFICULT","LEVEL","CREATOR","BPM_DEF",
     "MET_DEF","RESOLUTION","CLK_DEF","PROGJUDGE_BPM","PROGJUDGE_AER","TUTORIAL",
-    "BPM","MET",
+  ];
+  const TIMING_CMDS = ["BPM","MET","STP","SFL","SFE","SLP","DCM","CLK"];
+  const REGISTERED_CMDS = new Set([
+    ...HEADER_CMDS, ...TIMING_CMDS, ...Object.keys(FAM), ...DERIVED_CMDS,
   ]);
-  const LEGACY_TPROG = new Set(
-    ["00","05","10","15","20","25","30","35","40","45",
-     "50","55","60","65","70","75","80","85","90","95"].map(s => "T_PROG_" + s)
-  );
+  const LEGACY_CMDS = new Set([
+    "T_FIRST_MSEC","T_FIRST_RES","T_FINAL_MSEC","T_FINAL_RES",
+    ...["00","05","10","15","20","25","30","35","40","45",
+        "50","55","60","65","70","75","80","85","90","95"]
+      .map(s => "T_PROG_" + s),
+  ]);
+  if (REGISTERED_CMDS.size !== 91 || DERIVED_CMDS.length !== 45) {
+    throw new Error("internal C2S descriptor registry mismatch");
+  }
 
   // ---- parsing ------------------------------------------------------------
   const c2sInt = value => Number.isNaN(Number.parseInt(value, 10))
@@ -427,11 +461,332 @@
     return Number.isNaN(parsed) ? 0 : Math.trunc(parsed * 10 + 0.5) * 0.1;
   };
 
+  // Exact 32-bit MSVC three-way introsort instantiated by this snapshot for
+  // BPM and keyed interval records. Keeping it here defines equivalent/NaN
+  // ordering instead of inheriting the browser's stable Array.sort policy.
+  function snapshotMsvcSort(records, precedes) {
+    const swap = (left, right) => {
+      if (left === right) return;
+      const value = records[left]; records[left] = records[right]; records[right] = value;
+    };
+    const medianThree = (left, middle, right) => {
+      if (precedes(records[middle], records[left])) swap(middle, left);
+      if (precedes(records[right], records[middle])) {
+        swap(right, middle);
+        if (precedes(records[middle], records[left])) swap(middle, left);
+      }
+    };
+    const guessMedian = (first, last) => {
+      const count = last - first, middle = first + Math.floor(count / 2), right = last - 1;
+      if (count >= 42) {
+        const step = Math.floor(count / 8);
+        medianThree(first, first + step, first + step * 2);
+        medianThree(middle - step, middle, middle + step);
+        medianThree(right - step * 2, right - step, right);
+        medianThree(first + step, middle, right - step);
+      } else {
+        medianThree(first, middle, right);
+      }
+    };
+    const partition = (first, last) => {
+      guessMedian(first, last);
+      const middle = first + Math.floor((last - first) / 2);
+      let equalFirst = middle, equalLast = middle + 1;
+      while (first < equalFirst &&
+             !precedes(records[equalFirst - 1], records[equalFirst]) &&
+             !precedes(records[equalFirst], records[equalFirst - 1])) equalFirst--;
+      while (equalLast < last &&
+             !precedes(records[equalLast], records[equalFirst]) &&
+             !precedes(records[equalFirst], records[equalLast])) equalLast++;
+      let scanRight = equalLast, scanLeft = equalFirst;
+      for (;;) {
+        for (; scanRight < last; scanRight++) {
+          if (precedes(records[equalFirst], records[scanRight])) continue;
+          if (precedes(records[scanRight], records[equalFirst])) break;
+          swap(equalLast, scanRight); equalLast++;
+        }
+        for (; first < scanLeft; scanLeft--) {
+          const candidate = scanLeft - 1;
+          if (precedes(records[candidate], records[equalFirst])) continue;
+          if (precedes(records[equalFirst], records[candidate])) break;
+          equalFirst--; swap(equalFirst, candidate);
+        }
+        if (scanLeft === first) {
+          if (scanRight === last) return { equalFirst, equalLast };
+          swap(equalLast, scanRight); equalLast++; scanRight++;
+        } else if (scanRight === last) {
+          scanLeft--; equalFirst--; swap(scanLeft, equalFirst);
+          equalLast--; swap(equalFirst, equalLast);
+        } else {
+          scanLeft--; swap(scanRight, scanLeft); scanRight++;
+        }
+      }
+    };
+    const insertionSort = (first, last) => {
+      for (let next = first + 1; next < last; next++) {
+        const value = records[next];
+        if (precedes(value, records[first])) {
+          for (let hole = next; hole > first; hole--) records[hole] = records[hole - 1];
+          records[first] = value;
+          continue;
+        }
+        let hole = next;
+        while (precedes(value, records[hole - 1])) {
+          records[hole] = records[hole - 1]; hole--;
+        }
+        records[hole] = value;
+      }
+    };
+    const pushHeap = (first, hole, top, value) => {
+      while (top < hole) {
+        const parent = Math.floor((hole - 1) / 2);
+        if (!precedes(records[first + parent], value)) break;
+        records[first + hole] = records[first + parent]; hole = parent;
+      }
+      records[first + hole] = value;
+    };
+    const popHeapHole = (first, hole, bottom, value) => {
+      const top = hole, lastParent = Math.floor((bottom - 1) / 2);
+      while (hole < lastParent) {
+        let child = hole * 2 + 2;
+        if (precedes(records[first + child], records[first + child - 1])) child--;
+        records[first + hole] = records[first + child]; hole = child;
+      }
+      if (hole === lastParent && bottom % 2 === 0) {
+        records[first + hole] = records[first + bottom - 1]; hole = bottom - 1;
+      }
+      pushHeap(first, hole, top, value);
+    };
+    const heapSort = (first, last) => {
+      const count = last - first;
+      for (let hole = Math.floor(count / 2); hole > 0;) {
+        hole--; popHeapHole(first, hole, count, records[first + hole]);
+      }
+      for (let bottom = count; bottom > 1;) {
+        bottom--;
+        const value = records[first + bottom]; records[first + bottom] = records[first];
+        popHeapHole(first, 0, bottom, value);
+      }
+    };
+    const sortRange = (initialFirst, initialLast, initialIdeal) => {
+      let first = initialFirst, last = initialLast, ideal = initialIdeal;
+      for (;;) {
+        const count = last - first;
+        if (count < 33) { if (count > 1) insertionSort(first, last); return; }
+        if (ideal < 1) { heapSort(first, last); return; }
+        const equal = partition(first, last);
+        const half = Math.floor(ideal / 2); ideal = half + Math.floor(half / 2);
+        if (equal.equalFirst - first < last - equal.equalLast) {
+          sortRange(first, equal.equalFirst, ideal); first = equal.equalLast;
+        } else {
+          sortRange(equal.equalLast, last, ideal); last = equal.equalFirst;
+        }
+      }
+    };
+    sortRange(0, records.length, records.length);
+    return records;
+  }
+
+  (() => {
+    const precedes = (left, right) => left.p + 0.5 < right.p;
+    const equivalent = Array.from({ length: 42 }, (_, source) => ({ p: 3, source }));
+    snapshotMsvcSort(equivalent, precedes);
+    if (equivalent.some((record, index) => record.source !== index)) {
+      throw new Error("snapshot sort equivalent-region self-test failed");
+    }
+    const reverse = Array.from({ length: 100 }, (_, source) => ({ p: 99 - source, source }));
+    snapshotMsvcSort(reverse, precedes);
+    if (reverse.some((record, index) => record.p !== index)) {
+      throw new Error("snapshot sort reverse-range self-test failed");
+    }
+  })();
+
+  // The event parser owns associations, not the renderer. Process records in
+  // source order so a secondary cannot attach to a later root and two roots
+  // cannot both claim one AIR-family slot. Failed searches are reported and
+  // omitted, matching the parser diagnostic path rather than drawing orphans.
+  function normalizeEventAssociations(rawNotes) {
+    const notes = [], rejected = [], roots = [];
+    const slideChains = [], heavenChains = [];
+    const airHoldChains = [], airSlideChains = [];
+    const sameStart = (left, right) =>
+      left.p === right.p && left.lane === right.lane &&
+      left.width === right.width;
+    const endpointOf = n => ({
+      p: n.p + n.dur,
+      lane: n.endLane ?? n.lane,
+      width: n.endWidth ?? n.width,
+      vertical: n.h1 ?? n.h0 ?? 0,
+      isAction: !!n.isAction,
+    });
+    const sameHeavenPoint = (left, right) =>
+      sameStart(left, right) && left.vertical === right.vertical;
+    // AIR, AHD/AHX, and ASD/ASC compare the record's current endpoint fields.
+    // Lane/width are obtained through
+    // FUN_004574f0/FUN_011c5ca0, which select the final path record for types
+    // 2/9/10/13 and the base fields otherwise.
+    const rootLaneWidthPoint = root => {
+      if ((root.type === 2 || root.type === 13) && root.chain?.last) {
+        return root.chain.last;
+      }
+      if (root.type === 9 || root.type === 10 || root.type === 13) {
+        return endpointOf(root.note);
+      }
+      return root.note;
+    };
+    const rootAttachmentPoint = root => {
+      const geometry = rootLaneWidthPoint(root);
+      let p = root.note.p;
+      if ((root.type === 2 || root.type === 13) && root.chain?.last) {
+        p = root.chain.last.p;
+      }
+      else if (root.type === 1 || root.type === 9 || root.type === 10 || root.type === 13) {
+        p = root.note.p + root.note.dur;
+      }
+      return { p, lane: geometry.lane, width: geometry.width };
+    };
+    const compatibleRoot = (requestedType, n) =>
+      roots.find(root =>
+        root.type === requestedType && root.secondaryType === null &&
+        sameStart(rootAttachmentPoint(root), n));
+    const reject = (n, reason) => rejected.push({
+      cmd: n.cmd, root: n.root || "-", reason,
+    });
+
+    for (const n of rawNotes) {
+      n.parsedType = PARSED_TYPE[n.cmd];
+
+      if (n.kind === "slide") {
+        let chain = slideChains.find(candidate =>
+          candidate.styleCode === n.slideStyleCode &&
+          sameStart(candidate.last, n));
+        if (!chain) {
+          chain = {
+            styleCode: n.slideStyleCode,
+            segments: [], root: n, last: null,
+          };
+          slideChains.push(chain);
+          roots.push({ type: 2, note: n, secondaryType: null, chain });
+        }
+        chain.segments.push(n);
+        chain.last = endpointOf(n);
+        n.slideChain = chain;
+        notes.push(n);
+        continue;
+      }
+
+      if (n.kind === "heaven") {
+        const start = {
+          p: n.p, lane: n.lane, width: n.width, vertical: n.h0,
+        };
+        let chain = heavenChains.find(candidate =>
+          candidate.extended === n.heavenExtended &&
+          candidate.feedbackCode === n.heavenFeedbackCode &&
+          candidate.discriminator === n.heavenDiscriminator &&
+          candidate.parity === n.heavenParity &&
+          sameHeavenPoint(candidate.last, start));
+        if (!chain) {
+          chain = {
+            extended: n.heavenExtended,
+            feedbackCode: n.heavenFeedbackCode,
+            discriminator: n.heavenDiscriminator,
+            parity: n.heavenParity,
+            segments: [], root: n, last: null,
+          };
+          heavenChains.push(chain);
+          roots.push({ type: 13, note: n, secondaryType: null, chain });
+        }
+        chain.segments.push(n);
+        chain.last = endpointOf(n);
+        n.heavenChain = chain;
+        notes.push(n);
+        continue;
+      }
+
+      if (n.kind === "air") {
+        const requestedType = PARSED_TYPE[n.root];
+        const root = compatibleRoot(requestedType, n);
+        if (!root) {
+          reject(n, "no compatible unused root");
+          continue;
+        }
+        root.secondaryType = 3;
+        n.attachedRoot = root;
+        notes.push(n);
+        continue;
+      }
+
+      if (n.kind === "ahold") {
+        const requestedType = PARSED_TYPE[n.root];
+        let chain = null;
+        if (requestedType === 5) {
+          chain = airHoldChains.find(candidate =>
+            sameStart(candidate.last, n));
+        } else if (AIR_PATH_ROOT_TYPES.has(requestedType)) {
+          const root = compatibleRoot(requestedType, n);
+          if (root) {
+            root.secondaryType = 5;
+            chain = { root, segments: [], last: null };
+            airHoldChains.push(chain);
+          }
+        }
+        if (!chain) {
+          reject(n, "no compatible root or AirHold continuation");
+          continue;
+        }
+        n.secondaryChain = chain;
+        n.chainStart = chain.segments.length === 0;
+        chain.segments.push(n);
+        chain.last = endpointOf(n);
+        notes.push(n);
+        continue;
+      }
+
+      if (n.kind === "aslide") {
+        const requestedType = PARSED_TYPE[n.root];
+        let chain = null;
+        if (requestedType === 8) {
+          const referencedAction = n.root === "ASD";
+          chain = airSlideChains.find(candidate =>
+            sameStart(candidate.last, n) &&
+            candidate.last.isAction === referencedAction);
+        } else if (AIR_PATH_ROOT_TYPES.has(requestedType)) {
+          const root = compatibleRoot(requestedType, n);
+          if (root) {
+            root.secondaryType = 8;
+            chain = { root, segments: [], last: null };
+            airSlideChains.push(chain);
+          }
+        }
+        if (!chain) {
+          reject(n, "no compatible root or marker-matched AirSlide continuation");
+          continue;
+        }
+        n.secondaryChain = chain;
+        n.chainStart = chain.segments.length === 0;
+        chain.segments.push(n);
+        chain.last = endpointOf(n);
+        notes.push(n);
+        continue;
+      }
+
+      notes.push(n);
+      if (n.parsedType !== 12) {
+        roots.push({
+          type: n.parsedType, note: n, secondaryType: null, chain: null,
+        });
+      }
+    }
+
+    return { notes, rejected, slideChains, heavenChains };
+  }
+
   function parseC2s(text) {
     const lines = text.split(/\r?\n/);
     const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
-    const bpmEvents = [], metEvents = [], notes = [], markers = [], regions = [];
+    const bpmEvents = [], metEvents = [], rawNotes = [], markers = [], regions = [];
     const counts = new Map(), unknown = new Map();
+    let eventSourceOrder = 0;
 
     for (const raw of lines) {
       if (!raw.trim()) continue;
@@ -442,8 +797,8 @@
       // This snapshot recognizes RESOLUTION but has no accepting header case;
       // reset-owned 384 remains in force. CLK_DEF does not replace it either.
       if (cmd === "RESOLUTION" || cmd === "CLK_DEF") continue;
-      if (cmd === "BPM_DEF") { head.bpmDef = c2sFloat(f[0]) || head.bpmDef; continue; }
-      if (cmd === "MET_DEF") { head.metNum = c2sInt(f[0]) || 4; head.metDen = c2sInt(f[1]) || 4; continue; }
+      if (cmd === "BPM_DEF") { head.bpmDef = c2sFloat(f[0]); continue; }
+      if (cmd === "MET_DEF") { head.metNum = c2sInt(f[0]); head.metDen = c2sInt(f[1]); continue; }
       if (cmd === "CREATOR") { head.creator = f.join(" "); continue; }
       if (cmd === "VERSION") { head.version = f[0] || ""; continue; }
       if (cmd === "BPM") { bpmEvents.push({ m: c2sInt(f[0]), t: c2sInt(f[1]), bpm: c2sFloat(f[2]) }); continue; }
@@ -464,9 +819,10 @@
 
       const fam = FAM[cmd];
       if (!fam) {
-        // T_* records are chart statistics, not gameplay; they never reach the
-        // note factory. Everything else unrecognised is worth surfacing.
-        if (!HEADER_CMDS.has(cmd) && !LEGACY_TPROG.has(cmd) && !cmd.startsWith("T_")) {
+        // Registered group-3 records are overwritten by the parser's derived
+        // summary pass. The exact 24 legacy names are discarded by this
+        // snapshot. Every other spelling is surfaced, including unknown T_*.
+        if (!REGISTERED_CMDS.has(cmd) && !LEGACY_CMDS.has(cmd)) {
           unknown.set(cmd, (unknown.get(cmd) || 0) + 1);
           // Every gameplay family in this format opens with measure and tick.
           // That much is deducible for an unrecognised command; nothing else is.
@@ -480,14 +836,37 @@
 
       const n = {
         cmd, kind: fam.kind, color: fam.color,
+        sourceOrder: eventSourceOrder++,
         m: c2sInt(f[0]), t: c2sInt(f[1]), lane: c2sInt(f[2]), width: c2sWidth(f[3]),
         dur: 0, endLane: null, endWidth: null, h0: 0, h1: 0, style: "", root: "",
       };
 
       switch (fam.kind) {
         case "hold": n.dur = c2sInt(f[4]); n.style = f[5] || ""; break;
+        case "heaven":
+          // HHD/HHX do not use HOLD's five-field tail. The type-13 parser
+          // rounds the two authored vertical values to tenths, reads duration
+          // from token 6, and stores token 10 as the presentation
+          // discriminator. HHX alone decodes token 11 through the same exact
+          // eight-entry feedback table used by extended Slide roots.
+          n.h0 = Math.trunc(c2sFloat(f[4]) * 10 + 0.5) * 0.1;
+          n.dur = c2sInt(f[5]);
+          n.endLane = c2sInt(f[6]);
+          n.endWidth = c2sWidth(f[7]);
+          n.h1 = Math.trunc(c2sFloat(f[8]) * 10 + 0.5) * 0.1;
+          n.heavenDiscriminator = c2sInt(f[9]);
+          n.heavenParity = n.heavenDiscriminator % 2 === 1;
+          n.heavenExtended = cmd === "HHX";
+          n.heavenFeedbackCode = n.heavenExtended
+            ? exactIndexOrZero(SLIDE_FEEDBACK, f[10]) : 0;
+          n.heavenRuntime = "heaven_hold";
+          break;
         case "slide":
-          n.dur = c2sInt(f[4]); n.endLane = c2sInt(f[5]); n.endWidth = c2sWidth(f[6]);
+          n.dur = c2sInt(f[4]); n.endLane = c2sInt(f[5]);
+          // The six-field legacy form constructs the control with the root
+          // width. The binary's count includes the command token, so more
+          // than seven total tokens means at least seven data fields.
+          n.endWidth = f.length > 6 ? c2sWidth(f[6]) : n.width;
           n.style = f[7] || "";
           n.slideStyleCode = exactIndexOrZero(SLIDE_STYLE, n.style);
           n.slideExtendedRoot = cmd === "SXD" || cmd === "SXC";
@@ -527,45 +906,50 @@
           n.dur = c2sInt(f[4]); n.tag = c2sInt(f[5]); break;
         default: break;
       }
-      notes.push(n);
+      rawNotes.push(n);
     }
 
     // position in ticks -> milliseconds, walking the tempo schedule
     const R = head.resolution;
     const pos = e => e.m * R + e.t;
-    bpmEvents.sort((a, b) => pos(a) - pos(b));
-    // The first sorted record's own BPM covers chart zero to its position;
-    // BPM_DEF never synthesizes a tempo record, and with no BPM records
-    // every scheduled lookup returns zero (spec/timing.md).
-    if (bpmEvents.length && pos(bpmEvents[0]) > 0) {
-      bpmEvents.unshift({ m: 0, t: 0, bpm: bpmEvents[0].bpm });
-    }
-
+    snapshotMsvcSort(bpmEvents, (left, right) =>
+      pos(left) + 0.5 < pos(right));
     const seg = [];
     let acc = 0;
     for (let i = 0; i < bpmEvents.length; i++) {
       const p = pos(bpmEvents[i]);
-      const msPerTick = bpmEvents[i].bpm > 0 ? 240000 / (bpmEvents[i].bpm * R) : 0;
-      if (i > 0) acc += (p - seg[i - 1].p) * seg[i - 1].msPerTick;
+      const previousP = i > 0 ? seg[i - 1].p : 0;
+      const previousBpm = i > 0 ? bpmEvents[i - 1].bpm : bpmEvents[0].bpm;
+      acc += (p - previousP) * (240000 / (previousBpm * R));
+      const msPerTick = 240000 / (bpmEvents[i].bpm * R);
       seg.push({ p, ms: acc, msPerTick, bpm: bpmEvents[i].bpm });
     }
-    if (!seg.length) seg.push({ p: 0, ms: 0, msPerTick: 0, bpm: 0 });
     const timeAt = p => {
-      let s = seg[0];
-      for (let i = 1; i < seg.length && seg[i].p <= p; i++) s = seg[i];
+      if (!seg.length) return 0;
+      let s = null;
+      // The parser's comparison shifts the query by half one fixed-grid tick.
+      for (let i = 0; i < seg.length && seg[i].p <= p + 0.5; i++) s = seg[i];
+      if (!s) return 0;
       return s.ms + (p - s.p) * s.msPerTick;
     };
     // Inverse, for seeking to a grid position from a wall-clock offset.
     const posAt = ms => {
+      if (!seg.length) return 0;
       let s = seg[0];
       for (let i = 1; i < seg.length && seg[i].ms <= ms; i++) s = seg[i];
       return s.msPerTick > 0 ? s.p + (ms - s.ms) / s.msPerTick : s.p;
     };
 
-    for (const n of notes) {
+    for (const n of rawNotes) {
       n.p = n.m * R + n.t;
       n.time = timeAt(n.p);
       n.endTime = n.dur > 0 ? timeAt(n.p + n.dur) : n.time;
+    }
+    const associations = normalizeEventAssociations(rawNotes);
+    const notes = associations.notes;
+    for (const rejected of associations.rejected) {
+      const label = rejected.cmd + " (rejected association)";
+      unknown.set(label, (unknown.get(label) || 0) + 1);
     }
     const { chains: aldChains, samples: aldSamples } =
       buildAirLadderChains(notes, timeAt);
@@ -580,40 +964,58 @@
     }
     regions.sort((a, b) => a.time - b.time);
 
-    // Meter is a state schedule like BPM, not a bounded interval: a record has
-    // no duration and stays in force until the next one, so the list is sorted
-    // and seeded at position zero from MET_DEF. The fields read as unit then
-    // count — `4 3` is 3/4 — which is the inverse of the usual notation; that
-    // reading is inferred from the corpus, the reconstruction only calls them
-    // two integer meter fields. A zero count stops subdivision, matching the
-    // spec's note that a zero meter component halts subdivision generation.
-    metEvents.sort((a, b) => (a.m * R + a.t) - (b.m * R + b.t));
+    // MET field 1 is the beat unit and field 2 is the count. The producer uses
+    // count*384/unit for the bar vector and 384/unit for the beat vector. Each
+    // MET position restarts both sequences; either zero component terminates
+    // all subsequent subdivision generation.
+    snapshotMsvcSort(metEvents, (left, right) =>
+      left.m * R + left.t + 0.5 < right.m * R + right.t);
     if (!metEvents.length || metEvents[0].m * R + metEvents[0].t > 0) {
       metEvents.unshift({ m: 0, t: 0, n: head.metNum, d: head.metDen });
     }
-    const beatsPerBarAt = p => {
-      let e = metEvents[0];
-      for (let i = 1; i < metEvents.length && metEvents[i].m * R + metEvents[i].t <= p; i++) {
-        e = metEvents[i];
-      }
-      // A zero in EITHER meter component stops subdivision generation
-      // (spec/timing.md); the count field is the second integer.
-      return (e.n > 0 && e.d > 0) ? e.d : 0;
-    };
-
-    // Bar boundaries stay every R ticks — position is major*R + minor whatever
-    // the meter — so only the beats inside a bar move.
+    const uniqueMetEvents = [];
+    for (const e of metEvents) {
+      const p = e.m * R + e.t;
+      if (uniqueMetEvents.length && uniqueMetEvents[uniqueMetEvents.length - 1].p === p) continue;
+      uniqueMetEvents.push({ ...e, p });
+    }
     const beats = [];
-    const lastBar = notes.length ? Math.floor(notes[notes.length - 1].p / R) + 2 : 8;
-    for (let bar = 0; bar <= lastBar; bar++) {
-      const base = bar * R;
-      const count = beatsPerBarAt(base);
-      beats.push({ p: base, time: timeAt(base), bar: true, m: bar, b: 1 });
-      if (count < 2) continue; // 0 stops subdivision; 1 leaves only the bar line
-      const step = R / count;
-      for (let i = 1; i < count; i++) {
-        const p = base + i * step;
-        beats.push({ p, time: timeAt(p), bar: false, m: bar, b: i + 1 });
+    const lastGridTick = Math.max(
+      8 * R,
+      ...notes.map(n => n.p + Math.max(0, n.dur)),
+      ...uniqueMetEvents.map(e => e.p),
+    ) + 2 * R;
+    for (let index = 0; index < uniqueMetEvents.length; index++) {
+      const e = uniqueMetEvents[index];
+      const end = index + 1 < uniqueMetEvents.length
+        ? uniqueMetEvents[index + 1].p : lastGridTick;
+      const unit = e.n, count = e.d;
+      if (unit === 0 || count === 0) break;
+      const beatStep = Math.trunc(R / unit);
+      const barStep = Math.trunc((count * R) / unit);
+      // The executable's malformed signed/unsigned division domain can yield
+      // zero and nonprogress. Refuse to invent a finite grid for that domain.
+      if (beatStep <= 0 || barStep <= 0) break;
+      const bars = new Set();
+      const beatPositions = new Set();
+      for (let p = e.p; p < end; p += barStep) bars.add(p);
+      let ordinal = 0;
+      for (let p = e.p; p < end; p += beatStep) {
+        beatPositions.add(p);
+        const bar = bars.has(p);
+        if (bar) ordinal = 0;
+        beats.push({
+          p, time: timeAt(p), bar,
+          m: Math.floor(p / R), b: ordinal + 1,
+        });
+        ordinal++;
+      }
+      // A non-integral ratio can put a bar between beat-vector entries. Both
+      // vectors exist independently in the source, so retain those boundaries.
+      for (const p of bars) {
+        if (!beatPositions.has(p)) {
+          beats.push({ p, time: timeAt(p), bar: true, m: Math.floor(p / R), b: 1 });
+        }
       }
     }
     beats.sort((a, b) => a.p - b.p);
@@ -621,10 +1023,10 @@
     // Positions where the signature actually changes, for the grid marker.
     // Repeats of the value already in force are dropped: they mark nothing.
     const meters = [];
-    for (const e of metEvents) {
+    for (const e of uniqueMetEvents) {
       const prev = meters[meters.length - 1];
       if (prev && prev.n === e.n && prev.d === e.d) continue;
-      const p = e.m * R + e.t;
+      const p = e.p;
       meters.push({ p, time: timeAt(p), n: e.n, d: e.d });
     }
 
@@ -637,9 +1039,11 @@
       const key = r.def.key ? r.key : 0;
       const factor = r.def.factor ? r.factor : 0;
       if (!regionsByKey.has(key)) regionsByKey.set(key, []);
-      regionsByKey.get(key).push({ start: r.time, end: r.endTime, factor });
+      regionsByKey.get(key).push({ p: r.p, start: r.time, end: r.endTime, factor });
     }
-    for (const list of regionsByKey.values()) list.sort((a, b) => a.start - b.start);
+    for (const list of regionsByKey.values()) {
+      snapshotMsvcSort(list, (left, right) => left.p + 0.5 < right.p);
+    }
 
     // DCM is a separate query and stays in source order even though region UI
     // records above are sorted for drawing.
@@ -670,11 +1074,9 @@
       if (n.kind === "region") continue;
       n.slaKey = selectSlaKey(n.p, n.lane, n.width);
       // Every sustained record projects its far end through the endpoint's
-      // own independently selected key, never the root's. Recovered outright
-      // for Slide (spec/notes/slide.md, endpoint keyed schedule; footage
-      // 2898_03 m27) and for ALD authored endpoints; for hold/ASO/HeavenHold
-      // the recovered statement is the materialization endpoint-retry key,
-      // and using it for drawn projection is inference — issue #12.
+      // own independently selected key, never the root's. Direct presentation
+      // consumers are recovered for HOLD (type 1), Slide (2), ALD (9), ASO
+      // (10), and HeavenHold (13), in addition to materialization retry.
       n.endSlaKey = n.dur > 0
         ? selectSlaKey(n.p + n.dur, n.endLane ?? n.lane, n.endWidth ?? n.width)
         : n.slaKey;
@@ -684,10 +1086,15 @@
         sample.p, sample.lane, sample.width, true);
     }
 
+    const heavenPresentations = buildHeavenHoldPresentations(
+      associations.heavenChains, associations.slideChains, aldChains,
+      selectSlaKey, timeAt);
+
     const dur = notes.length ? Math.max(...notes.map(n => n.endTime)) : 0;
     return { head, notes, markers, regions, regionsByKey, dcm, slas,
-             aldChains, aldSamples, counts,
-             unknown, beats, meters, duration: dur, seg, R, timeAt, posAt };
+             aldChains, aldSamples, heavenPresentations, counts,
+             unknown, associationRejects: associations.rejected,
+             beats, meters, duration: dur, seg, R, timeAt, posAt };
   }
 
   // ---- window trimming ----------------------------------------------------
@@ -718,22 +1125,77 @@
   const SLIDE_MARKER = { SLD: 1, SXD: 1, SLC: 0, SXC: 0 };
 
   function markSlideBoundaries(notes) {
-    // Continuation requires position, lane, bounded width, and the decoded
-    // style/connection code to match the previous point. The command's first
-    // bit is a root property and is deliberately not a continuation key.
     const slides = notes.filter(n => n.kind === "slide");
-    const head = n => `${n.p}:${n.lane}:${n.width}:${n.slideStyleCode}`;
-    const tail = n => `${n.p + n.dur}:${n.endLane ?? n.lane}:${n.endWidth ?? n.width}:${n.slideStyleCode}`;
-    const startsAt = new Set(slides.map(head));
-    const endsAt = new Set(slides.map(tail));
     for (const n of slides) {
-      n.isRoot = !endsAt.has(head(n));
-      n.isFinal = !startsAt.has(tail(n));
+      const segments = n.slideChain.segments;
+      const index = segments.indexOf(n);
+      n.isRoot = index === 0;
+      n.isFinal = index === segments.length - 1;
       n.marker = n.slideRuntime === "slide" && SLIDE_MARKER[n.cmd] === 1;
       n.endpointResource = n.slideRuntime === "slide" && (n.marker || n.isFinal);
       n.bar = n.isRoot || n.endpointResource;
       n.forcedBar = n.slideRuntime === "slide" && !n.marker && n.isFinal;
     }
+  }
+
+  // Type 13 has one presentation object per accepted parsed chain, regardless
+  // of whether that chain originated as HHD/HHX, an HLD-styled Slide, or the
+  // exact zero/NON ALD exception. The precompute walks authored endpoints;
+  // generated judgement samples never define this mesh.
+  function buildHeavenHoldPresentations(
+    directChains, slideChains, aldChains, selectSlaKey, timeAt) {
+    const models = [];
+    const add = (segments, discriminator, origin) => {
+      if (!segments.length) return;
+      const root = segments[0];
+      const points = [{
+        p: root.p, time: root.time, lane: root.lane, width: root.width,
+        vertical: root.h0 || 0,
+        slaKey: selectSlaKey(root.p, root.lane, root.width),
+      }];
+      for (const segment of segments) {
+        const p = segment.p + segment.dur;
+        const lane = segment.endLane ?? segment.lane;
+        const width = segment.endWidth ?? segment.width;
+        points.push({
+          p, time: timeAt(p), lane, width,
+          vertical: segment.h1 || 0,
+          slaKey: selectSlaKey(p, lane, width),
+        });
+      }
+      const model = {
+        origin, root, segments, points, discriminator,
+        geometryFlag: heavenGeometryFlag(discriminator),
+        geometryMode: heavenGeometryMode(discriminator),
+      };
+      root.heavenPresentationRoot = true;
+      root.heavenPresentation = model;
+      for (const segment of segments) segment.heavenPresentation = model;
+      models.push(model);
+    };
+
+    for (const chain of directChains) {
+      add(chain.segments, chain.discriminator, "direct");
+    }
+    for (const chain of slideChains) {
+      if (chain.styleCode === SLIDE_HLD_STYLE_CODE) {
+        // The rewrite's 10 is the root/control path scalar (+0x30/+0x18).
+        // Parsed +0xb0, which selects the mirror/mode tables, remains at the
+        // constructor default zero for a Slide-origin chain.
+        for (const segment of chain.segments) {
+          segment.h0 = 1.0;
+          segment.h1 = 1.0;
+        }
+        add(chain.segments, 0, "slide_hld");
+      }
+    }
+    for (const chain of aldChains) {
+      if (chain.interval === 0 && chain.style === "NON") {
+        add(chain.controls.map(control => control.segment), 0,
+            "ald_zero_non");
+      }
+    }
+    return models;
   }
 
   // Guide cue instants, owner-specified 2026-08-07. Cued: tap/ExTap/flick
@@ -769,26 +1231,6 @@
     }
     for (const sample of chart.aldSamples) out.push(sample.time);
     return out.sort((a, b) => a - b);
-  }
-
-  // AirHold and AirSlide own an air-up start component: air_hold_start_profile
-  // and air_slide_start_profile both resolve AirDirectionCode::air. Charts
-  // never author a separate AIR record for it, so the arrow has to come from
-  // the note itself. Only the first record of a chain carries one.
-  function markAirChainStarts(notes) {
-    const continues = new Set();
-    for (const n of notes) {
-      if (n.kind !== "ahold" && n.kind !== "aslide") continue;
-      const endLane = n.endLane ?? n.lane;
-      continues.add(`${n.p + n.dur}:${endLane}`);
-    }
-    const seen = new Set();
-    for (const n of notes) {
-      if (n.kind !== "ahold" && n.kind !== "aslide") continue;
-      const at = `${n.p}:${n.lane}`;
-      n.chainStart = !continues.has(at) && !seen.has(at);
-      if (n.chainStart) seen.add(at);
-    }
   }
 
   // Recovered type-9 producer. Authored ALD endpoints are 0x24-byte controls;
@@ -969,14 +1411,12 @@
   // the same chart position regardless of how far up the screen it reached.
   const FAR = 1.9;
 
-  // Authored height 1.0 is the lane surface: charts park a path at 1.0 while
-  // it runs along the floor beside a hold. The vertical scale is fixed and
-  // chart-independent: the recovered ALD stream-1 threshold of 15.574 render
-  // units equals (5 - 1) * 3.8934999, so authored value 5 IS the ordinary
-  // air height. Recovered for ALD; anchoring air slide/hold heights to the
-  // same scale is inference plus footage (2121_03) — issue #12. Taller
-  // records genuinely rise above the plane, unclamped (the binary's
-  // transform has no cap; the screen clip trims what leaves the frame).
+  // The common recovered vertical transform is (value-1)*3.8934999. ALD and
+  // AirSlide authored verticals use it directly; their action/checkpoint
+  // resources use the same transform plus 0.14999962. Ordinary AirHold has no
+  // authored vertical and retains constructor value 1, hence render vertical
+  // zero. The division by four below only maps those exact render units into
+  // this fitted camera's normalized lift coordinate.
   const ALD_UNITS_PER_LIFT = 15.574;                   // render units at the plane
   const ALD_EFFECT_LIFT = 0.14999962 / ALD_UNITS_PER_LIFT;
   function liftHeight(v) {
@@ -1490,8 +1930,14 @@
     const vis = [];
     for (const n of chart.notes) {
       if (n.kind === "region") continue;
+      if (n.heavenPresentation && !n.heavenPresentationRoot) continue;
       n.vt0 = scrolledTime(n.time, now, n.slaKey);
-      n.vt1 = scrolledTime(n.endTime, now, n.endSlaKey ?? n.slaKey);
+      const heavenEnd = n.heavenPresentation
+        ? n.heavenPresentation.points[n.heavenPresentation.points.length - 1]
+        : null;
+      const visibleEndTime = heavenEnd?.time ?? n.endTime;
+      const visibleEndKey = heavenEnd?.slaKey ?? n.endSlaKey ?? n.slaKey;
+      n.vt1 = scrolledTime(visibleEndTime, now, visibleEndKey);
       let dStart = n.vt0 - now, dEnd = n.vt1 - now;
       // Cull against the factored distance, or a slowed note gets dropped
       // while still on screen and a hastened one is kept after leaving.
@@ -1511,6 +1957,7 @@
     const keyOf = (ms, lane) => `${Math.round(ms / 8)}:${lane}`;
     const headKeys = new Set();
     for (const n of vis) {
+      if (n.heavenPresentation) continue;
       if (n.kind !== "slide" && n.kind !== "hold") continue;
       if (n.kind !== "slide" || n.isRoot) headKeys.add(keyOf(n.vt0, n.lane));
     }
@@ -1519,7 +1966,8 @@
     // Slide final endpoint is the builder's forced ending-marker resource,
     // not a synthetic judgement checkpoint; its original image is external.
     for (const n of vis) {
-      const capped = n.kind === "hold" || (n.kind === "slide" && n.isFinal);
+      const capped = !n.heavenPresentation &&
+        (n.kind === "hold" || (n.kind === "slide" && n.isFinal));
       if (!capped) continue;
       // The cap rides the same shared transform as the band end it closes —
       // keyed schedule plus projection factor — or it detaches from the body
@@ -1550,7 +1998,9 @@
       if (AIR_KINDS.has(n.kind) && !show.airNotes) continue;
       if (n.kind === "asolid" && !show.cosmetic) continue;
 
-      if (n.kind === "asolid") {
+      if (n.heavenPresentation) {
+        drawHeavenHold(n.heavenPresentation, W, H);
+      } else if (n.kind === "asolid") {
         drawAirSolid(n, t0, t1, W, H);
       } else if (n.kind === "ald") {
         for (const sample of n.generated || []) {
@@ -1569,7 +2019,9 @@
         }
       } else if (n.kind === "ahold") {
         drawAirHold(n, t0, t1, W, H);
-        if (n.chainStart) drawArrow(t0, n.lane, n.width, n.color, true, W, H);
+        if (n.chainStart) {
+          drawArrow(t0, n.lane, n.width, n.color, true, W, H, liftHeight(1));
+        }
       } else if (n.kind === "hold" || n.kind === "slide") {
         drawSustain(n, t0, t1, W, H);
       } else if (n.kind === "air") {
@@ -1785,6 +2237,127 @@
 
   }
 
+  // Asset-independent HeavenHold presentation. The executable builds one
+  // path point for the root and every authored endpoint, not for generated
+  // judgement samples. Its lateral center and half extent reduce exactly to
+  // the authored lane span after the common four-render-units-per-lane map.
+  // A nonzero +0xb0 mirror flag reflects authored endpoint spans about the
+  // root center. A nonzero geometry mode then reverses and reflects the live
+  // point sequence about its first/final midpoint before six vertices are
+  // emitted for every surviving adjacent pair.
+  function drawHeavenHold(model, W, H) {
+    const source = model.points.map((point, index) => {
+      let center = point.lane + point.width * 0.5;
+      const rootCenter = model.points[0].lane + model.points[0].width * 0.5;
+      if (index > 0 && model.geometryFlag !== 0) {
+        center = rootCenter * 2 - center;
+      }
+      return {
+        raw: point.time - now,
+        depth: depthAt(point.time, point.slaKey),
+        center,
+        width: point.width,
+        vertical: point.vertical,
+      };
+    });
+    let points = source;
+
+    // Once a nonzero-mode path has crossed the judgement origin, the builder
+    // disables points before the crossing and starts the retained geometry at
+    // the interpolated zero point. Ended paths are hidden by the phase owner;
+    // this chart-only preview has no input state, so the final cull below is
+    // its deterministic no-input equivalent.
+    if (model.geometryMode !== 0 && points.length > 1 && points[0].raw < 0) {
+      let crossing = -1;
+      for (let i = 0; i + 1 < points.length; i++) {
+        if (points[i].raw < 0 && 0 <= points[i + 1].raw) {
+          crossing = i;
+          break;
+        }
+      }
+      if (crossing >= 0) {
+        const left = points[crossing], right = points[crossing + 1];
+        const span = right.raw - left.raw;
+        const fraction = span !== 0 ? -left.raw / span : 0;
+        const mix = key => left[key] + (right[key] - left[key]) * fraction;
+        points = [{
+          raw: 0,
+          depth: mix("depth"),
+          center: mix("center"),
+          width: mix("width"),
+          vertical: mix("vertical"),
+        }, ...points.slice(crossing + 1)];
+      }
+    }
+
+    if (model.geometryMode !== 0 && points.length > 1) {
+      const first = points[0], last = points[points.length - 1];
+      points = [...points].reverse().map(point => ({
+        raw: point.raw,
+        depth: first.depth + last.depth - point.depth,
+        center: first.center + last.center - point.center,
+        width: point.width,
+        vertical: first.vertical + last.vertical - point.vertical,
+      }));
+    }
+
+    const interpolate = (from, to, fraction) => ({
+      raw: from.raw + (to.raw - from.raw) * fraction,
+      depth: from.depth + (to.depth - from.depth) * fraction,
+      center: from.center + (to.center - from.center) * fraction,
+      width: from.width + (to.width - from.width) * fraction,
+      vertical: from.vertical + (to.vertical - from.vertical) * fraction,
+    });
+    const clipSegment = (from, to) => {
+      if ((from.depth < nearClip() && to.depth < nearClip()) ||
+          (FAR < from.depth && FAR < to.depth)) return null;
+      const span = to.depth - from.depth;
+      if (span === 0) return [from, to];
+      const atNear = (nearClip() - from.depth) / span;
+      const atFar = (FAR - from.depth) / span;
+      const lower = Math.max(0, Math.min(atNear, atFar));
+      const upper = Math.min(1, Math.max(atNear, atFar));
+      if (upper < lower) return null;
+      return [interpolate(from, to, lower),
+              interpolate(from, to, upper)];
+    };
+    const heavenLift = value => (value - 1) / 4;
+    const quads = [];
+    for (let index = 0; index + 1 < points.length; index++) {
+      const clipped = clipSegment(points[index], points[index + 1]);
+      if (clipped) quads.push(clipped);
+    }
+    quads.sort((left, right) =>
+      Math.max(right[0].depth, right[1].depth) -
+      Math.max(left[0].depth, left[1].depth));
+    for (const [a, b] of quads) {
+      const aLeft = project(a.depth, a.center - a.width * 0.5,
+                            heavenLift(a.vertical), W, H);
+      const aRight = project(a.depth, a.center + a.width * 0.5,
+                             heavenLift(a.vertical), W, H);
+      const bLeft = project(b.depth, b.center - b.width * 0.5,
+                            heavenLift(b.vertical), W, H);
+      const bRight = project(b.depth, b.center + b.width * 0.5,
+                             heavenLift(b.vertical), W, H);
+      cx2.beginPath();
+      cx2.moveTo(aLeft.x, aLeft.y);
+      cx2.lineTo(bLeft.x, bLeft.y);
+      cx2.lineTo(bRight.x, bRight.y);
+      cx2.lineTo(aRight.x, aRight.y);
+      cx2.closePath();
+      cx2.fillStyle = model.root.color + "55";
+      cx2.fill();
+    }
+
+    // The start resource is independent from the single body resource and is
+    // phase-hidden separately. In no-input preview state, drawTap's recovered
+    // time clipping supplies the deterministic start-resource lifetime.
+    const rootPoint = model.points[0];
+    const rootDepth = depthAt(rootPoint.time, rootPoint.slaKey);
+    drawTap(model.root, rootDepth, W, H, rootPoint.lane, rootPoint.width,
+            rootColor(model.root));
+  }
+
   function drawAirBand(n, t0, t1, W, H) {
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
@@ -1836,8 +2409,9 @@
     // Anchor to the true endpoint, not the view-clamped one: clamping would
     // pin the marker at the far edge until the endpoint came into range.
     if (n.isAction && t1 <= FAR && t1 >= nearClip()) {
-      const p = project(t1, (n.endLane ?? n.lane) - pad, h1, W, H);
-      const q = project(t1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, h1, W, H);
+      const actionHeight = h1 + ALD_EFFECT_LIFT;
+      const p = project(t1, (n.endLane ?? n.lane) - pad, actionHeight, W, H);
+      const q = project(t1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, actionHeight, W, H);
       const th = Math.max(4, 11 * p.s);
       noteBar(p.x, p.y - th, q.x - p.x, th, ACTION);
     }
@@ -1994,10 +2568,11 @@
   function drawAirHold(n, t0, t1, W, H) {
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
-    // AHD authors no height, so it sits at the ordinary air height. It is
-    // straight: no end lane exists to travel toward. Drawn narrower than its
-    // lane span, with a solid air-up green line down the centre.
-    const h = AIR_PLANE;
+    // AHD authors no height. Its constructor retains value 1 and the exact
+    // common transform therefore places the resource-independent object at
+    // render vertical zero. External resource geometry can extend away from
+    // that origin, but is not available to this asset-free viewer.
+    const h = liftHeight(1);
     const inset = n.width * 0.24;
     const l0 = n.lane + inset, l1 = n.lane + n.width - inset;
     const a0 = project(s0, l0, h, W, H), b0 = project(s0, l1, h, W, H);
@@ -2034,20 +2609,16 @@
     }
   }
 
-  // Left/right spellings lean the block toward the side they name. The angle
-  // is cosmetic: the reconstruction keeps six direction codes but attaches no
-  // geometry to them, and only the up/down half reaches judgement.
+  // AirNote load mirrors the external resource's lateral scale for exact
+  // direction codes AUL (2) and ADR (4), while AUR (1) and ADL (5) retain the
+  // positive scale. That pairing is binary-backed. The 30-degree shear is an
+  // asset-free product glyph because the external resource shape is absent.
   const AIR_LEAN_DEG = 30; // lean off vertical, on screen
-  const LATERAL = { AUL: -1, ADL: -1, AUR: 1, ADR: 1 };
+  const AIR_SCALE_SIGN = { AUL: -1, ADR: -1, AUR: 1, ADL: 1 };
 
   function drawAirArrow(n, t, W, H) {
     const up = n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR";
-    // The shear anchors at the lane surface, so it displaces an up arrow's
-    // head but a down arrow's tail — which mirrors the read direction. Flip
-    // the lateral for down arrows so the chevron points where the motion
-    // goes (owner-verified against footage at 2517_03 m71: ADL/ADR read
-    // swapped without this).
-    const lat = (LATERAL[n.cmd] || 0) * (up ? 1 : -1);
+    const lat = AIR_SCALE_SIGN[n.cmd] || 0;
     drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, lat);
   }
 
@@ -2272,7 +2843,6 @@
   function load(text) {
     chart = parseC2s(text);
     computeTrims(chart.notes);
-    markAirChainStarts(chart.notes);
     markSlideBoundaries(chart.notes);
     chart.guideEvents = buildGuideEvents(chart);
     cancelGuides();
@@ -2437,8 +3007,70 @@
   // Optional local automation hook for corpus/reference sweeps. Normal users
   // still use the file picker; `?src=../music/.../chart.c2s` loads only a
   // same-origin URL (including another local file beside this offline viewer).
-  const sourceParam = new URLSearchParams(location.search).get("src");
-  if (sourceParam) {
+  const automationParams = new URLSearchParams(location.search);
+  const auditManifestParam = automationParams.get("auditManifest");
+  const auditReportParam = automationParams.get("auditReport");
+  const sourceParam = automationParams.get("src");
+  if (auditManifestParam && auditReportParam && location.protocol !== "file:") {
+    const manifestUrl = new URL(auditManifestParam, location.href);
+    const reportUrl = new URL(auditReportParam, location.href);
+    const report = {
+      charts: 0, parseErrors: 0, unknownRecords: 0,
+      rejectedAssociations: 0, rejectedByCommand: {},
+      rejectedByReference: {}, harnessErrors: 0,
+    };
+    try {
+      if (manifestUrl.origin !== location.origin || reportUrl.origin !== location.origin) {
+        throw new Error("audit endpoints must be same-origin");
+      }
+      const manifestRequest = new XMLHttpRequest();
+      manifestRequest.open("GET", manifestUrl, false);
+      manifestRequest.send();
+      if (manifestRequest.status !== 200) throw new Error("audit manifest unavailable");
+      const sources = JSON.parse(manifestRequest.responseText);
+      if (!Array.isArray(sources)) throw new Error("audit manifest must be an array");
+      report.charts = sources.length;
+      for (const source of sources) {
+        try {
+          const sourceUrl = new URL(String(source), location.href);
+          if (sourceUrl.origin !== location.origin) throw new Error("cross-origin chart");
+          const chartRequest = new XMLHttpRequest();
+          chartRequest.open("GET", sourceUrl, false);
+          chartRequest.send();
+          if (chartRequest.status !== 200) throw new Error("chart unavailable");
+          const parsed = parseC2s(chartRequest.responseText);
+          for (const rejected of parsed.associationRejects) {
+            const reference = `${rejected.cmd}:${rejected.root}`;
+            report.rejectedByReference[reference] =
+              (report.rejectedByReference[reference] || 0) + 1;
+          }
+          for (const [name, count] of parsed.unknown.entries()) {
+            if (name.endsWith(" (rejected association)")) {
+              report.rejectedAssociations += count;
+              const command = name.slice(0, -" (rejected association)".length);
+              report.rejectedByCommand[command] =
+                (report.rejectedByCommand[command] || 0) + count;
+            } else {
+              report.unknownRecords += count;
+            }
+          }
+        } catch (error) {
+          report.parseErrors++;
+        }
+      }
+    } catch (error) {
+      report.harnessErrors++;
+    }
+    try {
+      const reportRequest = new XMLHttpRequest();
+      reportRequest.open("POST", reportUrl, false);
+      reportRequest.setRequestHeader("Content-Type", "application/json");
+      reportRequest.send(JSON.stringify(report));
+    } catch (error) {
+      console.error(error);
+    }
+    document.title = `viewer audit: ${report.charts} charts, ${report.parseErrors} parse errors, ${report.unknownRecords} unknown, ${report.rejectedAssociations} rejected`;
+  } else if (sourceParam) {
     const sourceUrl = new URL(sourceParam, location.href);
     const sameLocal = location.protocol === "file:" && sourceUrl.protocol === "file:";
     const sameOrigin = location.protocol !== "file:" && sourceUrl.origin === location.origin;
@@ -2454,8 +3086,8 @@
         }
         load(request.responseText);
         const at = Number.parseFloat(
-          new URLSearchParams(location.search).get("at"));
-        const focus = new URLSearchParams(location.search).get("focus");
+          automationParams.get("at"));
+        const focus = automationParams.get("focus");
         if (Number.isFinite(at)) {
           now = Math.max(0, at);
           sync();

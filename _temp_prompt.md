@@ -10,8 +10,8 @@ for arbitrary user-selected files.
 1. Read `AGENTS.md` completely.
 2. Read every document it requires, in order.
 3. Treat `docs/VIEWER_ROADMAP.md` as the durable issue/status handoff. Read the
-   linked GitHub issues for their original reports, and read
-   `_temp_handoff_render_comparison.md` for unresolved session-local detail.
+   linked GitHub issues for their original reports, then read
+   `research/GITHUB_ISSUE_VERIFICATION.md` for the exact-binary verdicts.
 4. Run:
 
    ```bash
@@ -43,19 +43,23 @@ parse arbitrary C2S files and approximate the chart gameplay, but it frequently
 diverges from gameplay footage in shape and presentation. Its fitted values and
 guesses are not canonical merely because they already exist in code.
 
-The renderer author filed GitHub issues for ambiguous or contradictory areas.
-Review the issue bodies and current code, then reinforce or replace their
-hypotheses using focused Ghidra decompilation wherever the exact binary contains
-the answer. Footage is for discrepancy discovery and visual validation;
-gameplay/spec changes still require exact evidence.
+The renderer author's 12 GitHub issues and both temporary handoff notes were
+reviewed on 2026-08-07. Their durable verdicts are in
+`research/GITHUB_ISSUE_VERIFICATION.md`. Binary questions from that set are
+answered; the exact timing sort and full-corpus browser parser audit are now
+implemented; remaining work is exact hostile-input parity,
+type-13 presentation, resource-independent camera/geometry, result-state
+integration, and the broader presentation saturation audit. Footage is for
+discrepancy discovery and visual validation; gameplay/spec changes still
+require exact evidence.
 
 ## Current priorities
 
-1. Reconcile stale issue statements with the completed reconstruction. Close or
-   annotate issues already answered, rather than reinvestigating obsolete gaps.
-2. Investigate unresolved canonical shape/variant rules, beginning with ALD
-   element classes and generated shapes, Slide rendered checkpoint classes, and
-   playfield/projection geometry.
+1. Finish numeric failure/range behavior and hostile signed/unsigned domains
+   in the viewer parser. The snapshot timing introsort is already ported and
+   self-tested; do not replace it with host sorting.
+2. Implement the distinct HeavenHold/type-13 presentation path and continue
+   the shared camera/viewport and resource-independent geometry trace.
 3. Keep parser, normalized model, schedule/playback, and renderer behavior
    logically separated even if the prototype remains one HTML file.
 4. Replace chart-specific heuristics with rules that work for arbitrary C2S
