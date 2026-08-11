@@ -269,7 +269,8 @@
           <button id="tAir" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
           <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
           <button id="tShape" type="button" aria-pressed="false" title="Show shape-only SLC/SXC controls as faint debug rules. Binary-backed SLD/SXD endpoint resources remain visible.">Shape pts</button>
-          <button id="tStripe" type="button" aria-pressed="false" title="One-lane bright stripe along the sustain path center. Recovered as JointSlide stream 1 for slides; holds share it only as an untraced substitute.">Center stripe</button>
+          <button id="tStripe" type="button" aria-pressed="false" title="One-lane bright stripe along the slide path center, recovered as JointSlide stream 1. Slides only: the recovered hold body is a single quad with no second stream.">Center stripe</button>
+          <button id="tMirror" type="button" aria-pressed="false" title="The recovered chart-mirror play option: every lane becomes 16 − lane − width at ingest, before chain matching, and AIR left/right direction codes swap. Reparses the loaded chart.">Mirror</button>
           <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
           <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
           <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
@@ -320,7 +321,7 @@
   </div>
 
   <footer class="note">
-    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> schedule on this snapshot's fixed 384-tick grid; authored <code>RESOLUTION</code> is recognized but rejected. The taper is cosmetic — the recovered projection is linear in time-delta and says nothing about perspective, which sits outside the reconstruction's scope. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
+    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> schedule on this snapshot's fixed 384-tick grid; authored <code>RESOLUTION</code> is recognized but rejected. The perspective projection/view/viewport algorithm is recovered and normative; only the resource-selected camera pose — represented here by owner-calibrated fitted parameters — and the framebuffer dimensions remain external inputs. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
     <br><br>
     <b>Chart regions.</b> <code>STP</code>, <code>SFL</code>, <code>SLP</code> and <code>DCM</code> intervals are marked in the gutter off the right edge of the playfield, labelled with their scroll speed. They rewrite a pending note's scheduled position before the materialization test, and only above the <code>30.0F</code> raw-delta shortcut — so they never move a near note. With <b>Apply scroll</b> enabled, the recovered interval composition and DCM selection are applied to drawn distance; the remaining caveat is the unavailable external view calibration. <code>SFE</code> is recognised by the parser but has no handler case, so it is drawn dashed and dead.
   </footer>
@@ -340,9 +341,14 @@
   // darkened so a checkpoint never reads as another root.
   const SLIDE_ENDPOINT = "#2a55b8";
   const AIRUP = "#7ef08a";      // air-up green, also the air hold centre line
-  // Product-choice colors applied to the three recovered asset-independent
-  // ALD stream geometries. The original packed colors/resources are external
-  // and are intentionally not copied.
+  // The far cap of a hold whose root carries an air-family secondary: the
+  // recovered resource table splits on attachment (rows 289..274 vs 65..50);
+  // the assets are external, so the split shows as a labeled shade.
+  const HOLD_CAP_ATTACHED = "#ffd9a8";
+  // Product-choice hues applied to the three recovered asset-independent
+  // ALD stream geometries. The packed VERTEX colors are recovered static
+  // constants (0xffffffff for streams 0/1, 0x40ffffff for stream 2); only
+  // textures, materials, and final pixels are external.
   const ALD_STREAM_ZERO = "#ff5ce0";
   const ALD_STREAM_TWO = "#a35cff";
   const ALD_STREAM_ONE = "#58275f";
@@ -371,7 +377,9 @@
     // rather than only in hue.
     MNE: { kind: "tap",   color: "#111c4f", label: "Damage" },
     HLD: { kind: "hold",  color: "#ff9633", label: "Hold" },
-    HXD: { kind: "hold",  color: "#ffb066", label: "Ex hold" },
+    // The recovered far marker and body color do not split on hold form; the
+    // extended root keeps its distinction at the root cap via rootColor.
+    HXD: { kind: "hold",  color: "#ff9633", label: "Ex hold" },
     SLD: { kind: "slide", color: "#3d7dff", label: "Slide" },
     SXD: { kind: "slide", color: "#6b9dff", label: "Ex slide" },
     SLC: { kind: "slide", color: "#3d7dff", label: "Slide ctrl" },
@@ -399,7 +407,10 @@
     CHR: 4, AHD: 5, AHX: 5, FLK: 6, ASD: 8, ASC: 8,
     ALD: 9, ASO: 10, MNE: 11, SLA: 12, HHD: 13, HHX: 13,
   };
-  const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11]);
+  // Initial AHD/AHX and ASD/ASC attachment supports these root parsed types;
+  // type-13 HeavenHold roots attach through their chain's final endpoint and
+  // supply its stored vertical as the chain's base.
+  const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11, 13]);
 
   // Group-1 chart-region forms. These rewrite a pending note's scheduled
   // position before the materialization test, above the 30.0F raw-delta
@@ -608,7 +619,7 @@
   function normalizeEventAssociations(rawNotes) {
     const notes = [], rejected = [], roots = [];
     const slideChains = [], heavenChains = [];
-    const airHoldChains = [], airSlideChains = [];
+    const airHoldChains = [], airSlideChains = [], asolidChains = [];
     const sameStart = (left, right) =>
       left.p === right.p && left.lane === right.lane &&
       left.width === right.width;
@@ -626,7 +637,7 @@
     // FUN_004574f0/FUN_011c5ca0, which select the final path record for types
     // 2/9/10/13 and the base fields otherwise.
     const rootLaneWidthPoint = root => {
-      if ((root.type === 2 || root.type === 13) && root.chain?.last) {
+      if ((root.type === 2 || root.type === 10 || root.type === 13) && root.chain?.last) {
         return root.chain.last;
       }
       if (root.type === 9 || root.type === 10 || root.type === 13) {
@@ -637,7 +648,7 @@
     const rootAttachmentPoint = root => {
       const geometry = rootLaneWidthPoint(root);
       let p = root.note.p;
-      if ((root.type === 2 || root.type === 13) && root.chain?.last) {
+      if ((root.type === 2 || root.type === 10 || root.type === 13) && root.chain?.last) {
         p = root.chain.last.p;
       }
       else if (root.type === 1 || root.type === 9 || root.type === 10 || root.type === 13) {
@@ -726,7 +737,11 @@
           const root = compatibleRoot(requestedType, n);
           if (root) {
             root.secondaryType = 5;
-            chain = { root, segments: [], last: null };
+            chain = {
+              root, segments: [], last: null,
+              rootBaseVertical: root.type === 13
+                ? (rootLaneWidthPoint(root).vertical ?? 1) : 1,
+            };
             airHoldChains.push(chain);
           }
         }
@@ -736,6 +751,7 @@
         }
         n.secondaryChain = chain;
         n.chainStart = chain.segments.length === 0;
+        if (n.chainStart) n.rootBaseVertical = chain.rootBaseVertical ?? 1;
         chain.segments.push(n);
         chain.last = endpointOf(n);
         notes.push(n);
@@ -754,7 +770,11 @@
           const root = compatibleRoot(requestedType, n);
           if (root) {
             root.secondaryType = 8;
-            chain = { root, segments: [], last: null };
+            chain = {
+              root, segments: [], last: null,
+              rootBaseVertical: root.type === 13
+                ? (rootLaneWidthPoint(root).vertical ?? 1) : 1,
+            };
             airSlideChains.push(chain);
           }
         }
@@ -764,8 +784,30 @@
         }
         n.secondaryChain = chain;
         n.chainStart = chain.segments.length === 0;
+        if (n.chainStart) n.rootBaseVertical = chain.rootBaseVertical ?? 1;
         chain.segments.push(n);
         chain.last = endpointOf(n);
+        notes.push(n);
+        continue;
+      }
+
+      if (n.kind === "asolid") {
+        // ASO records chain like slides: equal style code, the previous
+        // endpoint's lane/width and both integer-tenth properties matching
+        // the new start. Only the chain's current final endpoint is the
+        // type-10 attachment point.
+        let chain = asolidChains.find(candidate =>
+          candidate.styleCode === n.asoStyleCode &&
+          sameStart(candidate.last, n) &&
+          candidate.last.pA === n.pA0 && candidate.last.pB === n.pB0);
+        if (!chain) {
+          chain = { styleCode: n.asoStyleCode, segments: [], root: n, last: null };
+          asolidChains.push(chain);
+          roots.push({ type: 10, note: n, secondaryType: null, chain });
+        }
+        chain.segments.push(n);
+        chain.last = { ...endpointOf(n), pA: n.pA1, pB: n.pB1 };
+        n.asoChain = chain;
         notes.push(n);
         continue;
       }
@@ -778,7 +820,38 @@
       }
     }
 
+    // The far-marker resource table splits on association: mark roots that
+    // ended up carrying an air-family secondary (types 3/5/8).
+    for (const root of roots) {
+      if (root.secondaryType !== null) root.note.airAttachedSecondary = true;
+    }
+
+    // The air-hold anchor chain forces its FINAL saved endpoint as a judged
+    // checkpoint whether the last command is AHD or AHX
+    // (spec/notes/air_hold.md) — every air hold ends with an air action.
+    for (const chain of airHoldChains) {
+      const last = chain.segments[chain.segments.length - 1];
+      if (last) last.isChainFinal = true;
+    }
+
     return { notes, rejected, slideChains, heavenChains };
+  }
+
+  // Chart mirror is applied once while group-2 records are ingested, before
+  // association/matching: every root and every independently authored lateral
+  // endpoint becomes wrapped 16 - lane - clamped_width, and AIR direction
+  // codes swap exact left/right pairs (AIR and ADW are unchanged). Width and
+  // width-indexed selection never change. claim.presentation.chart-mirror.
+  const MIRROR_AIR = { AUL: "AUR", AUR: "AUL", ADL: "ADR", ADR: "ADL" };
+  let mirrorOn = false;   // parser-owned play option, set before load/reparse
+  function applyMirror(n) {
+    n.lane = (16 - n.lane - n.width) | 0;
+    if (n.endLane !== null && n.endLane !== undefined &&
+        (n.kind === "slide" || n.kind === "aslide" || n.kind === "ald" ||
+         n.kind === "asolid" || n.kind === "heaven")) {
+      n.endLane = (16 - n.endLane - (n.endWidth ?? n.width)) | 0;
+    }
+    if (n.kind === "air" && MIRROR_AIR[n.cmd]) n.cmd = MIRROR_AIR[n.cmd];
   }
 
   function parseC2s(text) {
@@ -885,7 +958,8 @@
         case "aslide":
           n.root = f[4] || ""; n.h0 = c2sFloat(f[5]); n.dur = c2sInt(f[6]);
           n.endLane = c2sInt(f[7]); n.endWidth = c2sWidth(f[8]); n.h1 = c2sFloat(f[9]);
-          n.style = f[10] || ""; n.isAction = cmd === "ASD"; break;
+          n.style = f[10] || ""; n.isAction = cmd === "ASD";
+          n.styleCode = Math.max(0, C2S_STYLE.indexOf(n.style)); break;
         case "ald":
           n.lane = c2sInt(f[2]); n.width = c2sWidth(f[3]);
           n.interval = c2sInt(f[4]); n.h0 = aldVertical(f[5]);
@@ -897,8 +971,17 @@
             ? "heaven_hold" : "air_ladder";
           break;
         case "asolid":
+          // Four structural floats become integer tenths exactly as the
+          // type-10 parser stores them; they are the two per-endpoint shell
+          // surface heights A and B.
+          n.pA0 = Math.trunc(c2sFloat(f[4]) * 10 + 0.5) * 0.1;
+          n.pB0 = Math.trunc(c2sFloat(f[5]) * 10 + 0.5) * 0.1;
           n.dur = c2sInt(f[6]); n.endLane = c2sInt(f[7]); n.endWidth = c2sWidth(f[8]);
-          n.style = f[11] || ""; break;
+          n.pA1 = Math.trunc(c2sFloat(f[9]) * 10 + 0.5) * 0.1;
+          n.pB1 = Math.trunc(c2sFloat(f[10]) * 10 + 0.5) * 0.1;
+          n.style = f[11] || "";
+          n.asoStyleCode = Math.max(0, C2S_STYLE.indexOf(n.style));
+          break;
         // SLA: major, minor, lane, width, duration, tag. A time/lane region
         // carrying an integer tag; no runtime object, but the tag selects a
         // keyed scroll schedule. Width rides the common clamp above.
@@ -906,6 +989,7 @@
           n.dur = c2sInt(f[4]); n.tag = c2sInt(f[5]); break;
         default: break;
       }
+      if (mirrorOn) applyMirror(n);
       rawNotes.push(n);
     }
 
@@ -985,17 +1069,18 @@
       ...notes.map(n => n.p + Math.max(0, n.dur)),
       ...uniqueMetEvents.map(e => e.p),
     ) + 2 * R;
+    let gridHaltedAt = null;
     for (let index = 0; index < uniqueMetEvents.length; index++) {
       const e = uniqueMetEvents[index];
       const end = index + 1 < uniqueMetEvents.length
         ? uniqueMetEvents[index + 1].p : lastGridTick;
       const unit = e.n, count = e.d;
-      if (unit === 0 || count === 0) break;
+      if (unit === 0 || count === 0) { gridHaltedAt = e.p; break; }
       const beatStep = Math.trunc(R / unit);
       const barStep = Math.trunc((count * R) / unit);
       // The executable's malformed signed/unsigned division domain can yield
       // zero and nonprogress. Refuse to invent a finite grid for that domain.
-      if (beatStep <= 0 || barStep <= 0) break;
+      if (beatStep <= 0 || barStep <= 0) { gridHaltedAt = e.p; break; }
       const bars = new Set();
       const beatPositions = new Set();
       for (let p = e.p; p < end; p += barStep) bars.add(p);
@@ -1016,6 +1101,17 @@
         if (!beatPositions.has(p)) {
           beats.push({ p, time: timeAt(p), bar: true, m: Math.floor(p / R), b: 1 });
         }
+      }
+    }
+    // Owner display rule, observation-driven (issue #13): the grid never goes
+    // dark. The recovered generator halts for the rest of the chart at a zero
+    // or nonprogress meter record, but the owner reports the cabinet still
+    // shows a grid on every zero-carrying chart, so measure lines continue at
+    // the 384-tick boundaries past the halt. Product fallback, not recovered
+    // behavior; the generated vectors above are untouched.
+    if (gridHaltedAt !== null) {
+      for (let p = Math.ceil(gridHaltedAt / R) * R; p < lastGridTick; p += R) {
+        beats.push({ p, time: timeAt(p), bar: true, m: Math.floor(p / R), b: 1 });
       }
     }
     beats.sort((a, b) => a.p - b.p);
@@ -1105,7 +1201,12 @@
   function computeTrims(notes) {
     const lastOnLane = new Array(16).fill(null);
     for (const n of notes) {
-      if (n.kind === "air" || n.kind === "ald" || n.kind === "aslide" || n.kind === "region") continue;
+      // The recovered postprocessor considers only parsed types 0, 1, 2, 4,
+      // 6, 11, and 13 (claim.judgement.tap-adjacent-window-adjustment):
+      // tap/chr/flk/mne, hold, slide, and heaven. Air-family types 3/5/8/9/10
+      // and regions neither trim nor get trimmed.
+      if (n.kind === "air" || n.kind === "ald" || n.kind === "aslide" ||
+          n.kind === "ahold" || n.kind === "asolid" || n.kind === "region") continue;
       const a = Math.max(0, n.lane), b = Math.min(15, n.lane + n.width - 1);
       let nearest = Infinity;
       for (let l = a; l <= b; l++) {
@@ -1222,6 +1323,12 @@
           out.push(n.time);
           break;
         case "ahold":
+          // Guide follows judgement: action CHECKERS exist only for authored
+          // AHX endpoints (the checkpoint vector includes the final only if
+          // it is AHX — spec/notes/air_hold.md). The end marker drawn for
+          // AHD finals is display, not a judged event, so it stays silent.
+          if (n.isAction) out.push(n.endTime);
+          break;
         case "aslide":
           if (n.isAction) out.push(n.endTime);
           break;
@@ -1458,6 +1565,7 @@
 
   // ---- state --------------------------------------------------------------
   let chart = null, now = 0, playing = false, last = 0;
+  let lastChartText = null;
   let speed = 9.0, rate = 1.0, winMs = 33, maxH = 1, gridAlpha = 0.35;
   let overlayN = 0, overlayPat = null;
   const show = { wings: false, air: true, grid: true, bars: false,
@@ -1985,7 +2093,12 @@
           drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, SLIDE_ENDPOINT);
         }
       } else {
-        drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, n.color);
+        // The hold far-marker resource table splits on attachment (rows
+        // 289..274 with an air-family secondary vs 65..50 without). The
+        // assets are external; the attached case gets a distinct labeled
+        // placeholder shade so the recovered selection is visible.
+        const capColor = n.airAttachedSecondary ? HOLD_CAP_ATTACHED : n.color;
+        drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, capColor);
       }
     }
 
@@ -1995,11 +2108,22 @@
       const t0 = depthAt(n.time, n.slaKey);
       const t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
 
-      if (AIR_KINDS.has(n.kind) && !show.airNotes) continue;
+      // One visibility rule for the one runtime class: a zero/NON ALD is
+      // HeavenHold and follows the same toggles as HHD/HHX and HLD-styled
+      // slides, not the air-family gate.
+      if (AIR_KINDS.has(n.kind) && !n.heavenPresentation && !show.airNotes) continue;
       if (n.kind === "asolid" && !show.cosmetic) continue;
 
       if (n.heavenPresentation) {
-        drawHeavenHold(n.heavenPresentation, W, H);
+        // The zero/NON ALD origin selects the missing-resource sentinel and
+        // is invisible on the cabinet: owner footage at 2194_03 m87
+        // (2026-08-11) shows only the co-located EXTAP pair, the air-ups,
+        // and the crush above — no element for the heaven records. Its
+        // judgement still exists, so the recovered shape stays inspectable
+        // under the Shape pts debug toggle.
+        if (n.kind !== "ald" || show.bars) {
+          drawHeavenHold(n.heavenPresentation, W, H, depthAt);
+        }
       } else if (n.kind === "asolid") {
         drawAirSolid(n, t0, t1, W, H);
       } else if (n.kind === "ald") {
@@ -2011,16 +2135,28 @@
         // not be sent through type-9 AirLadder geometry.
         if (n.aldRuntime === "air_ladder") drawAirTrace(n, t0, t1, W, H);
       } else if (n.kind === "aslide") {
-        drawAirBand(n, t0, t1, W, H);
+        drawAirSlideTrace(n, t0, t1, W, H);
         // The air-up start reaches the record's own authored height, which is
-        // what makes it line up with the path leaving that point.
+        // what makes it line up with the path leaving that point. A type-13
+        // root lifts the base to its chain's stored final vertical.
         if (n.chainStart) {
-          drawArrow(t0, n.lane, n.width, n.color, true, W, H, liftHeight(n.h0));
+          drawArrow(t0, n.lane, n.width, n.color, true, W, H,
+                    liftHeight(n.h0), 0,
+                    liftHeight(n.rootBaseVertical ?? 1));
         }
       } else if (n.kind === "ahold") {
         drawAirHold(n, t0, t1, W, H);
-        if (n.chainStart) {
-          drawArrow(t0, n.lane, n.width, n.color, true, W, H, liftHeight(1));
+        // The separate width-scaled AirHold root resource, drawn as an
+        // asset-free start bar at the chain's base vertical (zero for
+        // ordinary roots, the root chain's final value for type-13 roots).
+        // The old arrow call died when the recovered origin moved from
+        // value 5 to value 1.
+        if (n.chainStart && t0 >= tapClip() && t0 <= FAR) {
+          const baseH = liftHeight(n.rootBaseVertical ?? 1);
+          const sp = project(t0, n.lane, baseH, W, H);
+          const sq = project(t0, n.lane + n.width, baseH, W, H);
+          const th = Math.max(5, 14 * sp.s);
+          noteBar(sp.x, sp.y - th, sq.x - sp.x, th, n.color);
         }
       } else if (n.kind === "hold" || n.kind === "slide") {
         drawSustain(n, t0, t1, W, H);
@@ -2034,7 +2170,13 @@
     // --- windows overlay, drawn on top so trimming is legible
     if (show.wings) {
       for (const n of vis) {
-        if (n.kind === "air" || n.kind === "ald" || n.kind === "aslide" || n.kind === "ahold") continue;
+        // MNE has no TAP-style timing checker — its judgement is held-contact
+        // accumulation over external parameters — so it gets no window. ASO
+        // submits no result. A zero/NON ALD is runtime type 13 and windows
+        // on the same terms as the other two HeavenHold origins.
+        if (n.cmd === "MNE" || n.kind === "asolid") continue;
+        if (n.kind === "air" || n.kind === "aslide" || n.kind === "ahold" ||
+            (n.kind === "ald" && !n.heavenPresentation)) continue;
         drawWindow(n, W, H, LA);
       }
     }
@@ -2181,12 +2323,13 @@
     cx2.fill();
 
     // JointSlide stream 1 is exactly one lane wide around the path center.
-    // Stream colours/materials are external, so these two fills are neutral
+    // The packed vertex colors are recovered static constants; only textures,
+    // materials, and final pixels are external, so these fills are neutral
     // asset-free silhouettes. The binary's 18-vertex width-change subdivision
     // changes resource coordinates but not this outer Canvas silhouette.
-    // The stream is recovered for slides only; holds share this code path
-    // while render.hold is untraced, so the stripe is opt-in.
-    if (show.stripe) {
+    // Slides only: the recovered JointHold body is exactly one constant-width
+    // six-vertex quad, so holds get no second stream.
+    if (show.stripe && n.kind === "slide") {
       const centerLeft = [
         project(a.t, a.center - 0.5, 0, W, H),
         project(b.t, b.center - 0.5, 0, W, H),
@@ -2201,13 +2344,17 @@
         cx2.lineTo(centerRight[i].x, centerRight[i].y);
       }
       cx2.closePath();
-      cx2.fillStyle = n.color + "77";
+      // The recovered stream-1 vertex color is opaque white (the texture it
+      // modulates is external), so the silhouette is a white overlay — also
+      // what makes the toggle legible against the same-hue body fill.
+      cx2.fillStyle = "rgba(255,255,255,0.28)";
       cx2.fill();
     }
 
     // Stream 2 exists only in presentation mode 1. This chart-only viewer does
-    // not yet simulate the start/path judgement phases, so it does not guess
-    // that overlay or either runtime-packed main-stream colour.
+    // not yet simulate the start/path judgement phases, so it draws only the
+    // static mode-0 state; the recovered packed vertex constants make the
+    // mode switches implementable once phase simulation exists.
     // The root is a separate start resource. A generated segment's marker
     // belongs to its ending boundary, not to the next segment's start. Marked
     // nonfinal endpoints therefore stay visible without the debug toggle;
@@ -2245,7 +2392,10 @@
   // root center. A nonzero geometry mode then reverses and reflects the live
   // point sequence about its first/final midpoint before six vertices are
   // emitted for every surviving adjacent pair.
-  function drawHeavenHold(model, W, H) {
+  // depthAt is the caller's per-frame keyed-depth closure; it is passed in
+  // because it captures the frame's lookahead, which this top-level function
+  // cannot see.
+  function drawHeavenHold(model, W, H, depthAt) {
     const source = model.points.map((point, index) => {
       let center = point.lane + point.width * 0.5;
       const rootCenter = model.points[0].lane + model.points[0].width * 0.5;
@@ -2358,62 +2508,59 @@
             rootColor(model.root));
   }
 
-  function drawAirBand(n, t0, t1, W, H) {
-    const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
-    if (s1 < s0) return;
-    // Authored heights are relative; air records are off the ground by
-    // definition, so the scale keeps their order but never sits on the floor.
-    const lift = liftHeight;
-    const h0 = lift(n.h0), h1 = lift(n.h1);
-    const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
-    // Crush rungs are authored one lane wide; widen the drawn ribbon so a
-    // stream of them reads as a shape rather than a hairline.
-    const pad = n.kind === "ald" ? 0.55 : 0.22;
-    const steps = 8;
-    const left = [], right = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
-      const lane = n.lane + ((n.endLane ?? n.lane) - n.lane) * k;
-      const w = n.width + ((n.endWidth ?? n.width) - n.width) * k;
-      const h = h0 + (h1 - h0) * k;
-      left.push(project(t, lane - pad, h, W, H));
-      right.push(project(t, lane + w + pad, h, W, H));
-    }
-    cx2.beginPath();
-    left.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
-    for (let i = right.length - 1; i >= 0; i--) cx2.lineTo(right[i].x, right[i].y);
-    cx2.closePath();
-    cx2.fillStyle = n.color + "55";
-    cx2.fill();
-    // Rails only: a closed outline draws a cross-edge at every segment
-    // boundary, which reads as a checkpoint the note does not have.
-    cx2.strokeStyle = n.color + "cc";
-    cx2.lineWidth = 1.2;
-    for (const rail of [left, right]) {
-      cx2.beginPath();
-      rail.forEach((p, i) => i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y));
-      cx2.stroke();
-    }
+  // AirSlide segments route through the same shared three-stream builder the
+  // recovered consumer gives ALD: full-vertical stream 0 at exact 1.5*width
+  // render-unit half extent, vertical-zero ground stream 1 attenuated by the
+  // exact render-vertical transform, and the fixed-half-extent stream 2, in
+  // Joint submission order 0, 1, 2.
+  function drawAirSlideTrace(n, t0, t1, W, H) {
+    const c0 = n.lane + n.width / 2;
+    const c1 = (n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2;
+    const h0 = liftHeight(n.h0), h1 = liftHeight(n.h1);
+    drawAldQuad(t0, t1, c0, c1,
+                n.width * 0.375, (n.endWidth ?? n.width) * 0.375,
+                h0, h1, n.color, 0.30, W, H);
+    const rv0 = (n.h0 - 1) * 3.8934999;
+    const rv1 = (n.h1 - 1) * 3.8934999;
+    drawAldQuad(t0, t1, c0, c1,
+                n.width * 0.5 * aldStreamOneScale(rv0),
+                (n.endWidth ?? n.width) * 0.5 * aldStreamOneScale(rv1),
+                0, 0, n.color, 0.32, W, H);
+    const fixedHalf = ((n.styleCode ?? 0) !== 0 ? 0.98 : 1.96) / 4;
+    drawAldQuad(t0, t1, c0, c1, fixedHalf, fixedHalf,
+                h0, h1, n.color, 0.62, W, H);
 
-    // Air slide records carry a path endpoint; air crush rungs are checkpoints
-    // in their own right. Mark them as air actions.
-    // Air action markers belong to air hold and air slide paths. An ALD rung
-    // is a note in its own right, not a path checkpoint, so it carries none.
-    //
     // Same split as a ground slide: ASC shapes without scoring, so its
     // junction draws faint and only under the toggle. ASD is a real air
     // action and draws its marker regardless, like a slide's root.
-    if (n.kind === "aslide" && !n.isAction && show.bars) {
+    if (!n.isAction && show.bars) {
       drawBoundary(n, t0, W, H, false, h0);
     }
     // Anchor to the true endpoint, not the view-clamped one: clamping would
     // pin the marker at the far edge until the endpoint came into range.
     if (n.isAction && t1 <= FAR && t1 >= nearClip()) {
+      const endLane = n.endLane ?? n.lane, endWidth = n.endWidth ?? n.width;
       const actionHeight = h1 + ALD_EFFECT_LIFT;
-      const p = project(t1, (n.endLane ?? n.lane) - pad, actionHeight, W, H);
-      const q = project(t1, (n.endLane ?? n.lane) + (n.endWidth ?? n.width) + pad, actionHeight, W, H);
+      const p = project(t1, endLane, actionHeight, W, H);
+      const q = project(t1, endLane + endWidth, actionHeight, W, H);
       const th = Math.max(4, 11 * p.s);
       noteBar(p.x, p.y - th, q.x - p.x, th, ACTION);
+      // The second width-indexed action resource: a vertical guide whose
+      // extent scales by the exact 0.063597046 * render-vertical — roughly
+      // the full drop to the lane surface at the air plane.
+      const guideExtent = 0.063597046 * Math.max(0, rv1);
+      if (guideExtent > 0.01) {
+        const gTop = project(t1, endLane + endWidth / 2, actionHeight, W, H);
+        const gBot = project(t1, endLane + endWidth / 2,
+                             Math.max(0, actionHeight - guideExtent), W, H);
+        cx2.strokeStyle = ACTION;
+        cx2.lineWidth = Math.max(1.5, 3 * p.s);
+        cx2.setLineDash([4, 3]);
+        cx2.beginPath();
+        cx2.moveTo(gTop.x, gTop.y); cx2.lineTo(gBot.x, gBot.y);
+        cx2.stroke();
+        cx2.setLineDash([]);
+      }
     }
   }
 
@@ -2541,38 +2688,70 @@
     }
   }
 
-  // ASO is a trace: it reads no input, submits no result, and draws as a line
-  // rather than a body. Its record carries endpoint widths, but they bound the
-  // trace's lane span, not a filled shape. The two anonymous properties per
-  // endpoint have no assigned meaning in the reconstruction, so they are not
-  // used as height here.
+  // ASO is a trace: it reads no input and submits no result. The recovered
+  // structural properties place two shell surfaces at the per-endpoint
+  // integer-tenth heights A and B across the authored lane span (half-extent
+  // 2*width render units = the lane span in this canvas model); exact NON
+  // (code 15) is the missing-resource sentinel and suppresses the primitive.
+  // The shells are drawn as edge curtains between the two heights with rails
+  // at each surface — an asset-free reading of the recovered bridge/shell
+  // topology; heights, span, and suppression are the recovered values.
   function drawAirSolid(n, t0, t1, W, H) {
+    if (n.asoStyleCode === 15) return;
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
-    const laneAt = k => (n.lane + n.width / 2) +
-      (((n.endLane ?? n.lane) + (n.endWidth ?? n.width) / 2) - (n.lane + n.width / 2)) * k;
     const kOf = t => (t1 - t0) > 0 ? (t - t0) / (t1 - t0) : 0;
+    const mix = (v0, v1, k) => v0 + (v1 - v0) * k;
     const steps = 10;
-    cx2.beginPath();
+    const edges = [[], []];
     for (let i = 0; i <= steps; i++) {
-      const t = s0 + (s1 - s0) * (i / steps);
-      const p = project(t, laneAt(kOf(t)), AIR_PLANE, W, H);
-      i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+      const t = s0 + (s1 - s0) * (i / steps), k = kOf(t);
+      const lane = mix(n.lane, n.endLane ?? n.lane, k);
+      const w = mix(n.width, n.endWidth ?? n.width, k);
+      const hA = liftHeight(mix(n.pA0 ?? 1, n.pA1 ?? 1, k));
+      const hB = liftHeight(mix(n.pB0 ?? 1, n.pB1 ?? 1, k));
+      edges[0].push({ t, lane, hA, hB });
+      edges[1].push({ t, lane: lane + w, hA, hB });
     }
-    const near = project(s0, 0, AIR_PLANE, W, H);
-    cx2.strokeStyle = n.color;
-    cx2.lineWidth = Math.max(1, 2.4 * near.s);
-    cx2.stroke();
+    const near = project(s0, 0, 0, W, H);
+    for (const edge of edges) {
+      cx2.beginPath();
+      edge.forEach((e, i) => {
+        const p = project(e.t, e.lane, e.hA, W, H);
+        i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+      });
+      for (let i = edge.length - 1; i >= 0; i--) {
+        const e = edge[i];
+        const p = project(e.t, e.lane, e.hB, W, H);
+        cx2.lineTo(p.x, p.y);
+      }
+      cx2.closePath();
+      cx2.fillStyle = n.color + "2e";
+      cx2.fill();
+      for (const key of ["hA", "hB"]) {
+        cx2.beginPath();
+        edge.forEach((e, i) => {
+          const p = project(e.t, e.lane, e[key], W, H);
+          i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y);
+        });
+        cx2.strokeStyle = n.color;
+        cx2.lineWidth = Math.max(1, 1.8 * near.s);
+        cx2.stroke();
+      }
+    }
   }
 
   function drawAirHold(n, t0, t1, W, H) {
     const s0 = Math.max(t0, nearClip()), s1 = Math.min(t1, FAR);
     if (s1 < s0) return;
-    // AHD authors no height. Its constructor retains value 1 and the exact
-    // common transform therefore places the resource-independent object at
-    // render vertical zero. External resource geometry can extend away from
-    // that origin, but is not available to this asset-free viewer.
-    const h = liftHeight(1);
+    // AHD authors no height: the recovered transform origin is render
+    // vertical zero (constructor value 1), and the visible element lives in
+    // the EXTERNAL resource extent above that origin. The cabinet shows air
+    // holds at the ordinary air height (owner footage, 2194_03 m9,
+    // 2026-08-11), so this asset-free band sits at the air plane as a
+    // labeled product placement; the origin itself stays marked by the
+    // ground tether below.
+    const h = AIR_PLANE;
     const inset = n.width * 0.24;
     const l0 = n.lane + inset, l1 = n.lane + n.width - inset;
     const a0 = project(s0, l0, h, W, H), b0 = project(s0, l1, h, W, H);
@@ -2601,9 +2780,18 @@
     cx2.setLineDash([3, 3]);
     cx2.beginPath(); cx2.moveTo(g0.x, g0.y); cx2.lineTo(t0p.x, t0p.y); cx2.stroke();
     cx2.setLineDash([]);
-    // each authored record endpoint is an air action point
-    if (n.isAction && t1 <= FAR && t1 >= nearClip()) {
-      const e0 = project(t1, l0, h, W, H), e1 = project(t1, l1, h, W, H);
+    // Two distinct rules meet here. JUDGED action checkers exist only for
+    // authored AHX endpoints (the checkpoint vector takes the final only if
+    // it is AHX). The DISPLAYED end action, per owner footage (2194_03 m9,
+    // 2026-08-11), also appears on plain-AHD finals — so the marker draws
+    // for every chain final as a footage-backed display rule. The owner
+    // reports a rare actionless-end variant in very few charts; its gate is
+    // unrecovered (candidate: the 8228_05 PNK-styled micro-holds) and is
+    // ledgered in issue #12. Markers sit at recovered render vertical
+    // 15.724 units — the air-plane value plus the shared +0.14999962 offset.
+    if ((n.isAction || n.isChainFinal) && t1 <= FAR && t1 >= nearClip()) {
+      const markerH = AIR_PLANE + ALD_EFFECT_LIFT;
+      const e0 = project(t1, l0, markerH, W, H), e1 = project(t1, l1, markerH, W, H);
       const th = Math.max(4, 11 * e0.s);
       noteBar(e0.x, e0.y - th, e1.x - e0.x, th, ACTION);
     }
@@ -2619,20 +2807,27 @@
   function drawAirArrow(n, t, W, H) {
     const up = n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR";
     const lat = AIR_SCALE_SIGN[n.cmd] || 0;
-    drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, lat);
+    // A type-13 root translates the glyph base by the chain's stored final
+    // vertical through the common transform; ordinary roots keep stored
+    // value 1 and the lane-surface base.
+    const root = n.attachedRoot;
+    const baseH = root && root.type === 13
+      ? liftHeight(root.chain?.last?.vertical ?? 1) : 0;
+    drawArrow(t, n.lane, n.width, n.color, up, W, H, undefined, lat, baseH);
   }
 
-  function drawArrow(t, lane, width, color, up, W, H, topH, lateral) {
+  function drawArrow(t, lane, width, color, up, W, H, topH, lateral, baseH = 0) {
     if (t < tapClip() || t > FAR) return;
     const top = topH === undefined ? AIR_PLANE : topH;
-    if (top <= 0.001) return;
-    // The arrow stands on its lane: base on the floor, reaching into the air
-    // plane. Up notes carry the head at the top, down notes at the floor.
+    if (top <= baseH + 0.001) return;
+    // The arrow stands on its base: lane surface for ordinary roots, the
+    // root's stored vertical for type-13 chains, reaching into the air
+    // plane. Up notes carry the head at the top, down notes at the base.
     // Drawn 20% narrower than the note's lane span so the block reads as an
     // arrow sitting on the lane rather than filling it.
     const trim = width * 0.1;
-    const g0 = project(t, lane + trim, 0, W, H);
-    const g1 = project(t, lane + width - trim, 0, W, H);
+    const g0 = project(t, lane + trim, baseH, W, H);
+    const g1 = project(t, lane + width - trim, baseH, W, H);
     const a0 = project(t, lane, top, W, H);
     const mid = (g0.x + g1.x) / 2;
     // Sit on top of a root note rather than inside it: the base lifts by one
@@ -2841,6 +3036,7 @@
 
   // ---- input --------------------------------------------------------------
   function load(text) {
+    lastChartText = text;
     chart = parseC2s(text);
     computeTrims(chart.notes);
     markSlideBoundaries(chart.notes);
@@ -2961,6 +3157,18 @@
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
   toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
+  el("tMirror").addEventListener("click", () => {
+    mirrorOn = !mirrorOn;
+    el("tMirror").setAttribute("aria-pressed", String(mirrorOn));
+    // Mirror is an ingest-time rewrite, so the chart reparses; the playback
+    // position survives the reload.
+    if (lastChartText !== null) {
+      const keep = now;
+      load(lastChartText);
+      now = Math.min(keep, chart.duration);
+      sync();
+    }
+  });
   el("tGuide").addEventListener("click", () => {
     guideOn = !guideOn;
     el("tGuide").setAttribute("aria-pressed", String(guideOn));
