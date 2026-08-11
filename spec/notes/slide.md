@@ -14,6 +14,14 @@ existing type-2 parsed record only when all of these match its last point:
 - bounded width;
 - chart position under the parser's existing float-position equality helper.
 
+The descriptor accepts the six-field legacy form. Control construction first
+copies the root's encoded width. The tested vector count includes the command
+token, so more than seven total tokens means seven or more data fields and
+reads/clamps field 7 as a distinct endpoint width. Only the six-data-field
+legacy form retains the root width. Missing endpoint width therefore means
+“inherit root width,” not width 1. This field-count branch is independent of
+the common root-width clamp.
+
 No match creates a new `0x174`-byte parsed record and appends its first point.
 The command-specific field pairs are:
 
@@ -45,11 +53,13 @@ exact three-string table: `SLD` is code 0, `HLD` is code 1, and `GRN` is code
 2; empty, differently cased, or otherwise unrecognized values also become
 zero. After all commands have been joined into chains, but before generated
 paths are built, every type-2 chain with style code 1 is changed to type 13.
-The pass writes discriminator code 10 to root `+0x30` and to `+0x18` of every
-control point. It preserves the command-specific first field: SLD/SLC keep
-zero, while SXD/SXC keep one. These rewritten records bypass `SlideNote` and
-follow the HeavenHold generation, factory, input, and judgement path specified
-in `spec/notes/heaven_hold.md`.
+The pass writes path-scalar integer 10 to root `+0x30` and to `+0x18` of every
+control point; HeavenHold precompute consumes those fields as scalar `1.0`.
+It does not write the separate presentation selector at parsed `+0xb0`, which
+retains zero. The pass preserves the command-form field: SLD/SLC keep zero,
+while SXD/SXC keep one. These rewritten records bypass `SlideNote` and follow
+the HeavenHold generation, factory, input, judgement, and presentation path
+specified in `spec/notes/heaven_hold.md`.
 
 Evidence: `claim.note.slide-path-sustain-judgement` and
 `claim.note.slide-hld-heaven-retyping`.
@@ -71,7 +81,10 @@ resources are distinct owners.
 - Every generated segment stores its preceding marker, ending marker, and
   final-segment byte. The final ending marker is forced set. A generated
   endpoint resource is preloaded and lazily allocated if and only if the
-  ending marker is set. Thus nonfinal SLD/SXD endpoints own the visible class;
+  ending marker is set. The allocator decodes the ending control width stored
+  at generated `+0x14`; the preceding/start width at `+0x10` is not its width
+  selector. Thus a shrink-point resource uses the post-shrink width, nonfinal
+  SLD/SXD endpoints own the visible class;
   nonfinal SLC/SXC controls are path-shaping only. The root start is separate,
   and the final endpoint is present regardless of the last command spelling.
 - Each generated endpoint begins with result-table index `0xff`. Presentation
@@ -90,6 +103,7 @@ consumer.
 
 Evidence: `claim.note.slide-presentation-classes`; reconstruction:
 `slide_generated_endpoint_resource_present`,
+`slide_generated_endpoint_decoded_width`,
 `slide_generated_endpoint_resource_visible`, and related Slide presentation
 helpers; focused coverage: `tests/slide_path_test.cpp`.
 
@@ -145,13 +159,15 @@ and callback order 0, 1, 2:
   mode 1, with packed color `0x20ffffff`.
 
 Triangle winding depends on projected endpoint order. Diagnostic categories
-1, 2, and 3 count triangles only; they are not layer identifiers. Mode 0 reads
-the base runtime packed color. Mode 1 uses the same color, adds stream 2, and
+1, 2, and 3 count triangles only; they are not layer identifiers. Static
+initializer functions construct exact packed colors `0xffffffff` (base white),
+`0x40ffffff` (shared low-alpha white), and `0xff666666` (alternate gray).
+Mode 0 reads base `0xffffffff`. Mode 1 uses the same color, adds stream 2, and
 applies intensity
 `sin(fmod(counter * 0.05, 1) * 2*pi) * 0.25 + 1.5`. Mode 2 reads a separate
-runtime packed color and omits stream 2. The two runtime color values,
-materials, textures, shaders, and final pixel composition are not statically
-available and remain explicit external presentation inputs.
+exact `0xff666666` and omits stream 2. Materials, textures, shaders, and final
+pixel composition remain external presentation inputs; the three packed colors
+do not.
 
 Evidence: `claim.note.slide-path-presentation-geometry`; reconstruction:
 `build_slide_presentation_geometry`, the three

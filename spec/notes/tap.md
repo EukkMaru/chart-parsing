@@ -27,6 +27,43 @@ There is no integer conversion or explicit rounding on this field path.
 Reconstruction: `make_note_scheduled_position`; evidence:
 `claim.note.tap-construction`.
 
+## Root presentation model
+
+Tap and CharaTap share one active root-model transform. The decoded width
+selects `clamp(width - 1, 0, 15)`. Ordinary Tap uses the executable's embedded
+descending resource-row table `81..66`; CharaTap fixes the extended-primary
+variant and uses `97..82`. The same loader also supports an
+extended-alternate table `113..98`. These are exact resource-table indices;
+the referenced proprietary model/material data remains external.
+
+The initial model translation is:
+
+```text
+x = 4 * start_lane + 2 * decoded_width - 32
+y = 0
+z = -10000
+```
+
+Thus one lane is four chart-space units and the center of the complete
+sixteen-lane field is zero. Initial scale is
+`(decoded_width / external_native_width, 1, platform_depth_scale)`, with a
+fallback lateral scale of `1` when the external native width is below one.
+The executable selects depth scale `1.3` in its alternate platform/mode branch
+and `1.0` otherwise.
+
+While the family phase remains at most one, the active update replaces the
+parked depth with the shared projection of
+`scheduled_time - manager_time`, using the configured base offset and the
+positive-delta DCM factor, writes the scale/translation matrix, and forces the
+model visible. The family maintenance/reset slot hides it. The result/effect
+half of the update, final camera conversion, scene layering, and external
+model pixels are separate presentation boundaries.
+
+Evidence: `claim.presentation.tap-chara-model-transform`; reconstruction:
+`active_note_projected_depth`, `tap_model_lateral_center`,
+`tap_model_resource_row`, `tap_model_lateral_scale`, and
+`tap_model_depth_scale`; focused tests: `tests/tap_presentation_test.cpp`.
+
 An ordinary TAP root reserves one source-ordered primary result identifier.
 Its middle/end and secondary identifiers remain negative unless a compatible
 attached component supplies the latter. The shared result path's exact slot

@@ -3,17 +3,22 @@
 ## Parser and class selection
 
 `HHD` and `HHX` have command IDs `0x2c` and `0x2d` and resolve to parsed type
-13. HHD stores command discriminator zero. HHX stores one and reads an
-additional token through an executable-owned lookup interface. Compatible
-commands extend a saved type-13 chain; the parser advances the final endpoint
-and retains matching discriminator, endpoint, lane/span, numeric, and
-command-specific metadata.
+13. Their exact data fields are root measure/tick/lane/width, root path scalar,
+duration, ending lane/width, ending path scalar, and integer presentation
+selector. The two scalars are rounded to integer tenths and later divided by
+ten. HHD clears the command-form byte. HHX sets it and decodes one additional
+token through the exact `UP/DW/CE/RC/LC/RS/LS/BS` table. Compatible commands
+extend a saved type-13 chain; the parser requires matching command form, HHX
+extra value when present, integer selector and parity, and prior endpoint
+position/lane/span/scalar.
 
 Type 13 also has a post-parse Slide origin. An SLD/SXD/SLC/SXC chain whose
 field-8 exact style is `HLD`/code 1 is first constructed as type 2, then changed
-to type 13 before generated-path construction. The rewrite stores code 10 in
-the root and all control-point discriminator slots but preserves the Slide
-command-form flag. SLD/SLC preserve zero; SXD/SXC preserve one. The local chart
+to type 13 before generated-path construction. The rewrite stores integer 10
+in the root/control path-scalar slots, so precompute consumes scalar `1.0`, and
+preserves the Slide command-form flag. It does not write parsed `+0xb0`, the
+separate presentation selector; that field retains constructor-default zero.
+SLD/SLC preserve command-form zero; SXD/SXC preserve one. The local chart
 snapshot contains two such lines in one chart, both SXD with the extended flag.
 
 The same runtime class also has one type-9 entry:
@@ -122,3 +127,44 @@ the queue, bank latches/activity, and the feedback once flag. Destruction
 releases the queue, checker, and resources. Reconstruction:
 `heaven_hold_path_phase`, `heaven_hold_exposes_candidate`, and
 `heaven_hold_is_terminal`.
+
+## Authored presentation path
+
+All three origins own the same two presentation resources: one root resource
+and one body resource. Type-13 precompute emits one `0x34` presentation span
+for every authored `0x24` control and a root-plus-authored-endpoint point
+vector. The generated judgement queue never supplies body geometry. Every
+authored endpoint independently selects its SLA key; presentation projects it
+with that key rather than inheriting the root key.
+
+Direct HHD/HHX's integer selector at parsed `+0xb0` drives two embedded tables:
+
+```text
+selector             0  1  2  3   4   outside 0..4
+mirror endpoints     0  1  0  1   0   0
+geometry mode        0  0  1  1  83h  83h
+```
+
+A mirror flag reflects every authored endpoint span about the root lane
+center. A nonzero geometry mode, after any raw-relative-zero crossing trim,
+reverses the surviving path and reflects projected, lateral, vertical, and
+resource-coordinate values about the first/final midpoint. Retyped HLD and
+zero/`NON` ALD retain selector zero, so neither transformation applies.
+
+The shared builder requires matching projected/path-vector cardinalities,
+clips every span to projected range `[-600, 50]`, and emits one six-vertex
+single-sided quad per surviving span. Vertices are `0x18` bytes. Lateral half
+extent is decoded width times two render units, exactly the authored lane span
+under the four-units-per-lane transform. HeavenHold has one body stream, not
+Slide's or AirLadder's three streams.
+
+The root resource is visible while start phase is not 4. The body resource is
+visible while path phase is not 4. Path phase 2 selects animated mode 1; after
+start completion, path phase 3 selects alternate mode 2 and the other
+nonterminal states select mode 1; earlier states use base mode 0. Modes 0 and 1
+use exact white `0xffffffff`; mode 1 also animates resource scale. Mode 2 uses
+exact gray `0xff666666`. Root/body resource identities, textures, materials,
+and final camera/pixels are external. Their selection and lifetime paths are
+closed. Evidence:
+`claim.presentation.heaven-hold-authored-mesh` and
+`claim.presentation.sustain-endpoint-sla-selection`.

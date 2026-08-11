@@ -25,6 +25,7 @@ int main() {
     using chart::reconstruction::build_slide_main_stream_vertices;
     using chart::reconstruction::build_slide_overlay_stream_vertices;
     using chart::reconstruction::build_slide_presentation_geometry;
+    using chart::reconstruction::c2s_slide_endpoint_width;
     using chart::reconstruction::clip_slide_presentation_segment;
     using chart::reconstruction::combine_slide_window_phases;
     using chart::reconstruction::slide_command_sets_path_marker;
@@ -34,6 +35,7 @@ int main() {
     using chart::reconstruction::slide_endpoint_profile_index;
     using chart::reconstruction::slide_feedback_code;
     using chart::reconstruction::slide_generated_endpoint_resource_present;
+    using chart::reconstruction::slide_generated_endpoint_decoded_width;
     using chart::reconstruction::slide_generated_endpoint_resource_visible;
     using chart::reconstruction::slide_generated_segment_result_table_index;
     using chart::reconstruction::slide_checkpoint_source_category;
@@ -41,6 +43,9 @@ int main() {
     using chart::reconstruction::slide_gap_active;
     using chart::reconstruction::slide_is_terminal;
     using chart::reconstruction::slide_joint_submission_order;
+    using chart::reconstruction::slide_base_main_stream_color;
+    using chart::reconstruction::slide_alternate_main_stream_color;
+    using chart::reconstruction::slide_shared_low_alpha_color;
     using chart::reconstruction::slide_main_stream_color;
     using chart::reconstruction::slide_mode_one_intensity;
     using chart::reconstruction::slide_overlay_stream_color;
@@ -99,6 +104,12 @@ int main() {
     assert(slide_bounded_style_resource_index(9) == 2);
     assert(slide_generated_endpoint_resource_present(true));
     assert(!slide_generated_endpoint_resource_present(false));
+    assert(slide_generated_endpoint_decoded_width(8, 2) == 2);
+    assert(slide_generated_endpoint_decoded_width(2, 8) == 8);
+    assert(c2s_slide_endpoint_width(6, 4, 0) == 4);
+    assert(c2s_slide_endpoint_width(7, 4, 12) == 12);
+    assert(c2s_slide_endpoint_width(8, 4, 12) == 12);
+    assert(c2s_slide_endpoint_width(8, 4, 0) == 1);
     assert(slide_unresolved_result_table_index == 0xff);
     assert(slide_generated_segment_result_table_index(true, 2) == 2);
     assert(slide_generated_segment_result_table_index(false, 2) == 4);
@@ -141,13 +152,16 @@ int main() {
            (std::array<std::int32_t, 3>{4, 3, 3}));
     assert(slide_joint_submission_order ==
            (std::array<std::int32_t, 3>{0, 1, 2}));
-    assert(slide_main_stream_color(SlidePresentationMode::base,
-                                   0x11U, 0x22U) == 0x11U);
-    assert(slide_main_stream_color(SlidePresentationMode::alternate_color,
-                                   0x11U, 0x22U) == 0x22U);
+    assert(slide_base_main_stream_color == 0xffffffffU);
+    assert(slide_alternate_main_stream_color == 0xff666666U);
+    assert(slide_shared_low_alpha_color == 0x40ffffffU);
+    assert(slide_main_stream_color(SlidePresentationMode::base) ==
+           slide_base_main_stream_color);
+    assert(slide_main_stream_color(SlidePresentationMode::alternate_color) ==
+           slide_alternate_main_stream_color);
     assert(slide_main_stream_color(
-               SlidePresentationMode::hide_past_with_overlay,
-               0x11U, 0x22U) == 0x11U);
+               SlidePresentationMode::hide_past_with_overlay) ==
+           slide_base_main_stream_color);
     assert(std::fabs(slide_mode_one_intensity(0.0F) - 1.5F) < 0.0001F);
     assert(std::fabs(slide_mode_one_intensity(5.0F) - 1.75F) < 0.0001F);
     assert(std::fabs(slide_mode_one_intensity(10.0F) - 1.5F) < 0.0001F);

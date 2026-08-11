@@ -68,9 +68,10 @@ program was saved after the final batch.
 - The old viewer assumption that every Slide segment needs a ten-sample curved
   ribbon is contradicted by the recovered adjacent endpoint mesh. The viewer
   no longer uses that interpolation as a canonical Slide rule.
-- Base and alternate main-stream packed colors are runtime globals with no
-  recovered direct static writer. Their values remain explicit external
-  inputs. Resource identities, textures, materials, shaders, blend/depth
+- Superseded 2026-08-10: raw address-byte search recovered the missed startup
+  initializers. Base and alternate colors are exact `0xffffffff` and
+  `0xff666666`; see `claim.presentation.shared-static-colors`. Resource
+  identities, textures, materials, shaders, blend/depth
   behavior, and final pixel composition are excluded external semantics.
 - The chart-only viewer does not simulate the start/path gameplay phases and
   therefore does not guess mode 1's overlay/pulse or mode 2's alternate color.

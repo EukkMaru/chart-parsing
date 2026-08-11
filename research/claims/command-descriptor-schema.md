@@ -6,14 +6,16 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.header`, `parser.events`
-- Last reviewed: 2026-07-27
+- Last reviewed: 2026-08-07
 
 ## Statement
 
 The snapshot registers exactly 91 C2S command descriptors, with numeric IDs
 zero through `0x5a`. Each contains a command string, descriptive string,
 command group, total tab-field count, and up to twelve per-argument type
-codes; negative type-code slots terminate the meaningful argument list.
+codes; negative type-code slots terminate the meaningful argument list. The
+complete case-sensitive name/ID order is enumerated in `spec/c2s.md` and
+`c2s_command_descriptor_names`; no prefix acceptance rule exists.
 
 ## Anchors
 
@@ -71,8 +73,10 @@ the corpus argument arity.
 - Ghidra mutations: recovered the missing initializer function at
   `RAM:00528b60` and added a plate comment.
 - Spec sections: normative descriptor and dispatch rules in `spec/c2s.md`.
-- Reconstruction code: shared numeric token accessors and the family-specific
-  parsers in `include/chart/reconstruction.hpp`.
+- Reconstruction code: the complete ordered
+  `c2s_command_descriptor_names`, exact registration lookup, shared numeric
+  token accessors, and family-specific parsers in
+  `include/chart/reconstruction.hpp`.
 - Tests: `tests/c2s_header_test.cpp`, `tests/derived_command_test.cpp`, and
   family-focused parser tests.
 
@@ -80,7 +84,9 @@ the corpus argument arity.
 
 Header and SLA descriptors were traced through tokenization, descriptor-type
 lookup, typed accessors, conversion wrappers, and their handler cases. The
-complete constructor-xref and exact-lookup sets close the registry cardinality.
+complete constructor-xref and exact-lookup sets close the registry cardinality
+and every ID/name pair. Focused tests pin boundary and group-transition IDs
+and reject unknown `T_*`, legacy metadata, and wrong-case names.
 Event handler call sites independently establish that descriptor arity
 validation is dormant on gameplay loads; descriptor types still govern
 accessed fields.

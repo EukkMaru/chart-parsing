@@ -109,20 +109,26 @@ independently accept the same lane edge. FLK can also accept because its edge
 path ignores selected-candidate equality; ordinary FLK only starts motion on
 that substep and emits no result yet.
 
-The update pass preserves active-vector storage order. Existing objects precede
-newly materialized ones; one pending scan appends supported roots in pending
-index order and each attached secondary immediately after its root. Objects
-constructed on earlier outer updates remain earlier even if their parsed index
-is later. A factory-default record contributes no object.
+The manager uses two active vectors. Its update pass preserves primary-vector
+storage order first, then preserves attached-secondary-vector storage order.
+Existing objects precede newly materialized ones within their vector; one
+pending scan appends supported roots to the primary vector in pending-index
+order and optional attachments to the separate secondary vector in encounter
+order. An attachment is not adjacent to its root in one combined update list:
+all later primaries still run before every secondary. Objects constructed on
+earlier outer updates remain earlier within their vector even if their parsed
+index is later. A factory-default record contributes no object.
 
-Same-pass results therefore dispatch in that dynamic storage order. A result
+Same-pass results therefore dispatch in complete primary order followed by
+complete secondary order. A result
 can activate shared terminal routing; later tied notes still observe input,
 complete locally, and invoke the observer, but their later result events do not
 update the authoritative aggregate while that route is active. Evidence:
 `claim.matching.tap-equal-candidate-fanout`,
 `claim.interactions.cross-family-candidate-result-order`, and
 `claim.interactions.result-terminal-short-circuit`; reconstruction/tests:
-`evaluate_lane_candidate_fanout`, `append_runtime_factory_events`,
+`evaluate_lane_candidate_fanout`, `RuntimeActiveVectors`,
+`append_runtime_factory_events`, `runtime_manager_update_order`,
 `tests/candidate_interaction_test.cpp`, and
 `tests/shared_result_test.cpp`.
 

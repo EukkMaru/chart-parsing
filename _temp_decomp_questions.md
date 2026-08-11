@@ -1,63 +1,50 @@
-# Temp handoff: questions for the next decomp session (2026-08-07)
+# Temp handoff: questions for the next decomp session (2026-08-11)
 
 Temporary note, not normative. Delete once the questions are answered or
-recorded as claims. Context: a six-domain faithfulness audit of the viewer
-against the 2ce3ff6 claims (18 confirmed divergences, GitHub issues #6-#11),
-an owner footage-verification pass over targets selected by a corpus trigger
-scan of all 1,837 reference `_03` charts, and a fix batch applied to
-`scripts/c2s-viewer.html`. Issue #12 is the standing ledger of viewer behavior
-that is implemented from inference or observation and is waiting for binary
-backing — it is a "probably right, please verify" list, not a bug list.
+recorded as claims. Your previous session's push (7762b67, recovered manually
+after quota death) was fully digested: the viewer adopted your changes, an
+eight-domain audit against your presentation claims found twelve implementable
+gaps, and all of them are implemented, corpus-verified, and committed
+(763540f). Issues #3 and #6–#11 and #13 are closed with resolution summaries;
+GitHub issue #15 is your work order, #16 is the owner's verification queue,
+#12 remains the living inference ledger.
 
-## The headline question: DCM query scope
+## The work order (issue #15, evidence inline there)
 
-`FUN`-level question: what exact times and entities does the source-order DCM
-projection-factor query consume, at materialization and at render?
+1. **Air-hold end/checkpoint resource display gate.** Owner footage shows end
+   actions displayed on plain-AHD chain finals (2194_03 m9) although the
+   checkpoint vector takes the final only if AHX — display and judgement
+   diverge, and a rare actionless-end variant exists. Does the trailing style
+   token (field 7; corpus: absent/DEF/PNK) select the resource pair, and does
+   any code suppress the end display? Witness: 8228_05's fourteen PNK
+   micro-holds, the only rare-shaped final population in 155k.
+2. **Meter grid bar vector under a zero component.** FUN_011bb0f0 halts at a
+   zero/nonprogress record; the owner reports the cabinet grid never goes
+   dark on the 139 zero-count charts. Does the bar vector continue, and at
+   which anchor? The viewer keeps 384-tick measure lines past the halt as a
+   labeled owner display rule pending your answer.
+3. **HeavenHold zero/NON null resource.** Owner footage (2194_03 m87): the
+   exceptional zero/NON ALD HeavenHold displays nothing. Confirm the type-13
+   body/start resource lookup resolves to the null resource under exact NON.
+4. Low priority: the exact JointSlide center-stream packed color (the viewer
+   cites the shared opaque-white constant for its white stripe silhouette).
 
-Evidence that the current model (query at the note's own scrolled event time,
-first covering interval in source order, +1 shift) is incomplete, from
-`2442_03` m49-50 (owner-verified footage):
+## What changed viewer-side since your session (for calibration)
 
-- `DCM 49 193 144 100.0` covers exactly the three earlier hold ends of the
-  four `HLD 49 192 ...` records (durations 48/96/144/192; the fourth ends at
-  the interval's edge). Footage and viewer agree the holds vanish one by one.
-- The full-width slide chain (`SXC 50 0 0 16 384 6 4 SLD DW`) begins 47 ticks
-  AFTER the interval ends. Under the current model it takes no factor — yet
-  the owner observed the viewer deferring its appearance while footage shows
-  it approaching normally. The divergence mechanism is NOT located; it may
-  involve materialization eligibility being factor-scaled differently from
-  drawn projection, or a different query anchor entirely. Reproduce before
-  theorizing: the observation predates the endpoint-key/cap fixes.
+Commit 763540f on top of your 7762b67: MNE/ASO excluded from windows and
+trims per the recovered type participation; slide-only opaque-white center
+stripe; HXD caps/bodies unified; hold far caps split on air attachment as a
+labeled shade; AHX markers at 15.724; AirSlide through the shared
+three-stream builder with the second width-indexed action guide; AirSolid
+rebuilt (tenth-properties, shell surfaces, NON suppression, chaining);
+type-13 roots accept air-path attachment with stored-vertical bases; a chart
+mirror toggle implementing your recovered ingest-time reflection; the
+zero/NON HeavenHold suppressed by default per owner footage; the air-hold
+band returned to the air plane per owner footage over your recovered zero
+origin; and a latent drawHeavenHold closure crash (depthAt) is fixed —
+scripts/verify_draw_smoke.mjs now executes the full draw loop headlessly
+over the heaven charts, dense World's End picks, and mirrored variants, so
+draw-path regressions are caught without a browser.
 
-## Verification requests for issue #12 (implemented, probably right)
-
-1. Presentation-side consumers of the endpoint SLA tag (+0x80) for types 1,
-   10, 13 — the viewer now projects every sustain endpoint through its own
-   key, recovered only for type 2 and ALD.
-2. The type-5/6 (air hold/slide) vertical transform — the viewer now anchors
-   all air heights at authored value 5 = ordinary air height, recovered only
-   for ALD (stream-1 threshold 15.574 = (5-1)*3.8934999).
-3. Air-arrow lean construction (`render.air`) — ADL/ADR lean was flipped on
-   one footage observation (2517_03 m71).
-4. The lazy slide endpoint allocator's width argument — post-shrink width
-   kept on two observations (2905_03 m11, 2106_03 m33) against one older
-   contrary one (2891_03 bar 53).
-5. The meter/grid vector builder's field consumers — unit-then-count is still
-   corpus-inferred.
-
-## Enumerations that would close standing blind spots
-
-- The 91-entry descriptor registry, and specifically the exact 45 group-3
-  `T_` statistics spellings — the viewer suppresses `T_*` by wildcard today,
-  which would hide an unregistered spelling (the SLP lesson, issue #11).
-- Family-specific secondary match rejection (orphan AIR/AHD/ASD records):
-  what exactly fails to construct, so the viewer can stop drawing orphans.
-
-## Owner-verified since your last session (for calibration)
-
-The endpoint-key and cap-transform divergences were confirmed in footage
-(0961_03 m105, 2310_03 m106, 2898_03 m27) and are fixed; AHX was absent from
-the viewer's family table (issue #6, fixed, 207 reference charts affected);
-the ALD per-chart height rescale was confirmed at 2121_03 and replaced by the
-fixed value-5 anchor. The slide presentation-classes and scroll-transform
-recoveries survived a 509,056-vector differential test unchanged.
+Your GITHUB_ISSUE_VERIFICATION.md matrix was the map for all of this — the
+issue set it declared answered is now also product-implemented and closed.

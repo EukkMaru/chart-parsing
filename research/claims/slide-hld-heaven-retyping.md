@@ -12,7 +12,7 @@
 
 In the ordinary gameplay parse path, an `SLD`/`SXD`/`SLC`/`SXC` chain whose
 field-8 style maps to exact string `HLD` is changed from parsed type 2 to type
-13 before generated-path construction. The pass writes discriminator code 10
+13 before generated-path construction. The pass writes path-scalar integer 10
 to the root and every control point, preserves the command-form flag, and
 therefore constructs `HeavenHoldNote`: SLD/SLC retain start-profile pair 0/1,
 while SXD/SXC retain pair 2/3.
@@ -39,8 +39,11 @@ while SXD/SXC retain pair 2/3.
 - After all group handlers finish, `FUN_011c7980` invokes `FUN_011c4af0`
   before the generated-record producers. For every type-2 record whose
   `+0xa4` equals one, that pass writes 10 to root `+0x30`, writes 10 to `+0x18`
-  of every `0x24`-byte control point, and changes root type `+0x10` to 13. It
-  does not modify byte `+0x98`.
+  of every `0x24`-byte control point, and changes root type `+0x10` to 13. The
+  HeavenHold precompute consumes those fields as tenths, yielding scalar
+  `1.0`. The pass does not modify command-form byte `+0x98` or the separate
+  presentation selector at `+0xb0`; the latter retains constructor-default
+  zero.
 - The later shared producer handles the rewritten record through its type-13
   branch and fills the primary generated vector. The factory's type-13 case
   constructs RTTI-identified `projView::HeavenHoldNote`, not `SlideNote`.
@@ -70,7 +73,7 @@ why the rewrite has two possible start-profile pairs.
 
 ## Unknowns
 
-- The player-facing names of discriminator code 10 and the `UP` extra-table
+- The player-facing name of path-scalar value `1.0` and the `UP` extra-table
   value remain unresolved; their interfaces and consumers remain explicit.
 - The local corpus does not exercise SLD/SLC/SXC with style `HLD`, although the
   exact parser and rewrite branches accept all four command forms.
@@ -81,8 +84,8 @@ why the rewrite has two possible start-profile pairs.
   temporary static project clone.
 - Spec sections: `spec/c2s.md`, `spec/notes/slide.md`,
   `spec/notes/heaven_hold.md`.
-- Reconstruction code: Slide style decoding, retype predicate, discriminator
-  constants, and extended-form HeavenHold profile selection.
+- Reconstruction code: Slide style decoding, retype predicate, path-scalar
+  constant, and extended-form HeavenHold profile selection.
 - Tests: `tests/heaven_hold_judgement_test.cpp`.
 
 ## Verification

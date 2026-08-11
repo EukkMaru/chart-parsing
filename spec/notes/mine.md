@@ -58,6 +58,53 @@ reconstruction is `chart::reconstruction::update_mine_contact`; evidence:
 `claim.note.mine-contact-aggregate-judgement`; tests:
 `tests/mine_contact_test.cpp`.
 
+## Root and terminal presentation
+
+Mine owns one width-indexed root model. Clamp `decoded_width - 1` to `[0, 15]`
+and subtract from 145, yielding executable resource rows 145 through 130. The
+rows select external model records. Position and scale use the shared root
+rules: lateral center `4 * start_lane + 2 * decoded_width - 32`, initial depth
+`-10000`, lateral scale `decoded_width / external_native_width` with a `1.0`
+fallback below one, and executable depth-axis scale `1.0` or `1.3`.
+
+Load explicitly makes the model visible. During phase 0, each presentation
+update forces it visible and replaces depth with the shared scheduled-time
+projection including base offset and positive-delta DCM. Phases 1 and 2 skip
+that update without issuing a hide, so the last root state persists until the
+maintenance/reset path explicitly hides it or ownership is destroyed.
+
+After result remapping, only result byte zero emits the Mine success effect.
+For an ordinary result, its lateral source coordinate is the arithmetic mean
+of currently held covered lane indices when that set is nonempty; otherwise it
+is `start_lane + decoded_width / 2`. Forced success always uses that span
+center. The coordinate becomes `(coordinate - 8) * 4`, and depth is exactly
+the common judgment plane `-65`.
+
+The success constructor receives the executable-owned selector
+`max(clamp(decoded_width, 0, 16) - 1, 0)` and the chart start lane. A registered
+startup initializer constructs the exact 17-entry table
+`[0,0,1,2,...,15]`; this value is not external configuration. The constructor
+conditionally emits shared effect kinds 8 and 9 only when their external
+handles exist; the primary constructor receives lifetime input 100. The effect
+assets remain external. A nonzero remapped result follows the
+fixed shared-feedback `(4, 0)` path instead; zero selects the external cue
+object with fixed selector 7 and parameter 0. These numeric protocols are
+binary facts; no asset or audio semantics are inferred.
+
+Preload step zero stages all sixteen root rows, step one stages feedback group
+17, and step two prewarms the success-effect constructor for every width.
+Readiness is set after step 28. Reconstruction:
+`mine_model_resource_row`, `mine_root_model_update_enabled`, and the
+`mine_success_effect_*` helpers; tests: `tests/mine_presentation_test.cpp`;
+evidence: `claim.presentation.mine-root-success-effect`.
+
+Mine's shared-feedback `+0x48` wrapper separately applies the same active
+result-control remap to its incoming result byte before the common one-position
+wrapper. That second application is idempotent after the ordinary producer-side
+remap and also covers the forced-result route. It leaves the feedback position
+unchanged; the held-average/span-center calculation above is exclusive to the
+zero-result success-effect constructor.
+
 ## Result and lifetime
 
 Phase 1 supplies anonymous provisional result byte 0; phase 2 supplies byte 4.

@@ -25,6 +25,7 @@ int main() {
     using chart::reconstruction::evaluate_air_hold_sample_step;
     using chart::reconstruction::evaluate_bpm_at_scheduled_position;
     using chart::reconstruction::finalize_bpm_schedule;
+    using chart::reconstruction::c2s_meter_grid_steps;
     using chart::reconstruction::schedule_at_chart_position;
     using chart::reconstruction::snapshot_bpm_sort;
 
@@ -36,6 +37,17 @@ int main() {
            4.0F / 384.0F);
     assert(chart_position_scalar(canonicalize_c2s_position(7, 3, 0)) ==
            0.0F);
+
+    const auto three_four = c2s_meter_grid_steps(4, 3);
+    assert(three_four.components_nonzero);
+    assert(three_four.beat_ticks == 96);
+    assert(three_four.bar_ticks == 288);
+    const auto six_eight = c2s_meter_grid_steps(8, 6);
+    assert(six_eight.beat_ticks == 48);
+    assert(six_eight.bar_ticks == 288);
+    assert(!c2s_meter_grid_steps(0, 4).components_nonzero);
+    assert(!c2s_meter_grid_steps(4, 0).components_nonzero);
+    assert(c2s_meter_grid_steps(-4, 3).beat_ticks == 0);
 
     // Input order is deliberately scrambled. Four scalar beats from major 0
     // to major 1 take 2000 ms at 120 BPM; the next four take 1000 ms at 240.

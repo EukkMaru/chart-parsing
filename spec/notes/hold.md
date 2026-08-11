@@ -1,5 +1,37 @@
 # HOLD note
 
+## Presentation
+
+HOLD owns two width-indexed model markers and a separate dynamic constant-width
+body. Ordinary roots use embedded resource rows `49..34`; HXD roots use the
+shared extended rows `97..82` or `113..98`. The far marker uses rows `65..50`
+without an attached AIR-family secondary and `289..274` with attached type 3,
+5, or 8. Every table uses `clamp(decoded_width - 1, 0, 15)`. These integers
+select external model records; their proprietary mesh/material contents are
+not part of the reconstruction.
+
+Both markers use lateral center `4*lane + 2*width - 32`, the independently
+SLA-projected root/end depths, the common native-width scale, and the
+executable-selected depth scale. They are visible while start phase is not 4
+and are hidden by the family reset.
+
+The body has fixed lateral edges `(lane - 8)*4` and
+`(lane + width - 8)*4`. Adjusted root/end deltas feed projection, while raw
+deltas separately select judgement-plane crossing. Surviving depth is clipped
+to `[-600, 50]`; clipping and raw crossing determine the body resource
+coordinate. Exactly one single-sided six-vertex quad is submitted. Path phase
+2 selects animated mode; after start completion, path phase 3 selects exact
+alternate gray `0xff666666` and the other active path phases select animated
+mode. Base and animated modes use exact white `0xffffffff`. Both completed
+phases stop the presentation update.
+
+Evidence: `claim.presentation.hold-root-body-transform` and
+`claim.presentation.sustain-endpoint-sla-selection`. Reconstruction:
+`hold_root_model_resource_row`, `hold_far_marker_resource_row`,
+`hold_presentation_mode`, `prepare_hold_body_geometry`, and
+`build_hold_body_vertices`; focused tests:
+`tests/hold_presentation_test.cpp`.
+
 ## Construction and schedule
 
 Parsed record type 1 constructs a runtime `projView::HoldNote`. Shared note
@@ -11,6 +43,12 @@ The common width clamp, fixed encoding/decoding tables, and exact bounded-
 extent calculation are normative in `spec/notes/tap.md`. Evidence:
 `claim.parser.common-lane-width-encoding` and
 `claim.note.hold-construction-start-gate`.
+
+Presentation retains the root and endpoint SLA tags separately. The HOLD
+update projects the start schedule with the root tag and the end schedule with
+the endpoint tag before the common projection transform. Endpoint drawing
+therefore must not inherit the root's STP/SFL/SLP schedule. Evidence:
+`claim.presentation.sustain-endpoint-sla-selection`.
 
 The first five HLD/HXD integers are major, minor, lane, width, and duration.
 Start position is canonicalized from `(major, minor)` and end position from

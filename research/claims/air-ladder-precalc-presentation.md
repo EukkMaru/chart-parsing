@@ -101,14 +101,17 @@ per-checkpoint presentation records, not the main path geometry.
 - The shared type-9 builder clips segment endpoints to projected range
   `[-600, 50]`, interpolating every carried geometric value at a crossed
   boundary. Each vertex is `0x18` bytes: render-space lateral, vertical and
-  projected coordinates, packed color, and two neutral coordinates.
+  projected coordinates, executable-owned packed color, and two neutral
+  coordinates.
 - Stream 0 emits six vertices for one quad at the segment's full vertical
   endpoints. Its endpoint half extent is decoded width multiplied by `1.5` in
   render-space units. Stream 1 emits a six-vertex quad on vertical zero; its
   half extent applies the exact height-dependent scale `0.75` below/equal zero,
   `0.65` at/above `15.574`, and the observed linear expression between them.
   Stream 2 emits both windings of one full-vertical quad, twelve vertices, with
-  fixed half extent `1.96`; parsed style code nonzero selects `0.98`. Style 15
+  fixed half extent `1.96`; parsed style code nonzero selects `0.98`. Streams
+  zero and one use exact base white `0xffffffff`; stream two uses exact
+  low-alpha white `0x40ffffff`. Style 15
   assigns resource ID `-1` to all three main streams even when a positive
   interval keeps the ordinary AirLadder runtime class.
 - After filling the three stream vertex containers, the builder calls the
@@ -167,7 +170,7 @@ former generated-main-geometry explanation.
 ## Unknowns
 
 - The three resource identities, texture/material contents, player-facing
-  stream roles, colors, shaders, and final pixel compositing are external
+  stream roles, shaders, and final pixel compositing are external
   product data and are not reconstruction inputs. Their executable selection,
   zero-handle skip, scene traversal, batching boundary, and default command
   append order are closed.

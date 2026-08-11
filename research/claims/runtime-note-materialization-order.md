@@ -94,8 +94,10 @@ record is consumed without creating an object.
   supported root. Region-only type 12 and every other default value create no
   primary object. The pending entry is still gone because erasure belongs to
   the caller after the factory returns.
-- A factory-created primary is appended to the first active vector, followed
-  immediately by an attached type-3, type-5, or type-8 secondary when present.
+- A factory-created primary is appended to the first active vector. An attached
+  type-3, type-5, or type-8 object, when present, is appended to a distinct
+  secondary vector in the corresponding encounter order. The manager later
+  updates the complete primary vector before the complete secondary vector.
   Since the manager call has already finished, neither object is a candidate,
   input consumer, or result producer during the construction update. On the
   first later manager substep, primaries already enter candidate reduction but

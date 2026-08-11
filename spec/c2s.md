@@ -126,6 +126,40 @@ with IDs `0x00` through `0x5a`. The corpus uses 87 of them; registered `SFE`,
 `ASO`, `HHD`, and `HHX` are absent and remain covered by exact-binary
 structural tests.
 
+The complete registry order is normative:
+
+```text
+00 VERSION        01 MUSIC          02 SEQUENCEID     03 DIFFICULT
+04 LEVEL          05 CREATOR        06 BPM_DEF        07 MET_DEF
+08 RESOLUTION     09 CLK_DEF        0a PROGJUDGE_BPM  0b PROGJUDGE_AER
+0c TUTORIAL       0d BPM            0e MET             0f STP
+10 SFL            11 SFE            12 SLP             13 DCM
+14 CLK            15 TAP            16 CHR             17 FLK
+18 MNE            19 HLD            1a HXD             1b SLD
+1c SXD            1d SLC            1e SXC             1f AIR
+20 AUR            21 AUL            22 ADW             23 ADR
+24 ADL            25 AHD            26 AHX             27 ASD
+28 ASC            29 ALD            2a ASO             2b SLA
+2c HHD            2d HHX            2e T_REC_TAP       2f T_REC_CHR
+30 T_REC_FLK      31 T_REC_MNE      32 T_REC_HLD       33 T_REC_SLD
+34 T_REC_AIR      35 T_REC_AHD      36 T_REC_ALL       37 T_NOTE_TAP
+38 T_NOTE_CHR     39 T_NOTE_FLK     3a T_NOTE_MNE      3b T_NOTE_HLD
+3c T_NOTE_SLD     3d T_NOTE_AIR     3e T_NOTE_AHD      3f T_NOTE_ALL
+40 T_NUM_TAP      41 T_NUM_CHR      42 T_NUM_FLK       43 T_NUM_MNE
+44 T_NUM_HLD      45 T_NUM_SLD      46 T_NUM_AIR       47 T_NUM_AHD
+48 T_NUM_AAC      49 T_CHRTYPE_UP   4a T_CHRTYPE_DW    4b T_CHRTYPE_CE
+4c T_CHRTYPE_RC   4d T_CHRTYPE_LC   4e T_CHRTYPE_RS    4f T_CHRTYPE_LS
+50 T_CHRTYPE_BS   51 T_LEN_HLD      52 T_LEN_SLD       53 T_LEN_AHD
+54 T_LEN_ALL      55 T_JUDGE_TAP    56 T_JUDGE_HLD     57 T_JUDGE_SLD
+58 T_JUDGE_AIR    59 T_JUDGE_FLK    5a T_JUDGE_ALL
+```
+
+No prefix is a compatibility rule. In particular, an unlisted `T_*` spelling
+is unknown and is discarded by the source line loader; it is not accepted as
+an inert group-3 command. Reconstruction:
+`c2s_command_descriptor_names` and `c2s_command_is_registered`; focused test:
+`tests/derived_command_test.cpp`.
+
 Every chart also contains 24 backward-compatible spellings absent from the
 registry: `T_FIRST_MSEC`, `T_FIRST_RES`, `T_FINAL_MSEC`, `T_FINAL_RES`, and
 `T_PROG_00`, `T_PROG_05`, ..., `T_PROG_95`. Their literals exist in one
@@ -334,9 +368,11 @@ judgement-checker profile as specified in `spec/notes/hold.md`. Evidence:
 
 Before type-specific generated-path construction, exact field-8 style `HLD`
 (style code 1) changes any completed Slide chain from type 2 to type 13 and
-normalizes its root and control-point discriminator slots to code 10. The
-SLD/SLC versus SXD/SXC command-form flag is preserved, so rewritten records
-construct `HeavenHoldNote` with start-profile pair 0/1 or 2/3 respectively.
+normalizes its root and control-point path-scalar slots to integer 10. The
+HeavenHold presentation precompute later consumes this as scalar `1.0`; the
+separate parsed `+0xb0` presentation selector remains zero. The SLD/SLC versus
+SXD/SXC command-form flag is preserved, so rewritten records construct
+`HeavenHoldNote` with start-profile pair 0/1 or 2/3 respectively.
 Evidence: `claim.note.slide-hld-heaven-retyping`.
 
 `AHD` and `AHX` resolve to secondary type 5. Their sixth token selects the
@@ -364,8 +400,11 @@ normative in `spec/notes/air_ladder.md`. A missing legacy style token becomes
 empty string / code 0 and does not select the exception. `HHD` and `HHX` have
 command IDs
 `0x2c` and `0x2d`, resolve to parsed type 13, and always construct the same
-HeavenHoldNote class. Exact generation and consumer rules are normative in
-`spec/notes/heaven_hold.md`. Evidence:
+HeavenHoldNote class. They read root scalar, duration, ending lane/width,
+ending scalar, and presentation selector after the common root fields; HHX
+also reads one exact-table extra token. Exact chaining, generation,
+presentation, and consumer rules are normative in `spec/notes/heaven_hold.md`.
+Evidence:
 `claim.note.air-ladder-generated-checkpoints` and
 `claim.note.heaven-hold-judgement`.
 

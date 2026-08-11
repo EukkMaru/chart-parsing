@@ -92,6 +92,11 @@ if(PROJECT_IS_TOP_LEVEL)
         target_link_libraries(tap_lifecycle_test PRIVATE chart_logic)
         add_test(NAME chart.tap_lifecycle COMMAND tap_lifecycle_test)
 
+        add_executable(tap_presentation_test
+                       tests/tap_presentation_test.cpp)
+        target_link_libraries(tap_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.tap_presentation COMMAND tap_presentation_test)
+
         add_executable(play_clock_test tests/play_clock_test.cpp)
         target_link_libraries(play_clock_test PRIVATE chart_logic)
         add_test(NAME chart.play_clock COMMAND play_clock_test)
@@ -103,6 +108,16 @@ if(PROJECT_IS_TOP_LEVEL)
         add_executable(hold_sustain_test tests/hold_sustain_test.cpp)
         target_link_libraries(hold_sustain_test PRIVATE chart_logic)
         add_test(NAME chart.hold_sustain COMMAND hold_sustain_test)
+
+        add_executable(hold_presentation_test
+                       tests/hold_presentation_test.cpp)
+        target_link_libraries(hold_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.hold_presentation COMMAND hold_presentation_test)
+
+        add_executable(flick_presentation_test
+                       tests/flick_presentation_test.cpp)
+        target_link_libraries(flick_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.flick_presentation COMMAND flick_presentation_test)
 
         add_executable(forced_result_test tests/forced_result_test.cpp)
         target_link_libraries(forced_result_test PRIVATE chart_logic)
@@ -128,9 +143,19 @@ if(PROJECT_IS_TOP_LEVEL)
         target_link_libraries(mine_contact_test PRIVATE chart_logic)
         add_test(NAME chart.mine_contact COMMAND mine_contact_test)
 
+        add_executable(mine_presentation_test
+                       tests/mine_presentation_test.cpp)
+        target_link_libraries(mine_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.mine_presentation COMMAND mine_presentation_test)
+
         add_executable(air_judgement_test tests/air_judgement_test.cpp)
         target_link_libraries(air_judgement_test PRIVATE chart_logic)
         add_test(NAME chart.air_judgement COMMAND air_judgement_test)
+
+        add_executable(air_presentation_test
+                       tests/air_presentation_test.cpp)
+        target_link_libraries(air_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.air_presentation COMMAND air_presentation_test)
 
         add_executable(air_hold_judgement_test
                        tests/air_hold_judgement_test.cpp)
@@ -138,11 +163,61 @@ if(PROJECT_IS_TOP_LEVEL)
         add_test(NAME chart.air_hold_judgement
                  COMMAND air_hold_judgement_test)
 
+        add_executable(air_hold_presentation_test
+                       tests/air_hold_presentation_test.cpp)
+        target_link_libraries(air_hold_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.air_hold_presentation
+                 COMMAND air_hold_presentation_test)
+
         add_executable(air_slide_judgement_test
                        tests/air_slide_judgement_test.cpp)
         target_link_libraries(air_slide_judgement_test PRIVATE chart_logic)
         add_test(NAME chart.air_slide_judgement
                  COMMAND air_slide_judgement_test)
+
+        add_executable(air_slide_presentation_test
+                       tests/air_slide_presentation_test.cpp)
+        target_link_libraries(air_slide_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.air_slide_presentation
+                 COMMAND air_slide_presentation_test)
+
+        add_executable(shared_feedback_presentation_test
+                       tests/shared_feedback_presentation_test.cpp)
+        target_link_libraries(shared_feedback_presentation_test
+                              PRIVATE chart_logic)
+        add_test(NAME chart.shared_feedback_presentation
+                 COMMAND shared_feedback_presentation_test)
+
+        add_executable(scene_camera_presentation_test
+                       tests/scene_camera_presentation_test.cpp)
+        target_link_libraries(scene_camera_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.scene_camera_presentation
+                 COMMAND scene_camera_presentation_test)
+
+        add_executable(scene_pass_ordering_test
+                       tests/scene_pass_ordering_test.cpp)
+        target_link_libraries(scene_pass_ordering_test PRIVATE chart_logic)
+        add_test(NAME chart.scene_pass_ordering
+                 COMMAND scene_pass_ordering_test)
+
+        add_executable(material_pass_flags_test
+                       tests/material_pass_flags_test.cpp)
+        target_link_libraries(material_pass_flags_test PRIVATE chart_logic)
+        add_test(NAME chart.material_pass_flags
+                 COMMAND material_pass_flags_test)
+
+        add_executable(mirroring_geometry_test
+                       tests/mirroring_geometry_test.cpp)
+        target_link_libraries(mirroring_geometry_test PRIVATE chart_logic)
+        add_test(NAME chart.mirroring_geometry
+                 COMMAND mirroring_geometry_test)
+
+        add_executable(cross_family_presentation_order_test
+                       tests/cross_family_presentation_order_test.cpp)
+        target_link_libraries(cross_family_presentation_order_test
+                              PRIVATE chart_logic)
+        add_test(NAME chart.cross_family_presentation_order
+                 COMMAND cross_family_presentation_order_test)
 
         add_executable(air_ladder_judgement_test
                        tests/air_ladder_judgement_test.cpp)
@@ -156,11 +231,23 @@ if(PROJECT_IS_TOP_LEVEL)
         add_test(NAME chart.air_ladder_presentation
                  COMMAND air_ladder_presentation_test)
 
+        add_executable(air_solid_presentation_test
+                       tests/air_solid_presentation_test.cpp)
+        target_link_libraries(air_solid_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.air_solid_presentation
+                 COMMAND air_solid_presentation_test)
+
         add_executable(heaven_hold_judgement_test
                        tests/heaven_hold_judgement_test.cpp)
         target_link_libraries(heaven_hold_judgement_test PRIVATE chart_logic)
         add_test(NAME chart.heaven_hold_judgement
                  COMMAND heaven_hold_judgement_test)
+
+        add_executable(heaven_hold_presentation_test
+                       tests/heaven_hold_presentation_test.cpp)
+        target_link_libraries(heaven_hold_presentation_test PRIVATE chart_logic)
+        add_test(NAME chart.heaven_hold_presentation
+                 COMMAND heaven_hold_presentation_test)
 
         add_executable(slide_path_test tests/slide_path_test.cpp)
         target_link_libraries(slide_path_test PRIVATE chart_logic)

@@ -8,7 +8,7 @@
 - Coverage rows: `parser.events`, `note.slide`, `state.ownership`; viewer rows
   `model.normalization`, `render.slide`, `render.feedback_layering`, and
   `config.external_presentation`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -70,8 +70,11 @@ persistent path or its endpoints.
 - The same load walks generated segments and preloads the endpoint resource
   family only for entries whose ending marker `+0x35` is nonzero. The lazy
   allocator repeats that guard: marker zero returns without allocating;
-  marker one selects by bounded width, root style, final-segment byte, and a
-  runtime variant, then stores the resource handle and object pointer.
+  marker one decodes generated `+0x14`, the ending control's width, then
+  selects by that post-boundary width, root style, final-segment byte, and a
+  runtime variant. Generated `+0x10` is the preceding/start width and is not
+  the endpoint selector. The allocator then stores the resource handle and
+  object pointer.
 - The presentation update manages the root resource separately. For every
   generated segment it updates the projected/lateral transform and invokes the
   guarded allocator. A present endpoint object is requested visible exactly
@@ -134,8 +137,8 @@ none can substitute for the endpoint marker.
   default symbols and types were retained.
 - Spec sections: `spec/notes/slide.md` and `docs/VIEWER_ROADMAP.md`.
 - Reconstruction code: Slide root/style/feedback selectors, endpoint-resource
-  presence/result/visibility helpers, and external-table selection in
-  `include/chart/reconstruction.hpp`.
+  presence/result/visibility/ending-width helpers, and external-table
+  selection in `include/chart/reconstruction.hpp`.
 - Tests: `tests/slide_path_test.cpp`.
 
 ## Verification

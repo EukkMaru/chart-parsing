@@ -11,12 +11,13 @@
 ## Statement
 
 The active-note manager completes candidate preparation and minimum reduction
-before updating any note, then updates every live object in active-vector
-storage order without consuming the selected candidate or rising edge.
+over the primary vector before updating any note, then updates every primary
+in forward primary-vector order and every attachment in forward secondary-
+vector order without consuming the selected candidate or rising edge.
 Consequently equal TAP, CHR, unresolved HOLD, unresolved Slide, and unresolved
 HeavenHold starts can all accept the same edge when their local checkers accept;
 FLK also accepts independently of the selected minimum. Same-pass result events
-are dispatched in that storage order, so an earlier terminal event can
+are dispatched in primary-first/secondary-second vector order, so an earlier terminal event can
 observer-route later events without preventing their local completion.
 
 ## Anchors
@@ -48,10 +49,12 @@ observer-route later events without preventing their local completion.
   and cannot emit FLK's later motion result on that same substep.
 - Gameplay setup queues final parsed indices in order. Each materialization
   scan visits the pending vector forward; existing objects remain ahead of new
-  objects, newly supported roots append in scan order, and an attached
-  secondary appends immediately after its root. Eligible factory-default
-  records append nothing. Different eligibility updates can therefore make
-  dynamic construction time, not merely chart index, decide storage order.
+  objects in each owner, newly supported roots append to the primary vector in
+  scan order, and attachments append to a distinct secondary vector in their
+  corresponding encounter order. Eligible factory-default records append
+  nothing. Different eligibility updates can therefore make dynamic
+  construction time, not merely chart index, decide order within either
+  vector.
 - Shared result dispatch handles each call synchronously. If an earlier event
   activates terminal routing, a later same-pass event still reaches its note
   finalizer and observer but no longer updates the authoritative aggregate.
@@ -62,8 +65,9 @@ Because reduction is complete and read-only before any input gate, storage
 order cannot break a candidate tie. Applying the one shared equality predicate
 to all gated start families establishes conditional fanout across those
 families, while FLK's missing equality read establishes its independent case.
-The separate update pass and synchronous result call then make active-vector
-order the exact downstream simultaneous-result order.
+The separate update passes and synchronous result call then make complete
+primary-vector order followed by complete secondary-vector order the exact
+downstream simultaneous-result order.
 
 ## Alternatives and falsifiers
 
@@ -78,7 +82,9 @@ order the exact downstream simultaneous-result order.
 
 - External per-family checker windows can make one tied local gate reject while
   another accepts; the claim is conditional on local acceptance.
-- Presentation-only secondaries remain ordered but expose no lane candidate.
+- Attached secondaries remain ordered in their own vector and expose no lane
+  candidate. They may submit results, but only after every primary update in
+  the substep.
 
 ## Consequences
 
@@ -88,8 +94,9 @@ order the exact downstream simultaneous-result order.
   `claim.matching.flick-candidate-asymmetry`,
   `claim.pipeline.runtime-note-materialization-order`, and
   `claim.interactions.result-terminal-short-circuit`.
-- Reconstruction code: `evaluate_lane_candidate_fanout` and
-  `append_runtime_factory_events`.
+- Reconstruction code: `evaluate_lane_candidate_fanout`,
+  `RuntimeActiveVectors`, `append_runtime_factory_events`, and
+  `runtime_manager_update_order`.
 - Tests: `tests/candidate_interaction_test.cpp`,
   `tests/shared_result_test.cpp`.
 
@@ -97,7 +104,7 @@ order the exact downstream simultaneous-result order.
 
 Focused tests cover equal fanout across every candidate-producing start family,
 per-note local rejection without edge consumption, unequal FLK asymmetry,
-existing/root/secondary/factory-default append order, and ordered terminal
+existing/root/secondary/factory-default two-vector append order, and ordered terminal
 rerouting of a later same-pass result. The relevant family candidate wrappers,
 shared input gate, manager loops, materializer, factory appends, and result
 route were independently rewalked.

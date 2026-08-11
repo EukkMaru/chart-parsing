@@ -10,7 +10,7 @@
   `judgement.windows`, `judgement.miss`, `note.other_variants`,
   `state.ownership`, `config.external`, `interactions.cross_note`,
   `audit.indirect_calls`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -52,7 +52,9 @@ start stream and the combined path/checkpoint stream to finish.
 
 - The type-5 parser requires six event fields after the command. Its sixth
   token resolves through the same family-to-type map. On first attachment that
-  type must match an existing root at equal lane, width, and chart position,
+  type must match an existing root at equal current-endpoint lane, width, and
+  chart position. HOLD uses its endpoint and Slide its current final path
+  record,
   and the root must not already carry an in-range secondary type. Corpus and
   binary paths agree on supported roots 0, 1, 2, 4, 6, and 11. Missing matches
   take the parser diagnostic path.
@@ -63,9 +65,10 @@ start stream and the combined path/checkpoint stream to finish.
   the final command was `AHX`. `AHD` therefore extends the endpoint/path but
   does not by itself create an authored timing checkpoint.
 - Factory secondary type 5 allocates `0x2f0` bytes, constructs AirHoldNote,
-  loads it through virtual slot `+0x24`, links it from the root, and appends the
-  root followed by the secondary. The vtable candidate slot uses the same
-  all-negative-sentinel implementation as AIR.
+  loads it through virtual slot `+0x24`, links it from the root, appends the
+  root to the primary vector, and appends the secondary to its separate vector.
+  The manager drains the primary vector first. The vtable candidate slot uses
+  the same all-negative-sentinel implementation as AIR.
 - The start checker anchors to the root start for root types 0, 4, 6, and 11,
   root end for type 1, and the last path/control point for types 2 and 13. The
   parser leaves its direction field at reset value zero, selecting profile 0

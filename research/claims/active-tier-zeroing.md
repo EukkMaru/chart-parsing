@@ -67,6 +67,11 @@ do not participate.
   Slide path, the shared TAP/CHR/HOLD/Slide start gate, AIR timing, HeavenHold,
   MNE, FLK, AirHold, AirSlide, HOLD, and the MNE/FLK result wrappers. No
   unidentified note-family caller remains.
+- Mine and Flick use opcode-identical `+0x48` wrappers which apply this remap
+  immediately before the common one-position feedback wrapper. Their ordinary
+  producers can already have applied the same remap; the repeated application
+  is idempotent because the only replacement is zero. The wrapper also covers
+  results reaching `+0x48` from paths that selected their byte elsewhere.
 - The validity bound comes from a runtime-loaded table registered as
   `NotesJudgeResultTableRecord`, so its unavailable count is correctly treated
   as an input rather than guessed from the executable.

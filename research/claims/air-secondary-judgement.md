@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `parser.events`, `input.logical_state`, `input.buffering`, `matching.candidates`, `judgement.types`, `judgement.windows`, `judgement.miss`, `note.air`, `state.ownership`, `config.external`, `interactions.cross_note`, `audit.indirect_calls`
-- Last reviewed: 2026-07-26
+- Last reviewed: 2026-08-07
 
 ## Statement
 
@@ -44,8 +44,11 @@ category 7 or 8.
 
 - The type-3 parser case scans existing `0x174`-byte root records. A match
   requires an unassigned/out-of-range secondary type, the requested root type,
-  equal start lane and width, and equal chart position through the parser's
-  epsilon comparison. On success it stores secondary type 3, optional ordering
+  equal current-endpoint lane and width, and equal current-endpoint chart
+  position through the parser's epsilon comparison. The lane/width accessors
+  select the final path record for parsed types 2, 9, 10, and 13 and otherwise
+  select the record's base fields; the position comparison uses the stored
+  current endpoint at `+0x34`. On success it stores secondary type 3, optional ordering
   index, a parsed property, and a direction code on that root. No new root
   record is appended. Failure to find a match follows the parser diagnostic and
   false-return path.
@@ -54,9 +57,11 @@ category 7 or 8.
 - The main factory has no standalone parsed-type-3 root case. For any supported
   root whose secondary field is 3, it allocates a `0x170`-byte object, calls the
   constructor with the `projView::AirNote` RTTI/vtable family, loads it through
-  virtual slot `+0x24`, stores it at root `+0xe0`, then appends the root followed
-  by the AirNote to the active vector. The link is used by metadata propagation;
-  AirNote outcome and destruction do not dereference a root backpointer.
+  virtual slot `+0x24`, stores it at root `+0xe0`, appends the root to the
+  primary vector, and appends AirNote to the separate secondary vector. The
+  link is used by metadata propagation; AirNote outcome and destruction do not
+  dereference a root backpointer. The manager updates every primary before
+  every secondary.
 - AirNote load copies direction code to local `+0xec` and initializes its
   checker. Root types 1, 2, and 13 select profile base 0; types 0, 4, and 11
   select base 2; type 6 selects base 4. Direction codes 0 through 2 use the

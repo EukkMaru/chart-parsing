@@ -27,7 +27,7 @@ int main() {
     assert(parse_slide_style_code("") == slide_sld_style_code);
     assert(slide_style_retypes_to_heaven_hold(slide_hld_style_code));
     assert(!slide_style_retypes_to_heaven_hold(slide_sld_style_code));
-    assert(slide_heaven_discriminator_code == 10);
+    assert(slide_heaven_path_scalar_tenths == 10);
     assert(!slide_command_uses_extended_profile(SlideCommandForm::sld));
     assert(slide_command_uses_extended_profile(SlideCommandForm::sxd));
     assert(!slide_command_uses_extended_profile(SlideCommandForm::slc));

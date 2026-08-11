@@ -18,7 +18,7 @@ as an official game client.
 
 Stage one—the exact-snapshot gameplay reconstruction—is complete and remains
 the evidence foundation. Stage two—the offline viewer—is the active goal. The
-five known GitHub issues are starting leads, not the bounds of stage two. Keep
+12 GitHub issues have been investigated but are not the bounds of stage two. Keep
 expanding and closing the binary-backed presentation map until a deliberate
 saturation audit finds no unexplored gameplay-render path, field consumer,
 indirect behavior, state transition, or relevant external-parameter selection.
@@ -27,17 +27,18 @@ Read, in order:
 
 1. `docs/SCOPE.md`
 2. `docs/WORKFLOW.md`
-3. `docs/EVIDENCE.md`
-4. `docs/GHIDRA.md`
-5. `docs/COMPLETION.md`
-6. `docs/VIEWER_ROADMAP.md`
-7. `research/STATUS.md`, `research/COVERAGE.tsv`, and
+3. `docs/HARNESS.md`
+4. `docs/EVIDENCE.md`
+5. `docs/GHIDRA.md`
+6. `docs/COMPLETION.md`
+7. `docs/VIEWER_ROADMAP.md`
+8. `research/STATUS.md`, `research/COVERAGE.tsv`, and
    `research/VIEWER_COVERAGE.tsv`
-8. `_temp_handoff_render_comparison.md` while its leads remain unresolved
+9. `research/GITHUB_ISSUE_VERIFICATION.md`
 
-Then run `python3 scripts/harness.py validate`, build the reconstruction, and
-run its tests. Run `python3 scripts/harness.py doctor` before any new Ghidra
-work.
+Then follow `docs/HARNESS.md`: run the preflight/validation/selection commands,
+build the reconstruction, and run its tests. Run `python3 scripts/harness.py
+doctor` before any new Ghidra work.
 
 ## Non-negotiable rules
 
