@@ -12,6 +12,15 @@ Every design decision below was made explicitly by the owner (2026-08-07
 question sessions, 28 decisions), with edge-case machinery contributed by a
 three-way design panel.
 
+**Revised 2026-08-11** against the post-decomp canon: the HEAVEN family
+gains its recovered layout (per-endpoint verticals, lateral endpoint,
+`disc`, and `fx` replacing `xtok`), TRACE's properties become the recovered
+shell heights `hA`/`hB`, slide step width follows the six-field legacy
+presence rule, the attachment table gains type-13 roots and loses the
+free-standing `NONE`, METER's field order graduates from corpus-inferred to
+recovered, and DEPTH's query-only semantics are documented. Grammar shape,
+keywords, and every owner decision are unchanged.
+
 ## 1. Files
 
 - **`chart.cmr`** — the whole chart in one file, sections in order:
@@ -75,7 +84,10 @@ Fully modeled, friendly lowercase keys. The header commands map:
 **Statistics are derived, not stored.** The binary's own derived-summary pass
 clears the complete 45-integer group-3 destination without reading it and
 rebuilds it from finalized parsed records (`spec/c2s.md`), so authored `T_*`
-values never reach the runtime model. `cmr2c2s` regenerates the registered
+values never reach the runtime model. The registered vocabulary is the exact
+91-name descriptor registry (claim.parser.command-descriptor-schema) —
+nothing is prefix-matched, and an unregistered `T_*` spelling is an unknown
+command like any other. `cmr2c2s` regenerates the registered
 `T_*` block by implementing that derivation. Where a source chart's authored
 values disagree with the derivation, `c2cmr` warns and records the
 disagreeing values as explicit overrides:
@@ -112,8 +124,13 @@ converter never does it.
 | `CLICK <m:t>` | `CLK` | point event |
 
 The meter fraction is the one place cmr deliberately un-inverts c2s
-(`METER 46:000 3/4` ↔ `MET 46 0 4 3`). The unit-then-count reading of the c2s
-fields is corpus-inferred (issue #12).
+(`METER 46:000 3/4` ↔ `MET 46 0 4 3`). The unit-then-count reading is now
+recovered, not corpus-inferred: the producer computes `beat = 384/unit` and
+`bar = count*384/unit` (claim.parser.tempo-measure-schedule; 2026-08-11
+revision). `DEPTH` is ONLY the separate source-order projection-factor
+query — it never joins the scroll schedule ("the chart-region transform is
+fully defined by STP/SFL/SLP intervals", spec/timing.md), and its cabinet
+query anchors at current playback position plus the note's adjusted delta.
 
 ## 5. `[notes]`
 
@@ -187,6 +204,11 @@ EX-ness lives in the word (`EXSLIDE`) and steps inherit it; a mixed chain
 `plain` or `ex`. `style` is the slide style token (`SLD`/`HLD`/`GRN`), written
 iff present, header value inherited by steps, per-step override allowed. `fx`
 appears only on EX segments (the binary reads it only on `SXD`/`SXC`).
+Step width follows the presence-round-trip rule (2026-08-11 revision): the
+recovered six-field legacy form constructs the control with the record's own
+start width, so an omitted step `w` round-trips that form — the emitter
+writes the six-field record — while an explicit `w` emits the seven-field
+form, even when the values coincide.
 
 ```
 AIRHOLD <tick> L<lane> w<w> on <FAMILY> [style <S>]
@@ -198,12 +220,20 @@ AIRSLIDE <tick> L<lane> w<w> h<v> on <FAMILY> [style <S>]
 ```
 
 `on <FAMILY>` is the root-attachment token in player words (`TAP`, `EXTAP`,
-`FLICK`, `DAMAGE`, `HOLD`, `EXHOLD`, `SLIDE`, `EXSLIDE`, `AIRHOLD`,
-`AIRSLIDE`, `NONE` for a free-standing chain — exact token mapping in §6).
-Air-hold steps omit lane/width (the family is static); a step may carry
-`L`/`w` explicitly as the lossless escape if a source record varies them.
-Continuation records' own root tokens are derived from block structure, per
-the recovered continuation rules.
+`FLICK`, `DAMAGE`, `HOLD`, `EXHOLD`, `SLIDE`, `EXSLIDE`, `HEAVEN`,
+`EXHEAVEN`, `AIRHOLD`, `AIRSLIDE` — exact token mapping in §6). Recovered
+attachment rules (2026-08-11 revision, spec/matching.md and the air-family
+claims): initial attachment supports root parsed types 0, 1, 2, 4, 6, 11,
+and 13, at the root's current endpoint, requiring an unused secondary slot;
+there is **no free-standing form** — the former `NONE` token is removed,
+because a failed root search takes the parser diagnostic path and appends
+nothing. A type-13 root supplies its chain's stored final vertical as the
+attachment base. ASD/ASC continuation additionally requires the previous
+control's ASD marker to match the referenced spelling. Air-hold steps omit
+lane/width (the family is static); a step may carry `L`/`w` explicitly as
+the lossless escape if a source record varies them. Continuation records'
+own root tokens are derived from block structure, per the recovered
+continuation rules.
 
 ```
 CRUSH <tick> L<lane> w<w> h<v> every <ticks> [style <S>]
@@ -223,23 +253,33 @@ same inline-`until` rule applies to every chain family's single-record case.
 (§5.6).
 
 ```
-TRACE <tick> L<lane> w<w> p1 <a> p2 <b> until <m:t> L<lane> w<w> p1 <a> p2 <b> [style <S>]
+TRACE <tick> L<lane> w<w> hA <a> hB <b> until <m:t> L<lane> w<w> hA <a> hB <b> [style <S>]
 ```
 
-TRACE (c2s `ASO`, corpus-absent, exact-binary-derived) carries two anonymous
-tenth-valued properties per endpoint; `p1`/`p2` are deliberately neutral names
-until the decomp pins their roles (issue #12). Multi-record traces chain with
-`~>` steps carrying the same shape.
+TRACE (c2s `ASO`, corpus-absent, exact-binary-derived) carries two
+integer-tenth **shell surface heights** per endpoint — the roles are now
+recovered (claim.note.air-solid-presentation; 2026-08-11 revision retires
+the former neutral `p1`/`p2` names, exactly the spec bump the original
+decision anticipated). Exact `NON` style is the missing-resource sentinel.
+Multi-record traces chain on equal style code, matching endpoint, and both
+heights, with `~>` steps carrying the same shape.
 
 ```
-HEAVEN <tick> L<lane> w<w> until <m:t>
-EXHEAVEN <tick> L<lane> w<w> until <m:t> [xtok <T>]   // c2s HHX; extra token role unpinned
-  ~> <m:t>                                             // extension records
+HEAVEN <tick> L<lane> w<w> h<v> disc <n> until <m:t> L<lane> w<w> h<v>
+EXHEAVEN <tick> L<lane> w<w> h<v> disc <n> [fx <word>] until <m:t> L<lane> w<w> h<v>
+  ~> <m:t> L<lane> w<w> h<v>                          // extension records
 ```
 
-`HHD`/`HHX` chains extend with `~>` steps. The HHX additional token (read
-through an executable-owned lookup; role unrecovered) is preserved verbatim
-behind `xtok`, written iff present.
+Recovered type-13 layout (2026-08-11 revision, spec/notes/heaven_hold.md):
+`HHD`/`HHX` carry their own integer-tenth verticals at BOTH endpoints, an
+independent lateral endpoint (lane and width), and an integer presentation
+discriminator whose parity joins the chain key — `disc <n>`, always written
+(the parser stores it unconditionally). The EXHEAVEN extra token is no
+mystery: HHX decodes it through the same exact eight-entry feedback table as
+extended slides, so it is the same `fx <word>` clause, written iff present
+(the former `xtok` clause is retired). Chains extend only when the extended
+flag, feedback code, discriminator, parity, and the previous endpoint's
+point AND vertical all match; `~>` steps carry the full endpoint geometry.
 
 ### 5.4 Air suffixes
 
@@ -327,8 +367,12 @@ Enforcement:
    first-match continuation exactly — including the stacked/merge junction
    multiplicity rules — so blocks reflect what the game would build.
 3. **Corpus proof**: `cmrcheck` runs the full round trip over every local
-   chart and compares parsed models. All 7,752 charts (1,837 reference `_03`)
-   must pass before the converter is considered correct.
+   chart and compares parsed models. The reference model is the viewer's own
+   `parseC2s` + association pass (owner decision 2026-08-11) — corpus-proven
+   through the browser audit and implementing the recovered rules — with
+   sampled deep-checks against the C++ reconstruction as the stricter
+   authority. All 7,752 charts (1,837 reference `_03`) must pass before the
+   converter is considered correct.
 4. Emitted record order: chains contiguous (root first), constructs ordered
    by (start position, family, lane, source order); `[events]` verbatim
    source order.
@@ -347,8 +391,11 @@ prove out on the corpus.
 
 ## 9. Open items (ledgered in issue #12 where inference-based)
 
-- `p1`/`p2` trace property roles; `xtok` HHX token role — awaiting decomp.
-- `METER` unit-then-count reading — corpus-inferred.
+- ~~`p1`/`p2` trace property roles; `xtok` HHX token role~~ — RESOLVED
+  2026-08-11: shell surface heights (`hA`/`hB`) and the shared eight-entry
+  feedback table (`fx`).
+- ~~`METER` unit-then-count reading~~ — RESOLVED 2026-08-11: recovered
+  producer math.
 - The stats derivations must reproduce the binary's derived-summary pass;
   mismatches surface as overrides and are individually investigable.
 - Air-hold step `L`/`w` variance and `from` slack: representable, expected
