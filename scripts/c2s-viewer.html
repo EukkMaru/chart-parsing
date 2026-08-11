@@ -353,6 +353,17 @@
   const ALD_STREAM_TWO = "#a35cff";
   const ALD_STREAM_ONE = "#58275f";
   const ALD_UNRESOLVED_RESULT_INDEX = 0xff;
+  // Provenance for the enumerations and helpers below: the orders ARE the
+  // binary's code assignments — the 16-entry style table and SLD/HLD/GRN
+  // slide styles per spec/c2s.md (code 1's retype role:
+  // claim.note.slide-hld-heaven-retyping), the eight-entry feedback table
+  // per spec/notes/heaven_hold.md, and PARSED_TYPE per
+  // claim.parser.event-family-type-map. LEGACY_CMDS is the exact 24-name
+  // discard set (claim.parser.legacy-metadata-command-exclusion,
+  // claim.parser.legacy-t-prog-command-exclusion); the 91/45 registry
+  // invariant is claim.parser.command-descriptor-schema. Zero-default
+  // prefix-accepting numeric conversion is claim.parser.event-token-fallback
+  // and the [1,16] width clamp is claim.parser.common-lane-width-encoding.
   const C2S_STYLE = [
     "DEF","RED","ORN","YEL","LIM","GRN","AQA","CYN",
     "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
@@ -792,6 +803,7 @@
       }
 
       if (n.kind === "asolid") {
+        // claim.note.air-solid-presentation:
         // ASO records chain like slides: equal style code, the previous
         // endpoint's lane/width and both integer-tenth properties matching
         // the new start. Only the chain's current final endpoint is the
@@ -854,6 +866,10 @@
     if (n.kind === "air" && MIRROR_AIR[n.cmd]) n.cmd = MIRROR_AIR[n.cmd];
   }
 
+  // Every field layout and header-command behavior in this parser follows
+  // spec/c2s.md's recovered descriptor table; registered group-3 statistics
+  // take the derived-summary overwrite path
+  // (claim.parser.derived-command-overwrite).
   function parseC2s(text) {
     const lines = text.split(/\r?\n/);
     const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
@@ -996,6 +1012,11 @@
     // position in ticks -> milliseconds, walking the tempo schedule
     const R = head.resolution;
     const pos = e => e.m * R + e.t;
+    // Tempo and meter construction through the beat vectors below follows
+    // claim.parser.tempo-measure-schedule and spec/timing.md: the compiled
+    // half-tick comparator, the 240000/(bpm*R) cumulative schedule, the
+    // half-tick-shifted lookup, unit/count grid vectors with truncating
+    // steps and the malformed-domain halt, and independent bar/beat vectors.
     snapshotMsvcSort(bpmEvents, (left, right) =>
       pos(left) + 0.5 < pos(right));
     const seg = [];
@@ -1131,7 +1152,16 @@
     // is 0, which stops the region dead.
     const regionsByKey = new Map();
     for (const r of regions) {
-      if (r.def.point || r.def.dead || r.endTime <= r.time) continue;
+      // "The chart-region transform is fully defined by STP/SFL/SLP
+      // intervals" (spec/timing.md; claim.timing.projection-schedule-
+      // materialization). DCM is ONLY the separate source-order
+      // projection-factor query specified alongside the far-path formula —
+      // it never joins this schedule. Folding it in double-applies every
+      // DCM chart: notes get time-warped as if by SFL and then
+      // factor-queried at the warped key, which lands in the wrong DCM
+      // window (the 8078_05 cramming/teleport divergence, owner-reported
+      // 2026-08-11).
+      if (r.cmd === "DCM" || r.def.point || r.def.dead || r.endTime <= r.time) continue;
       const key = r.def.key ? r.key : 0;
       const factor = r.def.factor ? r.factor : 0;
       if (!regionsByKey.has(key)) regionsByKey.set(key, []);
@@ -1150,6 +1180,9 @@
     // A note takes the greatest positive tag among SLA regions that contain it
     // in time and fully contain its lane span. Everything else stays key 0.
     const slas = notes.filter(n => n.kind === "region");
+    // claim.parser.sla-materialization-selection: greatest positive tag over
+    // half-open intervals, the exact 1/192 query scalar, and the recovered
+    // -0.00001F/+0.00001F float-span lane tolerances for generated samples.
     const selectSlaKey = (p, lane, width, floatSpan = false) => {
       let key = 0;
       // 1/192 canonical scalar equals half of one fixed-resolution authored
@@ -1223,6 +1256,7 @@
   // persistent endpoint resource; a clear one only shapes the shared path.
   // Root is a separate start resource and the final ending marker is forced.
   // Exact HLD style is retyped to HeavenHold before this Slide path runs.
+  // claim.note.slide-presentation-classes.
   const SLIDE_MARKER = { SLD: 1, SXD: 1, SLC: 0, SXC: 0 };
 
   function markSlideBoundaries(notes) {
@@ -1516,7 +1550,7 @@
   // space at the air plane's far edge, so a tall air element rises through the
   // clip line instead of appearing whole. Culling in time cut every note at
   // the same chart position regardless of how far up the screen it reached.
-  const FAR = 1.9;
+  const FAR = 1.9;  // viewer product choice: overdraw + screen-space trim
 
   // The common recovered vertical transform is (value-1)*3.8934999. ALD and
   // AirSlide authored verticals use it directly; their action/checkpoint
@@ -1601,8 +1635,10 @@
 
   // DCM scales the projection instead of moving the note. Source order, not
   // sorted: stop at the first interval starting later than the query, return
-  // the first nonzero factor whose end is strictly later, else 1. Consulted
-  // only for a positive delta — a note at or past the line uses 1.
+  // the first nonzero factor whose end is strictly later, else 1, with the
+  // exact +1.0F query shift. Consulted only for a positive delta — a note at
+  // or past the line uses 1. Recovered: spec/timing.md and
+  // claim.timing.projection-schedule-materialization.
   function scrollFactor(targetMs) {
     if (!show.applySlp || !chart.dcm.length) return 1;
     const q = targetMs + 1;
@@ -1622,8 +1658,25 @@
   // the line for 115/535 of the corridor before the binary clips them. On
   // the cabinet the frame bottom cuts earlier; here the canvas does.
   const OVERHANG = 115 / 535;
-  const nearClip = () => show.autoplay ? 0 : -OVERHANG;
-  const tapClip = () => show.autoplay ? 0 : -OVERHANG;
+  // Materialization endpoint-retry types (1, 2, 9, 10, 13) by viewer kind —
+  // spec/timing.md: "primary parsed types 1, 2, 9, 10, 12, and 13 retry with
+  // their endpoint and separate region key" (12 builds no runtime note).
+  const ENDPOINT_RETRY_KINDS = new Set(["hold", "slide", "ald", "asolid", "heaven"]);
+  // Kinds whose drawn body takes the single entity-time projection-factor
+  // query (heaven runs its own recovered per-point path presentation).
+  const ENTITY_BODY_KINDS = new Set(["hold", "slide", "ahold", "aslide", "ald", "asolid"]);
+  // With autoplay on, geometry is consumed at the judgement plane — but only
+  // for notes whose time has come. A FUTURE note sitting past the line (a
+  // bottom-entry note under a negative projection factor) keeps the render
+  // overhang so it can rise toward the plane. clipNote is set by the draw
+  // loops around each note's draw calls.
+  let clipNote = null;
+  const noteNearLimit = () => {
+    if (!show.autoplay) return -OVERHANG;
+    return (clipNote && clipNote.time > now) ? -OVERHANG : 0;
+  };
+  const nearClip = () => noteNearLimit();
+  const tapClip = () => noteNearLimit();
   // Visible lookahead at speed 1.0, derived rather than chosen. The recovered
   // materialization projection is
   //   projected = -65 - 1.5 * (base_offset + delta) * speed * factor
@@ -1822,7 +1875,8 @@
     const back = show.autoplay ? 0 : LA * OVERHANG;
     const backT = back / LA;
 
-    // Corridor depth for any chart time. Key 0 is the whole-field schedule, so
+    // Corridor depth for any chart time. Key 0 is the whole-field schedule
+    // (spec/timing.md: STP and SFL use key zero), so
     // the beat grid and subdivision overlay ride it too — otherwise the notes
     // appear to slide against a stationary backdrop instead of the whole field
     // slowing down or speeding up together.
@@ -2051,7 +2105,25 @@
       // while still on screen and a hastened one is kept after leaving.
       if (dStart > 0) dStart *= scrollFactor(n.vt0);
       if (dEnd > 0) dEnd *= scrollFactor(n.vt1);
-      if (dEnd < -back || dStart > LA * FAR) continue;
+      // Departure: autoplay consumes by TIME, which is exactly "consume at
+      // the judgement plane" in any factored domain — including bottom-entry
+      // notes pinned past the line by a negative factor, which stay visible
+      // until their moment. Without autoplay the render overhang bounds the
+      // tail as before.
+      if (show.autoplay ? n.endTime <= now : dEnd < -back) continue;
+      // Materialization eligibility, recovered (spec/timing.md): a record
+      // whose RAW untransformed delta is under 30 sixtieths (500 ms, past
+      // included) is eligible immediately; otherwise the factored projection
+      // must land inside the ±550 band — start first, then the endpoint
+      // retry for the sustained primary types. A record whose span merely
+      // STRADDLES the corridor with both points outside the band never
+      // materializes on the cabinet (the 8078_05 ghost holds).
+      const bandLo = -LA * (615 / 485), bandHi = LA;
+      const pointEligible = (timeMs, dMs) =>
+        (timeMs - now) * 0.06 < 30 || (bandLo <= dMs && dMs <= bandHi);
+      const eligible = pointEligible(n.time, dStart) ||
+        (ENDPOINT_RETRY_KINDS.has(n.kind) && pointEligible(visibleEndTime, dEnd));
+      if (!eligible) continue;
       vis.push(n);
     }
     vis.sort((a, b) => b.time - a.time);
@@ -2059,7 +2131,8 @@
     // Charts stack coincident records — eight overlapping roots on four lanes,
     // fifteen identical marked segments at one junction — and a one-tick
     // marked segment puts its own note a hair before its end cap. All of that
-    // is one note on the cabinet, so solid notes are deduplicated by lane
+    // is one note on the cabinet (corpus-observed stacking; the dedup is a
+    // viewer product choice), so solid notes are deduplicated by lane
     // within an 8ms bucket, well under a 1/32 note at these tempos.
     solidKeys.clear();
     const keyOf = (ms, lane) => `${Math.round(ms / 8)}:${lane}`;
@@ -2074,6 +2147,7 @@
     // Slide final endpoint is the builder's forced ending-marker resource,
     // not a synthetic judgement checkpoint; its original image is external.
     for (const n of vis) {
+      clipNote = n;
       const capped = !n.heavenPresentation &&
         (n.kind === "hold" || (n.kind === "slide" && n.isFinal));
       if (!capped) continue;
@@ -2103,12 +2177,32 @@
     }
 
     for (const n of vis) {
+      clipNote = n;
       // The projection factor multiplies distance, so a fast note is pushed
       // further out for the same time delta and covers more ground per tick.
       const t0 = depthAt(n.time, n.slaKey);
-      const t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
+      let t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
+      if (ENTITY_BODY_KINDS.has(n.kind)) {
+        // A record's BODY takes one projection-factor query at the record's
+        // own entity time, per the recovered "same keyed-adjusted entity
+        // time" COMMON presentation helper — not one per endpoint. A
+        // micro-segment whose two query keys straddle a DCM boundary
+        // otherwise smears across the whole corridor (the 8078_05
+        // letter-formation ghost slides and air holds, invisible on the
+        // cabinet at every speed). Footage-constrained inference: exact
+        // per-vertex DCM anchoring is on the decomp work order. Adjacent
+        // records still factor independently, preserving the per-record
+        // compression footage (0961_03 m105); keyed scrolledTime stays
+        // per-endpoint (that part is recovered); endpoint RESOURCES (caps)
+        // stay per-endpoint entities.
+        const v1 = scrolledTime(n.endTime, now, n.endSlaKey ?? n.slaKey);
+        let d1 = v1 - now;
+        if (d1 > 0) d1 *= scrollFactor(n.vt0);
+        t1 = d1 / LA;
+      }
 
-      // One visibility rule for the one runtime class: a zero/NON ALD is
+      // One visibility rule for the one runtime class
+      // (claim.judgement.heaven-hold-judgement): a zero/NON ALD is
       // HeavenHold and follows the same toggles as HHD/HHX and HLD-styled
       // slides, not the air-family gate.
       if (AIR_KINDS.has(n.kind) && !n.heavenPresentation && !show.airNotes) continue;
@@ -2146,17 +2240,14 @@
         }
       } else if (n.kind === "ahold") {
         drawAirHold(n, t0, t1, W, H);
-        // The separate width-scaled AirHold root resource, drawn as an
-        // asset-free start bar at the chain's base vertical (zero for
-        // ordinary roots, the root chain's final value for type-13 roots).
-        // The old arrow call died when the recovered origin moved from
-        // value 5 to value 1.
-        if (n.chainStart && t0 >= tapClip() && t0 <= FAR) {
-          const baseH = liftHeight(n.rootBaseVertical ?? 1);
-          const sp = project(t0, n.lane, baseH, W, H);
-          const sq = project(t0, n.lane + n.width, baseH, W, H);
-          const th = Math.max(5, 14 * sp.s);
-          noteBar(sp.x, sp.y - th, sq.x - sp.x, th, n.color);
+        // The width-scaled AirHold root resource displays as the standard
+        // air-up arrow rising from the root into the band (owner footage:
+        // 8110_05 m98, 2026-08-11 — a flat start bar here read as a ghost
+        // note). The recovered transform origin stays the base; type-13
+        // roots lift it to their chain's stored final vertical.
+        if (n.chainStart) {
+          drawArrow(t0, n.lane, n.width, n.color, true, W, H, AIR_PLANE,
+                    0, liftHeight(n.rootBaseVertical ?? 1));
         }
       } else if (n.kind === "hold" || n.kind === "slide") {
         drawSustain(n, t0, t1, W, H);
@@ -2167,19 +2258,24 @@
       }
     }
 
+    clipNote = null;
     // --- windows overlay, drawn on top so trimming is legible
     if (show.wings) {
       for (const n of vis) {
+        clipNote = n;
         // MNE has no TAP-style timing checker — its judgement is held-contact
-        // accumulation over external parameters — so it gets no window. ASO
-        // submits no result. A zero/NON ALD is runtime type 13 and windows
-        // on the same terms as the other two HeavenHold origins.
+        // accumulation over external parameters (claim.judgement.mine-contact-
+        // judgement) — so it gets no window. ASO submits no result
+        // (claim.note.air-solid-nonjudgement). A zero/NON ALD is runtime
+        // type 13 (claim.judgement.heaven-hold-judgement) and windows on the
+        // same terms as the other two HeavenHold origins.
         if (n.cmd === "MNE" || n.kind === "asolid") continue;
         if (n.kind === "air" || n.kind === "aslide" || n.kind === "ahold" ||
             (n.kind === "ald" && !n.heavenPresentation)) continue;
         drawWindow(n, W, H, LA);
       }
     }
+    clipNote = null;
 
     // --- judgement line
     cx2.restore();
@@ -2276,7 +2372,8 @@
       cx2.globalAlpha = 1;
     }
     noteBar(a.x, a.y - th, b.x - a.x, th, color ?? n.color, alpha);
-    // Flicks carry a stripe along the bar — the cabinet's own cue reduced to a
+    // Flicks carry a stripe along the bar (claim.note.flick-presentation) —
+    // the cabinet's own cue reduced to a
     // static line. Texture rather than shape, so the silhouette stays a bar.
     if (n.cmd === "FLK") {
       const sh = Math.max(1.5, th * 0.2);
@@ -2322,7 +2419,10 @@
     cx2.fillStyle = n.color + "44";
     cx2.fill();
 
-    // JointSlide stream 1 is exactly one lane wide around the path center.
+    // JointSlide stream 1 is exactly one lane wide around the path center
+    // (claim.note.slide-path-presentation-geometry, which also gives the
+    // segment mesh between marker-delimited coordinates that the linear
+    // lane/width interpolation above realizes).
     // The packed vertex colors are recovered static constants; only textures,
     // materials, and final pixels are external, so these fills are neutral
     // asset-free silhouettes. The binary's 18-vertex width-change subdivision
@@ -2355,7 +2455,8 @@
     // not yet simulate the start/path judgement phases, so it draws only the
     // static mode-0 state; the recovered packed vertex constants make the
     // mode switches implementable once phase simulation exists.
-    // The root is a separate start resource. A generated segment's marker
+    // claim.note.slide-presentation-classes: the root is a separate start
+    // resource. A generated segment's marker
     // belongs to its ending boundary, not to the next segment's start. Marked
     // nonfinal endpoints therefore stay visible without the debug toggle;
     // unmarked endpoints can be exposed only as faint shape diagnostics.
@@ -2530,7 +2631,8 @@
     drawAldQuad(t0, t1, c0, c1, fixedHalf, fixedHalf,
                 h0, h1, n.color, 0.62, W, H);
 
-    // Same split as a ground slide: ASC shapes without scoring, so its
+    // Same split as a ground slide (claim.judgement.air-slide-secondary-
+    // judgement): ASC shapes without scoring, so its
     // junction draws faint and only under the toggle. ASD is a real air
     // action and draws its marker regardless, like a slide's root.
     if (!n.isAction && show.bars) {
