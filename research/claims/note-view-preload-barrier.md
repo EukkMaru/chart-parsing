@@ -57,6 +57,12 @@ judgement logic.
   `max(10, first_ready_step) + 1` periodic calls because counters begin at zero.
   Including the stage-1 construction call, a fresh uninterrupted sequence
   returns complete on its 164th preload-step invocation.
+- Slide's longer threshold has an exact retained-player sequence. At resource
+  steps 11, 12, and 13, it walks every retained feedback handle and applies
+  visible plus external entry 0, visible plus entry 1, then hidden plus entry
+  1. Steps 14 through 19 add no further work; step 20 latches ready. The entry
+  payload remains externally loaded, but the request sequence is executable-
+  owned.
 - Before each construction after the first, and once more at final completion,
   the manager invokes virtual `+0x58` on every accumulated object. Sampled and
   recovered targets release or reset presentation/resource containers; no
@@ -95,8 +101,9 @@ candidate, input, or result operation.
 
 ## Consequences
 
-- Ghidra mutations: none in the live project; temporary read-only-clone
-  analysis recovered two missing AirSolid virtual targets only.
+- Ghidra mutations: named and documented the Slide preload step and its child
+  EffectBase entry selector; earlier analysis recovered two missing AirSolid
+  virtual targets.
 - Spec sections: `spec/timing.md`.
 - Reconstruction code: `NoteViewPreloadState`, fixed class order/readiness
   thresholds, and `advance_note_view_preload` in

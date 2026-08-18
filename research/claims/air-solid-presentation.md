@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `render.air_solid`, `time.playback_seek`, `audit.indirect_calls`
-- Last reviewed: 2026-08-10
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -55,6 +55,9 @@ executable-owned.
   14 use an externally supplied primitive resource identity. Code 15 (`NON`)
   stores the missing-resource sentinel instead. The preload state is ready
   immediately; the primitive wrapper is prepared per precompute/runtime load.
+  A valid checked resource handle assigns topology 3. An invalid index leaves
+  the default zero handle and is rejected by the common Joint callback, so
+  every submitted AirSolid primitive uses topology 3.
 - Runtime retains raw-relative and SLA-adjusted projected schedules in separate
   arrays. Each endpoint's lane center becomes `(coordinate - 8) * 4`; each
   property becomes `(value - 1) * 3.8934999`; decoded width remains a width

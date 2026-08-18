@@ -26,6 +26,8 @@ int main() {
     using chart::reconstruction::air_hold_is_terminal;
     using chart::reconstruction::air_hold_path_complete;
     using chart::reconstruction::air_hold_runtime_checkpoint_count;
+    using chart::reconstruction::air_hold_consumed_data_field_count;
+    using chart::reconstruction::air_hold_data_field_is_consumed;
     using chart::reconstruction::air_hold_sample_step;
     using chart::reconstruction::air_hold_start_profile;
     using chart::reconstruction::air_hold_start_source_category;
@@ -41,6 +43,9 @@ int main() {
     assert(air_hold_is_authored_checkpoint(AirHoldCommand::ahx));
     assert(air_hold_runtime_checkpoint_count(2, AirHoldCommand::ahd) == 2);
     assert(air_hold_runtime_checkpoint_count(2, AirHoldCommand::ahx) == 3);
+    assert(air_hold_consumed_data_field_count == 6);
+    assert(air_hold_data_field_is_consumed(5));
+    assert(!air_hold_data_field_is_consumed(6));
 
     // Postprocessing uses a 384-tick major / 96-tick minor grid and halves its
     // cadence while the selected tempo-map value is below 4 * reference.

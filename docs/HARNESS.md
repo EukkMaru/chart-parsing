@@ -14,7 +14,10 @@ command reads chart text and emits aggregate vocabulary/version counts. The
 explicit `viewer-audit` command serves the local viewer and a content-free
 manifest to an isolated headless Firefox process; the actual viewer parser
 reads each chart and returns only aggregate exception, unknown-command, and
-rejected-association counts. Neither command emits chart content.
+rejected-association counts. It also compares the actual group-1 parser and
+schedule builder against `scripts/c2s-schedule-reference.js`, an independent
+spec transcription, and returns aggregate coverage/mismatch counts. Neither
+command emits chart content.
 
 ## Required session sequence
 
@@ -101,13 +104,19 @@ Starts a loopback-only temporary HTTP server, opens the actual
 parses every local `.c2s` from a content-free manifest. It fails when a chart
 throws, a spelling remains unknown, an AIR-family association is rejected, the
 browser/report path fails, or the returned chart count differs from the
-manifest. Rejections are broken down only by aggregate command and referenced
-root-family name. `--limit N` provides a quick sorted-prefix smoke test; the
+manifest. For every chart carrying STP/SFL/SFE/SLP/DCM/CLK, it additionally
+compares the actual viewer parse/build result (keyed interval sets and
+source-order DCM list) with the independent spec reference. DCM-in-key-0,
+SFE-accepted, and CLK-as-interval mutation sentinels must all be detected. The
+audit fails on any schedule mismatch, missing group-1 coverage, or ineffective
+mutation sentinel. Rejections are broken down only by aggregate command and
+referenced root-family name. `--limit N` provides a quick sorted-prefix smoke test; the
 default audits the full corpus. `--timeout` changes the default 300-second
 browser limit.
 
 This proves that the current browser parser accepts the exercised local corpus
-with zero surfaced vocabulary/association failures. It does not compare
+with zero surfaced vocabulary/association failures and that its group-1
+builder matches the independent reference over that corpus. It does not compare
 rendered pixels, prove geometry, exercise playback through time, establish
 hostile-input parity beyond the corpus, or satisfy owner review. The loopback
 server is stopped, the reporting browser is terminated, and its isolated

@@ -44,6 +44,7 @@ int main() {
     using chart::reconstruction::slide_is_terminal;
     using chart::reconstruction::slide_joint_submission_order;
     using chart::reconstruction::slide_base_main_stream_color;
+    using chart::reconstruction::slide_center_stream_color;
     using chart::reconstruction::slide_alternate_main_stream_color;
     using chart::reconstruction::slide_shared_low_alpha_color;
     using chart::reconstruction::slide_main_stream_color;
@@ -153,6 +154,7 @@ int main() {
     assert(slide_joint_submission_order ==
            (std::array<std::int32_t, 3>{0, 1, 2}));
     assert(slide_base_main_stream_color == 0xffffffffU);
+    assert(slide_center_stream_color == 0xffffffffU);
     assert(slide_alternate_main_stream_color == 0xff666666U);
     assert(slide_shared_low_alpha_color == 0x40ffffffU);
     assert(slide_main_stream_color(SlidePresentationMode::base) ==
@@ -306,9 +308,12 @@ int main() {
     assert(std::fabs(main_vertices[1].lateral - 8.0F) < 0.0001F);
     assert(std::fabs(main_vertices[2].lateral - 0.0F) < 0.0001F);
     const auto center_vertices =
-        build_slide_center_stream_vertices(render_segment, 0xabcdef01U);
+        build_slide_center_stream_vertices(render_segment);
     assert(center_vertices.size() == 6);
     assert(std::fabs(center_vertices[0].lateral + 2.0F) < 0.0001F);
+    for (const SlideGeometryVertex& vertex : center_vertices) {
+        assert(vertex.color == slide_center_stream_color);
+    }
     assert(build_slide_overlay_stream_vertices(
                render_segment, SlidePresentationMode::base)
                .empty());

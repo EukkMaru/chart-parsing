@@ -51,6 +51,8 @@ int main() {
                root, std::span<const AirLadderPathPoint>{})
                .empty());
 
+    assert(air_ladder_primitive_topologies ==
+           (std::array<std::int32_t, 3>{3, 3, 2}));
     assert(air_ladder_primitive_counter_categories ==
            (std::array<std::int32_t, 3>{7, 9, 8}));
     assert(near(air_ladder_style_vertex_coordinate(0), 0.1561999917F));

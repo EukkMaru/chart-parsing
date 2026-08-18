@@ -194,8 +194,12 @@ bar_step  = count * 384 / beat_unit
 ```
 
 Thus `MET ... 4 3` yields 96-tick beats and 288-tick bars. Each MET position
-restarts the generated sequences. A zero in either component stops all further
-subdivision generation before division. Low-32-bit multiplication and unsigned
+restarts the generated sequences. The producer appends the current MET record
+to both meter-derived vectors before checking the components. A zero in either
+component therefore retains that MET-position anchor, then stops all further
+bar/beat generation before division; later MET records do not restart it.
+The visible-marker pass specifically consumes meter-derived bar-vector index 2,
+not the independently continuing fixed R-boundary vector. Low-32-bit multiplication and unsigned
 division define nonzero negative/extreme domains; a resulting zero step is a
 source nonprogress domain and must not be replaced with a guessed grid. These
 values do not enter the BPM lookup, note schedule fields, or adaptive Air
@@ -241,6 +245,12 @@ One later outer-update helper is a bounded cue/report scheduler. It runs after
 the complete current input/note-manager, materialization, meter-grid, and
 key-beam sequence, admits at most four triggers, starts selected audio/effect
 controllers, and retains trigger/backend timestamps for a teardown report.
+The exact live-project lifecycle is closed: the constructor and scene
+initializer seed/reset the count, first-trigger time, two externally selected
+configuration pairs, and two controller handles; the scheduler is their sole
+gameplay-update writer; and a uniquely registered teardown callback reports
+and clears them. A second uniquely registered callback is the only downstream
+scene-transition consumer of the retained controller time.
 Those fields and controller calls do not enter the play clock, input history,
 active notes, candidates, judgement, results, or terminal-outcome rules. Cue
 time is not entirely inert to the enclosing scene: a separately registered
@@ -472,6 +482,13 @@ construction call. Advancement finalizes every accumulated presentation object
 before constructing the next; final stage 12 finalizes all eleven and enters
 complete stage 13.
 
+Slide's first-ready step 20 includes a fixed external-player warm-up sequence.
+For every retained Slide feedback handle, step 11 applies visible plus resource
+entry 0, step 12 applies visible plus entry 1, and step 13 applies hidden plus
+entry 1. Steps 14 through 19 add no further handle command. The entry payloads
+come from the loaded external player table; the integer requests and ordering
+are executable-owned.
+
 These objects occupy a manager vector separate from both live-note vectors.
 Restart, full reset, and destruction delete them; their readiness/finalize
 paths do not call parsed-record dispatch, the runtime-note factory, input, or
@@ -537,6 +554,17 @@ source order. Shift the query by exactly `1.0F`, stop at the first interval
 whose start is later than the shifted value, and return the first nonzero
 factor whose end is strictly later. The fallback is `1.0F`. Nonpositive
 adjusted deltas use `1.0F` without consulting DCM.
+
+Sustained-note presentation repeats this keyed adjustment and DCM lookup for
+each projected path point. Hold uses root and end; Slide uses root and every
+generated endpoint; AirHold uses start, authored end, and unresolved AHX
+points; AirSlide, AirSolid, and HeavenHold use root plus authored controls;
+AirLadder projects generated checkpoint effects and its authored main-path
+points independently. No family caches a root-time factor for its whole body.
+Mesh splits, clipping, and tessellation interpolate between already projected
+endpoints and do not query DCM per emitted vertex. Evidence:
+`claim.presentation.sustain-endpoint-dcm-projection`; reconstruction:
+`sustain_endpoint_projected_depth_from_schedule`.
 
 The source-order projected-position calculation is:
 

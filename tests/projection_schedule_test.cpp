@@ -27,6 +27,7 @@ int main() {
     using chart::reconstruction::projection_factor_at_milliseconds;
     using chart::reconstruction::runtime_materialization_probe_from_schedule;
     using chart::reconstruction::runtime_materialization_probe_is_eligible;
+    using chart::reconstruction::sustain_endpoint_projected_depth_from_schedule;
 
     std::vector<BpmScheduleRecord> bpm_records{
         {{0.0F, 0.0F}, 0.0F, 0, 60.0F},
@@ -148,6 +149,25 @@ int main() {
                1998.999F, schedule.factor_intervals) == 3.0F);
     assert(projection_factor_at_milliseconds(
                1999.0F, schedule.factor_intervals) == 1.0F);
+
+    // Sustained bodies do not reuse a root-time DCM factor. Each endpoint
+    // performs its own keyed adjustment and factor lookup; geometry only
+    // interpolates after these independently projected values exist.
+    C2sProjectionSchedule endpoint_schedule;
+    endpoint_schedule.factor_intervals = {
+        {{0.0F, 0.0F}, 0.0F, 0, 2.0F,
+         {0.0F, 0.0F}, 1000.0F},
+        {{0.0F, 0.0F}, 1000.0F, 1, 0.5F,
+         {0.0F, 0.0F}, 2000.0F},
+    };
+    assert(near(sustain_endpoint_projected_depth_from_schedule(
+                    500.0F, 99, 0.0F, 1.0F, 0.0F,
+                    endpoint_schedule),
+                -155.0F));
+    assert(near(sustain_endpoint_projected_depth_from_schedule(
+                    1500.0F, 99, 0.0F, 1.0F, 0.0F,
+                    endpoint_schedule),
+                -132.5F));
 
     // Zero factors are skipped, and source order is normative: a future start
     // stops the scan before any later interval can be considered.

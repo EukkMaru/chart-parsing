@@ -7,7 +7,7 @@
 - Owner: codex-root
 - Coverage rows: `parser.events`, `judgement.types`, `state.ownership`;
   viewer row `render.air_ladder`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -129,8 +129,13 @@ per-checkpoint presentation records, not the main path geometry.
   a `0x10` row stride and resolves record `+0x0c` through the shared string pool
   as the filename/path. Loading that external path produces the runtime handle
   later copied into Joint draw state. Resource index `-1` retains the default
-  zero handle and makes the Joint callback skip submission. The per-stream
-  values 4, 3, and 2 configure primitive topology/mode, not layer numbers.
+  zero handle and makes the Joint callback skip submission. The shared
+  initializer computes stream 0 as topology 3 for selector 8 or 9 and 4 for
+  every other selector; streams 1 and 2 are fixed at 3 and 2. The AirLadder
+  producer writes literal selector 9, so its exact reachable topology triple
+  is `[3,3,2]`. The earlier `[4,3,2]` reading was contradicted by the selector
+  producer and corrected; these values are primitive topology/mode, not layer
+  numbers.
 - A valid Joint callback requires a nonempty vertex count divisible by three,
   copies the `0x18` vertices and runtime resource handle into dynamic-primitive
   state, and submits with a nullable collector pointer. The ordinary null-

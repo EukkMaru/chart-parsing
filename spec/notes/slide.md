@@ -154,7 +154,9 @@ and callback order 0, 1, 2:
   `1.1920929e-7` emits 18 vertices: a center quad at width scale `0.7` and
   horizontal coordinates `0.15`/`0.85`, plus two side strips reaching 0/1.
 - Stream 1 is a vertical-zero six-vertex strip of fixed render-space half
-  extent 2, exactly one chart lane in total width.
+  extent 2, exactly one chart lane in total width. It uses exact base white
+  `0xffffffff` in every presentation mode; only stream 0 uses the mode-dependent
+  white/gray selector.
 - Stream 2 is a vertical-zero, full-width six-vertex overlay emitted only in
   mode 1, with packed color `0x20ffffff`.
 

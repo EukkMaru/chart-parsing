@@ -2903,11 +2903,14 @@ struct BpmScheduleRecord {
 // MET stores beat-unit first and count second. The generated beat vector uses
 // resolution/unit while the generated bar vector uses count*resolution/unit.
 // The x86 operations retain low 32-bit multiplication and unsigned division;
-// zero components stop generation before either division.
+// The current MET record is appended to both meter-derived vectors before the
+// zero-component test. Zero components therefore retain that one anchor and
+// stop generation before either division.
 struct MeterGridSteps {
     bool components_nonzero{};
     std::uint32_t beat_ticks{};
     std::uint32_t bar_ticks{};
+    bool current_anchor_retained{};
 };
 
 constexpr MeterGridSteps c2s_meter_grid_steps(
@@ -2915,7 +2918,7 @@ constexpr MeterGridSteps c2s_meter_grid_steps(
     std::int32_t count,
     std::int32_t resolution = 384) {
     if (beat_unit == 0 || count == 0) {
-        return {};
+        return {false, 0U, 0U, true};
     }
     const std::uint32_t denominator =
         static_cast<std::uint32_t>(beat_unit);
@@ -2927,6 +2930,7 @@ constexpr MeterGridSteps c2s_meter_grid_steps(
         true,
         unsigned_resolution / denominator,
         numerator / denominator,
+        true,
     };
 }
 
@@ -3498,6 +3502,31 @@ inline RuntimeMaterializationProbe runtime_materialization_probe_from_schedule(
     return probe;
 }
 
+// Sustained-note updates call the common projection helper separately for the
+// root and every authored/generated path endpoint. This adapter deliberately
+// accepts one endpoint at a time: keyed adjustment and DCM lookup belong to
+// that endpoint's schedule/key, not to an entity-wide body factor. Mesh
+// vertices subsequently interpolate the already projected endpoints.
+inline float sustain_endpoint_projected_depth_from_schedule(
+    float scheduled_milliseconds,
+    std::int32_t projection_key,
+    float manager_position,
+    float runtime_speed,
+    float projection_base_offset,
+    const C2sProjectionSchedule& schedule) {
+    const RuntimeMaterializationProbe probe =
+        runtime_materialization_probe_from_schedule(
+            scheduled_milliseconds, projection_key, manager_position,
+            schedule);
+    return active_note_projected_depth(
+        probe.adjusted_delta,
+        runtime_speed,
+        projection_base_offset,
+        probe.positive_delta_projection_factor,
+        true,
+        true);
+}
+
 // AirHold, AirSlide, and HeavenHold select BPM by the already-computed
 // scheduled millisecond value. The source assumes a nonempty map and
 // dereferences its first record as the before-first fallback.
@@ -3716,6 +3745,15 @@ enum class AirHoldCommand : std::uint8_t {
     ahd,
     ahx,
 };
+
+// The AHD/AHX case reads the six data fields through duration. Descriptor
+// arity checking is disabled, so later fields such as corpus DEF/PNK labels
+// are accepted but never read by this command handler.
+inline constexpr std::size_t air_hold_consumed_data_field_count = 6U;
+
+constexpr bool air_hold_data_field_is_consumed(std::size_t index) {
+    return index < air_hold_consumed_data_field_count;
+}
 
 constexpr bool air_hold_is_authored_checkpoint(AirHoldCommand command) {
     return command == AirHoldCommand::ahx;
@@ -4620,6 +4658,12 @@ struct AirLadderGeometrySegment {
 inline constexpr float air_ladder_projection_near = 50.0F;
 inline constexpr float air_ladder_projection_far = -600.0F;
 inline constexpr float air_ladder_clip_minimum_span = 0.000001F;
+// InitializeAirPathJointDescriptors receives selector 9 from the AirLadder
+// precompute producer. Its first topology is 3 for selectors 8/9 and 4 for
+// every other value; the remaining two are fixed at 3/2. Therefore the
+// factory-reachable AirLadder path uses the same topology triple as AirSlide.
+inline constexpr std::array<std::int32_t, 3>
+    air_ladder_primitive_topologies{3, 3, 2};
 inline constexpr std::array<std::int32_t, 3>
     air_ladder_primitive_counter_categories{7, 9, 8};
 
@@ -6971,6 +7015,8 @@ inline constexpr std::uint32_t slide_base_main_stream_color =
     presentation_static_base_color;
 inline constexpr std::uint32_t slide_alternate_main_stream_color =
     presentation_static_alternate_color;
+inline constexpr std::uint32_t slide_center_stream_color =
+    presentation_static_base_color;
 inline constexpr std::uint32_t slide_shared_low_alpha_color =
     presentation_static_low_alpha_color;
 inline constexpr std::uint32_t slide_overlay_stream_color = 0x20ffffffU;
@@ -7302,23 +7348,26 @@ inline std::vector<SlideGeometryVertex> build_slide_main_stream_vertices(
 }
 
 inline std::vector<SlideGeometryVertex> build_slide_center_stream_vertices(
-    const SlidePresentationSegment& segment,
-    std::uint32_t color) {
+    const SlidePresentationSegment& segment) {
     if (!segment.visible) {
         return {};
     }
     const auto sl = slide_geometry_vertex(
         segment.lateral_start - slide_center_stream_half_extent,
-        segment.projected_start, color, 0.0F, segment.coordinate_start);
+        segment.projected_start, slide_center_stream_color, 0.0F,
+        segment.coordinate_start);
     const auto sr = slide_geometry_vertex(
         segment.lateral_start + slide_center_stream_half_extent,
-        segment.projected_start, color, 1.0F, segment.coordinate_start);
+        segment.projected_start, slide_center_stream_color, 1.0F,
+        segment.coordinate_start);
     const auto el = slide_geometry_vertex(
         segment.lateral_end - slide_center_stream_half_extent,
-        segment.projected_end, color, 0.0F, segment.coordinate_end);
+        segment.projected_end, slide_center_stream_color, 0.0F,
+        segment.coordinate_end);
     const auto er = slide_geometry_vertex(
         segment.lateral_end + slide_center_stream_half_extent,
-        segment.projected_end, color, 1.0F, segment.coordinate_end);
+        segment.projected_end, slide_center_stream_color, 1.0F,
+        segment.coordinate_end);
     return segment.projected_end <= segment.projected_start
                ? std::vector<SlideGeometryVertex>{sl, er, el, sl, sr, er}
                : std::vector<SlideGeometryVertex>{sl, el, er, sl, er, sr};
@@ -8268,6 +8317,268 @@ struct PresentationMat4 {
     }
 };
 
+// claim.presentation.air-sprite-dynamic-primitive-closure
+//
+// air::Sprite emits one six-vertex triangle list. The render-target/resource
+// pixels remain external, but the anchor, local transform, UV order, optional
+// UV transform, color replication, and primitive setup tuple are owned by the
+// executable and reconstructed here.
+struct AirSpriteVertex {
+    PresentationVec3 position{};
+    std::uint32_t color{};
+    float u{};
+    float v{};
+
+    constexpr bool operator==(const AirSpriteVertex&) const = default;
+};
+
+struct AirSpriteQuadParameters {
+    float width{16.0F};
+    float height{16.0F};
+    float x{};
+    float y{};
+    float scale_x{1.0F};
+    float scale_y{1.0F};
+    float rotation_radians{};
+    float u0{};
+    float v0{};
+    float u1{1.0F};
+    float v1{1.0F};
+    std::uint32_t color{0xffffffffU};
+    std::uint32_t anchor_mode{};
+    std::optional<PresentationMat4> uv_transform{};
+};
+
+// Preserve the four observed setup arguments without assigning unavailable
+// engine-enum names to them.
+inline constexpr std::array<std::uint32_t, 4>
+    air_sprite_dynamic_primitive_setup{{4, 3, 6, 1}};
+
+// claim.presentation.model-resource-pool-boundary
+//
+// Power-on population always creates sixteen Sprite-backed Joint texture
+// wrappers. Slot i selects TextureTable row i while it exists; once i reaches
+// the external table count, the executable repeats the last row. An empty
+// table therefore selects -1 for every wrapper and leaves every handle zero.
+inline constexpr std::size_t presentation_joint_texture_wrapper_count = 16;
+
+constexpr std::array<std::int32_t,
+                     presentation_joint_texture_wrapper_count>
+presentation_joint_texture_source_rows(std::int32_t table_record_count) {
+    std::array<std::int32_t,
+               presentation_joint_texture_wrapper_count> rows{};
+    for (std::size_t index = 0; index < rows.size(); ++index) {
+        rows[index] = table_record_count <= 0
+            ? -1
+            : std::min(static_cast<std::int32_t>(index),
+                       table_record_count - 1);
+    }
+    return rows;
+}
+
+constexpr bool presentation_joint_texture_index_admitted(
+    std::int32_t requested_index,
+    std::size_t wrapper_count = presentation_joint_texture_wrapper_count) {
+    return static_cast<std::uint32_t>(requested_index) < wrapper_count;
+}
+
+// claim.presentation.dynamic-primitive-finalizer-teardown-closure
+//
+// Preserve the common finalizer's offset-visible state transition without
+// inventing semantic names for fields whose engine enum/meaning is not
+// established. The executable performs these writes before submitting the
+// payload to the optional collector/default queue, then clears pending_150
+// after that call returns.
+struct DynamicPrimitiveFinalizeState {
+    std::uint32_t layout_selector_08{};
+    std::uint32_t topology_mode_0c{};
+    std::uint32_t vertex_count_10{};
+    std::uint32_t vertex_stride_14{};
+    std::uint32_t vertex_byte_count_18{};
+    bool flag_1c{};
+    std::uint32_t submission_flags_80{};
+    std::uint32_t submitted_90{};
+    std::uint32_t submitted_94{};
+    std::uint32_t payload_flags_a4{};
+    std::uintptr_t pending_150{};
+};
+
+// claim.presentation.dynamic-primitive-entry-setup-reset-closure
+//
+// The stride and acquired write pointer come from the external renderer
+// backend. This helper reconstructs the executable-owned field selection and
+// 32-bit count arithmetic once those two backend results are supplied.
+constexpr void set_dynamic_primitive_entry_configuration(
+    DynamicPrimitiveFinalizeState& state,
+    std::uint32_t layout_selector,
+    std::uint32_t topology_mode,
+    std::uint32_t vertex_count,
+    bool submission_flag,
+    std::uint32_t resolved_vertex_stride,
+    std::uintptr_t acquired_write_pointer) {
+    state.layout_selector_08 = layout_selector;
+    state.topology_mode_0c = topology_mode;
+    state.vertex_count_10 = vertex_count;
+    state.flag_1c = submission_flag;
+    state.vertex_stride_14 = resolved_vertex_stride;
+    state.submitted_94 = topology_mode;
+    state.vertex_byte_count_18 = vertex_count * resolved_vertex_stride;
+    state.submitted_90 = layout_selector;
+    state.pending_150 = acquired_write_pointer;
+}
+
+constexpr void finalize_dynamic_primitive_state(
+    DynamicPrimitiveFinalizeState& state) {
+    state.payload_flags_a4 |= 1U;
+    state.submission_flags_80 =
+        (state.submission_flags_80 & ~0x80U) |
+        (state.flag_1c ? 0x80U : 0U);
+    state.submitted_94 = state.topology_mode_0c;
+    state.submitted_90 = state.layout_selector_08;
+    state.pending_150 = 0;
+}
+
+// The common two-vertex line helper uses this exact setup tuple before
+// reaching the same virtual finalizer.
+inline constexpr std::array<std::uint32_t, 4>
+    dynamic_primitive_line_setup{{3, 1, 2, 1}};
+
+// claim.presentation.primitive-topology-derived-flags
+//
+// SetPrimitiveTopologyMode stores the low six mode bits and derives three
+// flags from an executable-owned 62-row property table. The generic helper
+// takes the already selected/clamped row properties so its threshold and bit
+// behavior can be represented without copying unrelated engine rows.
+struct PrimitiveTopologyModeState {
+    std::uint32_t packed_mode_word{};
+    std::uint32_t auxiliary_flags_58{};
+    std::uint32_t payload_flags_60{};
+};
+
+struct PrimitiveTopologyModeProperties {
+    bool property_08{};
+    bool property_18{};
+};
+
+constexpr void set_primitive_topology_mode(
+    PrimitiveTopologyModeState& state,
+    std::int32_t requested_mode,
+    PrimitiveTopologyModeProperties properties) {
+    const auto stored_mode =
+        static_cast<std::uint32_t>(requested_mode) & 0x3fU;
+    state.packed_mode_word =
+        (state.packed_mode_word & ~0x3fU) | stored_mode;
+
+    if (requested_mode < 33) {
+        state.payload_flags_60 &= ~0x800U;
+    } else {
+        state.payload_flags_60 |= 0x800U;
+    }
+
+    state.payload_flags_60 =
+        (state.payload_flags_60 & ~0x20U) |
+        (properties.property_08 ? 0x20U : 0U);
+    state.payload_flags_60 =
+        (state.payload_flags_60 & ~0x40U) |
+        (properties.property_18 ? 0x40U : 0U);
+    state.auxiliary_flags_58 =
+        (state.auxiliary_flags_58 & ~0x08U) |
+        (properties.property_08 ? 0U : 0x08U);
+
+    if (requested_mode > 32) {
+        state.payload_flags_60 |= 0x20U;
+    }
+}
+
+constexpr std::optional<PrimitiveTopologyModeProperties>
+chart_primitive_topology_mode_properties(std::uint32_t mode) {
+    switch (mode) {
+        case 2:
+            return PrimitiveTopologyModeProperties{true, true};
+        case 3:
+        case 4:
+            return PrimitiveTopologyModeProperties{true, false};
+        default:
+            return std::nullopt;
+    }
+}
+
+inline std::array<AirSpriteVertex, 6> build_air_sprite_quad(
+    const AirSpriteQuadParameters& parameters) {
+    float x0{};
+    float x1{};
+    switch (parameters.anchor_mode) {
+        case 0:
+        case 3:
+        case 6:
+            x1 = parameters.width;
+            break;
+        case 1:
+        case 4:
+        case 7:
+            x0 = parameters.width * -0.5F;
+            x1 = parameters.width * 0.5F;
+            break;
+        default:
+            x0 = -parameters.width;
+            break;
+    }
+
+    float y0{};
+    float y1{};
+    if (parameters.anchor_mode <= 2) {
+        y1 = parameters.height;
+    } else if (parameters.anchor_mode <= 5) {
+        y0 = parameters.height * -0.5F;
+        y1 = parameters.height * 0.5F;
+    } else {
+        y0 = -parameters.height;
+    }
+
+    const float sine = std::sin(parameters.rotation_radians);
+    const float cosine = std::cos(parameters.rotation_radians);
+    const auto transform_position = [&](float local_x, float local_y) {
+        local_x *= parameters.scale_x;
+        local_y *= parameters.scale_y;
+        return PresentationVec3{
+            local_x * cosine - local_y * sine + parameters.x,
+            local_y * cosine + local_x * sine + parameters.y,
+            0.0F,
+        };
+    };
+    const auto transform_uv = [&](float u, float v) {
+        if (!parameters.uv_transform.has_value()) {
+            return std::array<float, 2>{u, v};
+        }
+        const auto& matrix = *parameters.uv_transform;
+        return std::array<float, 2>{
+            matrix.at(0, 0) * u + matrix.at(0, 1) * v + matrix.at(0, 3),
+            matrix.at(1, 0) * u + matrix.at(1, 1) * v + matrix.at(1, 3),
+        };
+    };
+    const auto make_vertex = [&](float local_x,
+                                 float local_y,
+                                 float u,
+                                 float v) {
+        const auto transformed_uv = transform_uv(u, v);
+        return AirSpriteVertex{
+            transform_position(local_x, local_y),
+            parameters.color,
+            transformed_uv[0],
+            transformed_uv[1],
+        };
+    };
+
+    return {{
+        make_vertex(x0, y0, parameters.u0, parameters.v0),
+        make_vertex(x0, y1, parameters.u0, parameters.v1),
+        make_vertex(x1, y0, parameters.u1, parameters.v0),
+        make_vertex(x0, y1, parameters.u0, parameters.v1),
+        make_vertex(x1, y1, parameters.u1, parameters.v1),
+        make_vertex(x1, y0, parameters.u1, parameters.v0),
+    }};
+}
+
 struct PresentationSceneDescriptor {
     std::string_view name{};
     std::int32_t render_priority{};
@@ -9215,6 +9526,168 @@ constexpr bool fixed_post_result_cue_enabled(
            result < configured_mode;
 }
 
+// claim.presentation.effect-player-state-machine-closure
+//
+// Every accepted EffectManager submission owns this four-state executable
+// wrapper around the external resource player.  State writes are pending: the
+// next update applies the transition before running that state's update
+// callback.  In particular, disappearance while live queues terminal state
+// but does not make the current-state terminal predicate true until the next
+// update.
+enum class FeedbackEffectPlayerPhase : std::int32_t {
+    idle = 0,
+    starting = 1,
+    live = 2,
+    terminal = 3,
+};
+
+struct FeedbackEffectPlayerState {
+    std::int32_t current_phase{-1};
+    std::int32_t pending_phase{-1};
+    std::uint32_t ticks_in_phase{};
+    bool visible{true};
+    bool stopped{};
+};
+
+constexpr void start_feedback_effect_player_state(
+    FeedbackEffectPlayerState& state) {
+    state.pending_phase =
+        static_cast<std::int32_t>(FeedbackEffectPlayerPhase::starting);
+}
+
+constexpr bool stop_feedback_effect_player_state(
+    FeedbackEffectPlayerState& state) {
+    if (state.stopped) {
+        return false;
+    }
+    state.pending_phase =
+        static_cast<std::int32_t>(FeedbackEffectPlayerPhase::terminal);
+    state.stopped = true;
+    return true;
+}
+
+constexpr bool feedback_effect_player_is_terminal(
+    const FeedbackEffectPlayerState& state) {
+    return state.current_phase ==
+           static_cast<std::int32_t>(FeedbackEffectPlayerPhase::terminal);
+}
+
+struct FeedbackEffectPlayerUpdateOutcome {
+    bool applied_pending_transition{};
+    bool queued_live{};
+    bool queued_terminal{};
+    bool terminal_after_update{};
+};
+
+constexpr FeedbackEffectPlayerUpdateOutcome update_feedback_effect_player_state(
+    FeedbackEffectPlayerState& state,
+    bool external_instance_present,
+    bool paused = false) {
+    FeedbackEffectPlayerUpdateOutcome outcome{};
+    if (!paused) {
+        ++state.ticks_in_phase;
+        if (state.pending_phase >= 0) {
+            state.current_phase = state.pending_phase;
+            state.pending_phase = -1;
+            state.ticks_in_phase = 0;
+            outcome.applied_pending_transition = true;
+        }
+
+        if (state.current_phase ==
+            static_cast<std::int32_t>(FeedbackEffectPlayerPhase::starting)) {
+            state.pending_phase =
+                static_cast<std::int32_t>(FeedbackEffectPlayerPhase::live);
+            outcome.queued_live = true;
+        } else if (
+            state.current_phase ==
+                static_cast<std::int32_t>(FeedbackEffectPlayerPhase::live) &&
+            !external_instance_present) {
+            state.pending_phase =
+                static_cast<std::int32_t>(FeedbackEffectPlayerPhase::terminal);
+            outcome.queued_terminal = true;
+        }
+    }
+    outcome.terminal_after_update = feedback_effect_player_is_terminal(state);
+    return outcome;
+}
+
+constexpr std::uint32_t apply_feedback_effect_visibility_flag(
+    std::uint32_t instance_flags,
+    bool visible) {
+    return visible ? instance_flags & ~0x4U : instance_flags | 0x4U;
+}
+
+constexpr std::array<float, 16> feedback_effect_translation_matrix(
+    float x,
+    float y,
+    float z) {
+    return {
+        1.0F, 0.0F, 0.0F, 0.0F,
+        0.0F, 1.0F, 0.0F, 0.0F,
+        0.0F, 0.0F, 1.0F, 0.0F,
+        x, y, z, 1.0F,
+    };
+}
+
+// Slide stores a one-shot nonzero latch beside its retained feedback handle.
+// Construction and parsed-record loading set it to -1.  The first update with
+// a live handle and Slide presentation phase 2 selects external resource entry
+// zero and clears the latch.  Hidden phases deliberately leave it pending.
+struct SlideRetainedFeedbackControlState {
+    std::int32_t pending_resource_entry_latch{-1};
+};
+
+struct SlideRetainedFeedbackControlOutcome {
+    bool controls_handle{};
+    bool visible{};
+    bool updates_position{};
+    std::optional<std::int32_t> selected_resource_entry{};
+};
+
+constexpr SlideRetainedFeedbackControlOutcome
+update_slide_retained_feedback_control(
+    SlideRetainedFeedbackControlState& state,
+    bool handle_present,
+    std::int32_t slide_presentation_phase) {
+    SlideRetainedFeedbackControlOutcome outcome{};
+    if (!handle_present) {
+        return outcome;
+    }
+
+    outcome.controls_handle = true;
+    if (slide_presentation_phase != 2) {
+        return outcome;
+    }
+
+    outcome.visible = true;
+    outcome.updates_position = true;
+    if (state.pending_resource_entry_latch != 0) {
+        outcome.selected_resource_entry = 0;
+        state.pending_resource_entry_latch = 0;
+    }
+    return outcome;
+}
+
+struct SlidePreloadFeedbackControl {
+    bool controls_each_handle{};
+    bool visible{};
+    std::int32_t selected_resource_entry{-1};
+};
+
+constexpr SlidePreloadFeedbackControl slide_preload_feedback_control(
+    std::uint32_t resource_step) {
+    switch (resource_step) {
+    case 11:
+        return {true, true, 0};
+    case 12:
+        return {true, true, 1};
+    case 13:
+        return {true, false, 1};
+    default:
+        return {};
+    }
+}
+
 enum class FeedbackEffectList : std::uint8_t {
     bomb,
     reaction,
@@ -9263,9 +9736,68 @@ inline constexpr std::array<FeedbackEffectList, 2>
 
 constexpr bool feedback_effect_list_accepts_normal_submission(
     const FeedbackEffectListDescriptor& descriptor,
-    std::uint32_t active_count,
+    std::uint32_t submissions_since_update,
     bool cooldown_complete) {
-    return active_count < descriptor.capacity && cooldown_complete;
+    return submissions_since_update < descriptor.capacity &&
+           cooldown_complete;
+}
+
+// claim.presentation.effect-list-lifecycle-closure
+//
+// EffList capacity has two distinct uses. Admission compares the number of
+// submissions since the last list update, while a non-forced append separately
+// stops and removes the oldest active effect if occupancy is already at the
+// same fixed capacity. Forced/preload append bypasses both admission and that
+// eviction, so active occupancy may exceed capacity.
+struct FeedbackEffectListState {
+    std::uint32_t active_count{};
+    std::uint32_t submissions_since_update{};
+    std::uint32_t maximum_occupancy{};
+    std::uint32_t accepted_total{};
+    bool cooldown_ready{true};
+};
+
+struct FeedbackEffectListAppendOutcome {
+    bool evicted_oldest{};
+    bool restarted_cooldown{};
+};
+
+constexpr FeedbackEffectListAppendOutcome append_feedback_effect_list_state(
+    FeedbackEffectListState& state,
+    const FeedbackEffectListDescriptor& descriptor,
+    bool forced) {
+    FeedbackEffectListAppendOutcome outcome{};
+    if (!forced) {
+        if (state.active_count >= descriptor.capacity &&
+            state.active_count != 0U) {
+            --state.active_count;
+            outcome.evicted_oldest = true;
+        }
+        state.cooldown_ready = false;
+        outcome.restarted_cooldown = true;
+    }
+    ++state.active_count;
+    ++state.submissions_since_update;
+    ++state.accepted_total;
+    return outcome;
+}
+
+constexpr void update_feedback_effect_list_state(
+    FeedbackEffectListState& state,
+    std::uint32_t active_after_terminal_removal) {
+    state.active_count = active_after_terminal_removal;
+    state.maximum_occupancy =
+        std::max(state.maximum_occupancy, state.active_count);
+    state.submissions_since_update = 0;
+}
+
+constexpr void clear_feedback_effect_list_state(
+    FeedbackEffectListState& state) {
+    state.active_count = 0;
+    state.maximum_occupancy = 0;
+    state.accepted_total = 0;
+    state.cooldown_ready = true;
+    // The executable clear slot deliberately does not write this field.
 }
 
 constexpr std::int32_t feedback_effect_cooldown_milliseconds(
@@ -9301,6 +9833,83 @@ constexpr std::int32_t select_slide_extended_feedback_row(
     return embedded_mode
                ? slide_embedded_feedback_rows[trailing_selector]
                : runtime_rows[trailing_selector];
+}
+
+// claim.presentation.slide-extended-feedback-admission
+//
+// CharaEffectManager owns two independent pre-submission gates for the two
+// Slide extended-feedback kinds. The lane gate deliberately scans a half-open
+// interval but writes the same interval with its last cell included. Preserve
+// that asymmetric boundary exactly.
+struct SlideCharaEffectAdmissionState {
+    std::array<float, 32> lane_expiry{};
+    float global_next_allowed{};
+};
+
+inline constexpr std::array<std::int32_t, 16>
+    slide_chara_effect_lane_footprints{{
+        2, 4, 6, 8, 2, 12, 2, 16, 2, 2, 2, 2, 2, 2, 2, 32,
+    }};
+
+inline constexpr std::array<float, 16>
+    slide_chara_effect_lane_durations{{
+        1.0F, 1.0F, 1.0F, 1.0F,
+        1.0F, 1.0F, 1.0F, 1.0F,
+        1.0F, 1.0F, 1.0F, 1.0F,
+        1.0F, 1.0F, 1.0F, 1.0F,
+    }};
+
+inline constexpr float slide_chara_effect_global_duration = 7.0F;
+
+constexpr void reset_slide_chara_effect_admission(
+    SlideCharaEffectAdmissionState& state) {
+    state.lane_expiry.fill(0.0F);
+    state.global_next_allowed = 0.0F;
+}
+
+constexpr bool check_and_reserve_slide_chara_effect_lane_overlap(
+    SlideCharaEffectAdmissionState& state,
+    std::int32_t start_lane,
+    std::int32_t decoded_width,
+    float current_time) {
+    if (start_lane < 0 || decoded_width < 1 || decoded_width > 16 ||
+        start_lane > 16 - decoded_width) {
+        return false;
+    }
+
+    const std::size_t width_index =
+        static_cast<std::size_t>(decoded_width - 1);
+    const std::int32_t footprint =
+        slide_chara_effect_lane_footprints[width_index];
+    const std::int32_t center_subcell = start_lane * 2 + decoded_width;
+    const std::int32_t first = std::clamp(
+        center_subcell - footprint / 2, 0, 31);
+    const std::int32_t last = std::clamp(
+        center_subcell - 1 + footprint / 2, 0, 31);
+
+    for (std::int32_t cell = first; cell < last; ++cell) {
+        if (current_time < state.lane_expiry[static_cast<std::size_t>(cell)]) {
+            return false;
+        }
+    }
+
+    const float expiry =
+        current_time + slide_chara_effect_lane_durations[width_index];
+    for (std::int32_t cell = first; cell <= last; ++cell) {
+        state.lane_expiry[static_cast<std::size_t>(cell)] = expiry;
+    }
+    return true;
+}
+
+constexpr bool check_and_reserve_slide_chara_effect_global_cooldown(
+    SlideCharaEffectAdmissionState& state,
+    float current_time) {
+    if (current_time < state.global_next_allowed) {
+        return false;
+    }
+    state.global_next_allowed =
+        current_time + slide_chara_effect_global_duration;
+    return true;
 }
 
 }  // namespace chart::reconstruction

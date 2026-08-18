@@ -8,7 +8,7 @@
 - Coverage rows: stage-one `parser.events`, `state.ownership`,
   `audit.indirect_calls`; viewer rows `render.heaven_hold`, `render.slide`,
   `render.air_ladder`, `time.playback_seek`
-- Last reviewed: 2026-08-10
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -18,6 +18,8 @@ authored `0x24` endpoint, not from the generated judgement queue. HHD/HHX token
 10 selects endpoint mirroring and a geometry mode through two executable-owned
 tables. Retyped HLD and zero/`NON` ALD retain selector zero. The HLD rewrite's
 separate integer 10 is consumed as path scalar `1.0`, not as that selector.
+`NON` is not retained as a presentation-resource selector: exceptional ALD
+uses the same width/flags resource selection as other HeavenHold origins.
 
 ## Anchors
 
@@ -28,6 +30,7 @@ separate integer 10 is consumed as path scalar `1.0`, not as that selector.
 - `game.exe @ RAM:00b24b70, FUN_00b24b70, authored precompute and geometry descriptor, hash 763d61bf88deedba10e937f0da2e059b5ac445aa52c8e896af792ee80d16ab07`
 - `game.exe @ RAM:011cbbe0 and RAM:011cbbb0, +0xb0 mirror/mode selectors, normalized hashes fe1286ea8b693ad23514a92dce718aec8fc0ba5231146e99a8704f6649215e6f`
 - `game.exe @ RAM:00c15cd0, FUN_00c15cd0, precompute lookup and two-resource load, hash c50031aaae7a2cbe7ca4f58358625460d71a077381717e3eaa9cc6a3b60a0306`
+- `game.exe @ RAM:00c15990, FUN_00c15990, all-table HeavenHold preload with no NON branch, hash 5eda6d2686dfdeb9bc893c2440e42075563c5f825e43b50b7c18902b1f66f7f9`
 - `game.exe @ RAM:00c149a0, FUN_00c149a0, endpoint projection, phase modes and visibility, hash 55c4af0cd9eaad714ecae4f9d8096940bdfbdd472ecbfeaf5ab367610bc01c85`
 - `game.exe @ RAM:00c08420, FUN_00c08420, one-stream mesh transform, clipping and emission, hash 2c9d1425d6262aa157c14519a9b7e342e2e8816ffa1f0abf1a6aa2afc7425e2a`
 - `game.exe @ RAM:006ddc30, FUN_006ddc30, 0x18-byte vertex append, hash 3cac7fa29640e1cac62b72547ad7306252a8970b411aa3f68da28de8819c993f`
@@ -67,6 +70,12 @@ separate integer 10 is consumed as path scalar `1.0`, not as that selector.
   resource selects its ordinary/extended family from the command-form byte.
   The body selects its second family only when the primary owns attached
   secondary type 3, 5, or 8; this selector is not the HHD/HHX command form.
+- Preload steps load all 16 width rows of the ordinary root, ordinary body,
+  and attached-secondary body tables. Runtime selection reads width,
+  command-form/alternate-root state, and attached-secondary state only. It
+  never reads parsed type 9, style code 15, or the text `NON`. External table
+  contents could still be empty, but the executable selects no NON-specific
+  null entry.
 - Presentation projects the root and every authored endpoint with that
   endpoint's stored SLA key. Root visibility is `start_phase != 4`; body
   visibility is `path_phase != 4`. Path phase 2 selects presentation mode 1.
@@ -83,7 +92,8 @@ separate integer 10 is consumed as path scalar `1.0`, not as that selector.
   to `[-600, 50]`, preserving raw-relative values. Every enabled span emits one
   single-sided quad: exactly six `0x18`-byte vertices. Lateral half extent is
   decoded width multiplied by two render units, which equals the authored lane
-  boundaries under the common four-units-per-lane transform. There is one
+  boundaries under the common four-units-per-lane transform. The sole body
+  Joint is initialized with topology 4. There is one
   dynamic primitive submission, not Slide's or AirLadder's three streams.
 - Presentation modes 0 and 1 use exact base white `0xffffffff`. Mode 1 writes
   scale
@@ -111,6 +121,9 @@ phase reads and reset paths close both resource lifetimes.
 - Evidence that would disprove this claim: an HLD writer to parsed `+0xb0`, a
   precompute point sourced from generated `+0x158`, a second body submission,
   or a root/body visibility path that bypasses the two component phases.
+- Competing explanation: exceptional zero/`NON` ALD suppresses root/body by a
+  code-side null-resource selector. Falsifier: a NON/type-9 branch in preload
+  or runtime resource lookup. None exists in the closed paths.
 
 ## Unknowns
 
@@ -118,6 +131,10 @@ phase reads and reset paths close both resource lifetimes.
   texture contents, resource intrinsic scale, shaders, and final camera/pixel
   composition remain unavailable product data. Their exact selector branches
   and consumers are closed.
+- Exceptional ALD's empty generated path reaches body phase 4 on its first
+  eligible path update, so body invisibility is code-backed. Start-resource
+  absence in footage is not explained by a NON selector; external resource
+  contents and exact observed phase/timing remain the evidence boundary.
 - The chart-only viewer has no cabinet input. It uses deterministic no-input
   lifetime clipping; exact phase-driven mode transitions remain represented in
   the clean-room API for a future gameplay-state simulation.
@@ -129,6 +146,8 @@ phase reads and reset paths close both resource lifetimes.
 - Ghidra mutations: supported-role plate comments at `00b24b70`, `00c08420`,
   `00c145d0`, `00c149a0`, `00c152a0`, `00c154a0`, `00c15cd0`, `00c158f0`,
   `00c16340`, `011cbbb0`, and `011cbbe0`; default symbols/types retained.
+  Supported decompiler comments at `00c15990` and `00c15cd0` record the
+  all-table preload and absence of a NON-specific selector.
 - Spec sections: `spec/c2s.md`, `spec/notes/heaven_hold.md`, and
   `spec/notes/slide.md`.
 - Reconstruction: selector tables, authored path construction, origin trim,

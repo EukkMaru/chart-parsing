@@ -50,8 +50,9 @@ construct exact constants: base white `0xffffffff`, low-alpha white
   AirLadder calls the builder in mode zero. AirSlide selects modes one and two
   for path phases three and four, otherwise mode zero.
 - Hold and HeavenHold use base white in modes zero and one and alternate gray
-  in mode two. AirSolid always uses base white. Slide modes zero and one use
-  base white and mode two uses alternate gray; its mode-one overlay separately
+  in mode two. AirSolid always uses base white. Slide main-stream modes zero
+  and one use base white and mode two uses alternate gray; Slide center stream
+  one remains base white in every mode, while its mode-one overlay separately
   uses the immediate constant `0x20ffffff`.
 
 ## Reasoning

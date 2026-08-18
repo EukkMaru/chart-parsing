@@ -24,6 +24,8 @@ and finally attempt the two Slide extended-result effects. Accepted effect
 players receive a monotonic creation key and are bound to the executable-
 selected `MainScene` or `BgScene`; external resource rows, players, scene
 composition, materials, and textures determine their unavailable final pixels.
+The two Slide attempts additionally receive independent, mutating lane-overlap
+and global-cooldown admission flags owned by `CharaEffectManager`.
 
 ## Anchors
 
@@ -99,19 +101,35 @@ composition, materials, and textures determine their unavailable final pixels.
 - Slide source category 1 with nonzero result maps its trailing unsigned
   selector 0..7 through either embedded `{0,1,2,4,3,6,5,7}` or a writable
   runtime table. Values at least 8 become `-1`. A valid external result-effect
-  row independently gates kind 6 and kind 7 submissions, in that order.
+  row independently gates kind 6 and kind 7 submissions, in that order. Before
+  the submitter, `CharaEffectManager` evaluates its lane-overlap reservation and
+  then its global-cooldown reservation without short-circuiting. Kind 6 uses
+  the first flag and kind 7 the second; their exact state machines are owned by
+  `claim.presentation.slide-extended-feedback-admission`.
 - The effect manager constructs ten lists in the order Bomb, Reaction, Text,
   Continue, AirRing, SonicBoom, CharaNote, CharaBG, Mine, MineBG. Their
   capacities are `24,24,24,32,16,16,16,4,48,4`; only CharaBG and MineBG use
   cooldown count 5. That count is converted with the selected 60/120 rate by
   rounded `(1000 / rate) * count`, producing 83 or 42 milliseconds.
-- Normal gameplay admission requires both available list capacity and an
-  expired cooldown. The note-view preload temporarily enables a separate
-  tuple-deduplicating force mode and disables it at the end of the staged
-  pass. Each accepted player receives the current global 32-bit sequence key,
-  which is then incremented with wrap, before it is started and appended to
-  its fixed list. List updates run in the constructor order and erase effect
-  objects only after their state reaches 3.
+- Normal gameplay admission compares submissions since the last list update,
+  not active occupancy, with the fixed capacity and then checks the cooldown.
+  A non-forced append at full active occupancy stops/removes the oldest effect
+  before appending; forced preload appends bypass that eviction and cooldown
+  restart. The note-view preload temporarily enables a separate
+  tuple-deduplicating force mode and disables it at the end of the staged pass.
+  Each accepted player receives the current global 32-bit sequence key, which
+  is then incremented with wrap, before it is started and appended to its fixed
+  list. List updates run in constructor order, erase state-3 objects, record
+  maximum post-erase occupancy, and reset the per-update submission counter.
+  Exact clear/reset callers and the clear slot's retained counter are closed by
+  `claim.presentation.effect-list-lifecycle-closure`.
+- The appended `EffectBase` wrapper is a closed four-state machine. Start queues
+  state 1, its update queues state 2, and state 2 queues terminal state 3 after
+  external-instance disappearance. Because terminal testing reads current
+  state rather than pending state, natural disappearance is erased on the
+  following list update. Exact stop, visibility-bit, translated-position, and
+  destruction behavior is owned by
+  `claim.presentation.effect-player-state-machine-closure`.
 
 ## Reasoning
 
@@ -121,8 +139,10 @@ the effect helpers close every resource-field selector and scene flag. The
 effect-manager constructor, admission routine, player initializer, update
 loop, preload-mode callers, and cleanup path jointly establish ownership and
 lifetime rather than inferring them from effect names. The player initializer
-proves the executable-selected scene and creation key, but it delegates mesh,
-material, and final sorting behavior to the loaded player/scene objects.
+and wrapper state machine prove the executable-selected scene, creation key,
+visible/terminal lifetime, and retained Slide controls, but delegate mesh,
+material, animation, and final sorting behavior to the loaded player/scene
+objects.
 
 ## Alternatives and falsifiers
 
@@ -162,7 +182,9 @@ material, and final sorting behavior to the loaded player/scene objects.
 - Reconstruction code: exact per-family `+0x48` result-remap selection,
   feedback mask/resource mapping, span resource
   selection, scene and lane gates, serial-group state, cue gate, effect-list
-  descriptors/admission/cooldown, sequence allocation, and Slide feedback row.
+  descriptors/admission/cooldown/lifecycle, four-state player lifetime and
+  visibility, sequence allocation, Slide feedback row, and the separately
+  claimed CharaEffectManager admission state.
 - Tests: `tests/shared_feedback_presentation_test.cpp`.
 
 ## Verification
@@ -171,5 +193,7 @@ The common consumer was checked at both assembly and decompiler levels to pin
 the lane helper's hidden owner and stack argument order. The seven embedded
 masks, embedded Slide table, effect-list descriptor records, both scene-name
 branches, list virtual targets, preload mode callers, normal update/cleanup,
-and effect-object terminal state were independently followed. Focused and full
-build/test validation are recorded in the session handoff.
+all eight EffectBase vtable slots, all twelve state callbacks, effect-object
+terminal/visibility state, and both CharaEffectManager flags were independently
+followed. Focused and full build/test validation are recorded in the session
+handoff.

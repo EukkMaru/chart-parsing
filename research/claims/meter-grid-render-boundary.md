@@ -2,17 +2,17 @@
 
 - ID: `claim.pipeline.meter-grid-render-boundary`
 - State: active
-- Maturity: supported
+- Maturity: reconstructed
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `timing.tempo_measure`
-- Last reviewed: 2026-07-21
+- Last reviewed: 2026-08-18
 
 ## Statement
 
 The outer gameplay update's direct call immediately after runtime-note
-materialization reads generated meter/grid positions only to select visible
-view markers. It submits a stack-local position list to rendering and cannot
+materialization reads generated meter-derived bar-vector positions only to
+select visible view markers. It submits a stack-local position list to rendering and cannot
 alter the gameplay clock, pending or active notes, input, candidates, results,
 terminal state, or later materialization eligibility.
 
@@ -30,9 +30,17 @@ terminal state, or later materialization eligibility.
 
 ## Observations
 
-- Meter postprocessing creates four vectors of scheduled 24-byte grid records.
-  `FUN_00da8420` reads one such vector through the process parser owner; it does
-  not mutate the vector or any parsed record.
+- Meter postprocessing creates four vectors of scheduled 24-byte grid records:
+  fixed R-boundary and subdivision vectors at parser `+0x114`/`+0x120`, then
+  meter-derived bar and beat vectors at `+0x12c`/`+0x138`. `FUN_00da8420`
+  requests vector index 2 through `FUN_011c5310`, so its visible-marker pass
+  consumes the meter-derived bar vector, not the fixed R-boundary vector.
+- Each current MET record is appended to the temporary bar records before the
+  producer tests either meter component for zero. The same current anchor is
+  appended to the beat vector before its zero tests. If either component is
+  zero, both derived vectors retain that one MET-position anchor and no later
+  bar/beat positions are generated, even after later MET records. There is no
+  continuation to the next R boundary in vector index 2.
 - The direct thunk for `FUN_00da8420` has one caller, `FUN_00da9820`. That caller
   runs the complete ordinary or alternate input/manager path, then lazy
   materialization, then this pass. Its return is void and no value is tested by
@@ -73,22 +81,28 @@ cannot feed gameplay generation or judgement in this snapshot.
 
 ## Unknowns
 
-- The player-facing names of the four grid vectors and the exact visual marker
-  represented by the selected vector remain outside gameplay scope.
+- The exact external visual resource represented by the selected bar-vector
+  marker remains outside gameplay scope. A continuously visible field/grid
+  seen in footage must come from another static/external layer; it is not
+  evidence that this recovered vector continues after a zero MET component.
 - Allocation failure and render-backend failure behavior are not assigned to
   the successful finite gameplay path.
 
 ## Consequences
 
-- Ghidra mutations: none in the live project; GhidraMCP remained unavailable,
-  so analysis used the temporary static project clone.
+- Ghidra mutations: supported decompiler comments at `011bbbf4` and
+  `00da8420` record zero-anchor ordering and the exact index-2 consumer.
 - Spec sections: `spec/timing.md` meter/grid boundary.
-- Reconstruction code: none; the pass is presentation-only.
-- Tests: none; the exclusion is established by producer, caller, store, and
-  terminal-consumer closure.
+- Reconstruction code: `MeterGridSteps::current_anchor_retained` records the
+  producer ordering; the pass itself remains presentation-only.
+- Tests: `tests/tempo_map_test.cpp` covers zero-component anchor retention.
 
 ## Verification
 
+Normalized opcode hashes are `011bb0f0` =
+`59d9e1b5dc4cc5f5f817263e897a09e7bce086bff3c69c17484be1e9b3c73cfe`
+and `00da8420` =
+`b9b23db5c5270f5ffbcdb3022937908d565bfb8e2e6cfc0a78f0cd4950cc5981`.
 The meter/grid producer, selected parser-vector read, complete pass caller set,
 grid-index and projection helper chain, local append receiver, terminal render
 consumer, temporary destruction, and outer-update continuation were inspected
