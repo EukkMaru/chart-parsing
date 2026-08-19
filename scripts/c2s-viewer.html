@@ -1218,7 +1218,9 @@
     // the 384-tick boundaries past the halt. Product fallback, not recovered
     // behavior; the generated vectors above are untouched.
     if (gridHaltedAt !== null) {
+      const held = new Set(beats.map(b => b.p));   // the recovered anchor may sit on R
       for (let p = Math.ceil(gridHaltedAt / R) * R; p < lastGridTick; p += R) {
+        if (held.has(p)) continue;
         beats.push({ p, time: timeAt(p), bar: true, m: Math.floor(p / R), b: 1 });
       }
     }
@@ -1734,9 +1736,6 @@
   // spec/timing.md: "primary parsed types 1, 2, 9, 10, 12, and 13 retry with
   // their endpoint and separate region key" (12 builds no runtime note).
   const ENDPOINT_RETRY_KINDS = new Set(["hold", "slide", "ald", "asolid", "heaven"]);
-  // Kinds whose drawn body takes the single entity-time projection-factor
-  // query (heaven runs its own recovered per-point path presentation).
-  const ENTITY_BODY_KINDS = new Set(["hold", "slide", "ahold", "aslide", "ald", "asolid"]);
   // With autoplay on, geometry is consumed at the judgement plane — but only
   // for notes whose time has come. A FUTURE note sitting past the line (a
   // bottom-entry note under a negative projection factor) keeps the render
@@ -2268,25 +2267,13 @@
       // The projection factor multiplies distance, so a fast note is pushed
       // further out for the same time delta and covers more ground per tick.
       const t0 = depthAt(n.time, n.slaKey);
-      let t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
-      if (ENTITY_BODY_KINDS.has(n.kind)) {
-        // A record's BODY takes one projection-factor query at the record's
-        // own entity time, per the recovered "same keyed-adjusted entity
-        // time" COMMON presentation helper — not one per endpoint. A
-        // micro-segment whose two query keys straddle a DCM boundary
-        // otherwise smears across the whole corridor (the 8078_05
-        // letter-formation ghost slides and air holds, invisible on the
-        // cabinet at every speed). Footage-constrained inference: exact
-        // per-vertex DCM anchoring is on the decomp work order. Adjacent
-        // records still factor independently, preserving the per-record
-        // compression footage (0961_03 m105); keyed scrolledTime stays
-        // per-endpoint (that part is recovered); endpoint RESOURCES (caps)
-        // stay per-endpoint entities.
-        const v1 = scrolledTime(n.endTime, now, n.endSlaKey ?? n.slaKey);
-        let d1 = v1 - now;
-        if (d1 > 0) d1 *= scrollFactor(n.vt0);
-        t1 = d1 / LA;
-      }
+      // Every path point is projected independently — keyed schedule
+      // adjustment and the DCM lookup are applied per endpoint, and the
+      // builders interpolate between already-projected values
+      // (claim.presentation.sustain-endpoint-dcm-projection, eight anchored
+      // family projections; supersedes the former single entity-time
+      // inference).
+      const t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
 
       // One visibility rule for the one runtime class
       // (claim.judgement.heaven-hold-judgement): a zero/NON ALD is
