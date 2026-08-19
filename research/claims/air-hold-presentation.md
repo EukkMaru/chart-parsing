@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `render.air_hold`, `time.playback_seek`, `config.external_presentation`
-- Last reviewed: 2026-08-10
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -19,10 +19,16 @@ and lifetime update before presentation in each scheduled tick; once both
 component phases reach 5, the common deferred terminal request is made and the
 presentation update stops.
 
+The AHD/AHX parser consumes exactly six data fields. Any later corpus label,
+including `DEF` or `PNK`, is an ignored extra and cannot select presentation.
+A final AHD contributes to the envelope endpoint but creates no AHX resource
+pair; the fixed envelope pair still exists independently.
+
 ## Anchors
 
 - `game.exe @ RAM:00c21020, FUN_00c21020, constructor/default presentation state`
 - `game.exe @ RAM:00c23f50, FUN_00c23f50, attached load and resource construction`
+- `game.exe @ RAM:011c8870, FUN_011c8870, AHD/AHX field consumption and command-form flag, hash c634f8b3db46cfaaef0e2836a603435b1bce70cc8dd4980f939da3efdb24e97b`
 - `game.exe @ RAM:00c228e0, FUN_00c228e0, gameplay/lifetime update half`
 - `game.exe @ RAM:00c229c0, FUN_00c229c0, resource transform/visibility update half`
 - `game.exe @ RAM:00c24cd0, FUN_00c24cd0, ordered active wrapper`
@@ -42,6 +48,10 @@ presentation update stops.
 - Construction initializes the independent start and path phases, ordinary
   presentation value 1, unit resource scales, owned checkpoint/resource
   containers, and missing handle sentinels in the `0x2f0`-byte object.
+- The parser's type-5 case validates access through the sixth data field,
+  reads no later field, and stores only whether the command ID is AHX. Because
+  event descriptor arity enforcement is disabled, later `DEF`/`PNK` strings
+  are accepted and ignored rather than decoded as style.
 - Attached load reuses the already reconstructed root-family anchor rules.
   Root types 0/4/6/11 use root start; type 1 uses root end; types 2/13 use the
   final path/control. Type 13 also copies its final control value into the
@@ -53,8 +63,11 @@ presentation update stops.
   resource reports native width below 1, otherwise `width/native_width`.
 - Root load constructs two width-indexed resource families and two fixed
   resource families. Each authored AHX checker constructs two additional
-  width-indexed resources. The identities are external global tables; their
-  selection and consumers are closed without assigning asset names.
+  width-indexed resources. The checker count is saved AHX endpoints plus the
+  final endpoint only when the final command is AHX. A final AHD therefore has
+  no checkpoint pair, while the two fixed envelope resources are still
+  constructed. The identities are external global tables; their selection
+  and consumers are closed without assigning asset names.
 - The resource wrapper provides three external offsets. Root placement is
   `(base lateral + offset X, base vertical + offset Y,
   projected start + offset Z)` with scale
@@ -125,6 +138,9 @@ are treated as selection evidence, not copied asset data.
 - Competing explanation: terminal update hides or destroys resources
   immediately. Falsifier: an AirHold-reachable hide/destruction edge before
   the maintenance/removal path rather than the observed early return.
+- Competing explanation: trailing `PNK` selects a pink final-AHD resource.
+  Falsifier: any type-5 parser or AirHold load read of token index 7 or later,
+  or a resource-table branch on retained trailing text.
 
 ## Unknowns
 
@@ -167,4 +183,5 @@ Focused tests cover width indexing, root/checkpoint visibility, terminal update
 suppression, all three phase variants, field-feedback gate, exact attachment
 constants, external offsets, native-width fallback/ratio, unresolved-only
 envelope folding, future/judgement-plane inclusion, lateral bias, and the two
-envelope lateral scales.
+envelope lateral scales. Judgement tests additionally cover six consumed data
+fields, ignored later fields, and final-AHD versus final-AHX checkpoint count.

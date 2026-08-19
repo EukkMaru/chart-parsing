@@ -19,7 +19,8 @@ The body has fixed lateral edges `(lane - 8)*4` and
 `(lane + width - 8)*4`. Adjusted root/end deltas feed projection, while raw
 deltas separately select judgement-plane crossing. Surviving depth is clipped
 to `[-600, 50]`; clipping and raw crossing determine the body resource
-coordinate. Exactly one single-sided six-vertex quad is submitted. Path phase
+coordinate. Exactly one single-sided six-vertex quad is submitted with the
+Joint constructor's unchanged topology 4. Path phase
 2 selects animated mode; after start completion, path phase 3 selects exact
 alternate gray `0xff666666` and the other active path phases select animated
 mode. Base and animated modes use exact white `0xffffffff`. Both completed

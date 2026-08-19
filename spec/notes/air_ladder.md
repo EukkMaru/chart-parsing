@@ -174,7 +174,7 @@ a texture-atlas meaning or copying the excluded resource.
 The three streams are owned by three consecutively constructed
 `projView::Joint` graph children. Their graph callbacks run in stream-index
 order 0, 1, 2. Each valid callback copies its vertices, executable-selected
-primitive topology/mode (4, 3, or 2), and runtime resource handle into a
+primitive topology/mode (`[3,3,2]` in stream order), and runtime resource handle into a
 dynamic primitive. With the ordinary null collector, compatible adjacent state
 may be batched before a `0x38` record is appended to the default command vector.
 The handle is selected through a 16-entry wrapper pool populated from checked
@@ -190,7 +190,8 @@ call order, and checkpoint-effect lifetime predicate are reconstructed. The
 viewer must retain authored controls for its main
 trace and the recovered generated cadence for checkpoint effects; it must not
 invent a fixed subdivision or additional whole-height rungs. Evidence:
-`claim.note.air-ladder-precalc-presentation`.
+`claim.note.air-ladder-precalc-presentation` and
+`claim.presentation.joint-dynamic-primitive-producer-closure`.
 
 Reconstruction: `AirLadderPathPoint`,
 `generate_air_ladder_checkpoints`, `select_ald_runtime`,

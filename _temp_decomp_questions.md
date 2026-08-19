@@ -1,4 +1,4 @@
-# Temp handoff: questions for the next decomp session (2026-08-11)
+# Temp handoff: questions for the next decomp session (2026-08-11, rev 2)
 
 Temporary note, not normative. Delete once the questions are answered or
 recorded as claims. Your previous session's push (7762b67, recovered manually
@@ -9,8 +9,34 @@ gaps, and all of them are implemented, corpus-verified, and committed
 GitHub issue #15 is your work order, #16 is the owner's verification queue,
 #12 remains the living inference ledger.
 
-## The work order (issue #15, evidence inline there)
+Since the first revision of this note, an owner World's End verification
+session (8078_05, 8110_05) landed commit 857051e: the DCM-into-scroll-
+schedule builder bug is fixed (the recovered "fully defined by STP/SFL/SLP"
+sentence is now cited at the site), the recovered materialization
+eligibility rule (raw 30-sixtieths shortcut, ±550 far-path band, endpoint
+retry) is the visibility gate, autoplay consumes by time so bottom-entry
+notes render, record bodies take a labeled single entity-time factor query,
+and the AirHold root arrow is restored. Issue #17 (schedule-builder
+differential coverage) and #18 (42-item provenance backlog) exist for the
+product side; neither needs you. The cmr format branch (agent/c2s-normalizer)
+was revised against your canon and does not need you either.
 
+## The work order (issue #15, evidence inline there and in its comments)
+
+0. **TOP ITEM (added after the 8078_05 session): the DCM query anchor for
+   drawn bodies — per entity or per endpoint/vertex?** The owner's World's
+   End verification exposed and we fixed a viewer bug (DCM records had
+   joined the scroll schedule; they are only the separate query — commit
+   857051e), after which one inference remains implemented and labeled: each
+   record's drawn body takes ONE projection-factor query at the record's
+   entity time, supported by the recovered "same keyed-adjusted entity time"
+   common-helper wording, owner speed-independence evidence, and 0961_03's
+   per-record compression. Trace whether body vertices (the slide path mesh
+   especially) query DCM once per entity or per vertex/endpoint. Related:
+   does a materialized note whose factored projection later re-exits the
+   ±550 band stay alive (expected yes — lifetime is result-owned)? That
+   decides whether the viewer's stateless eligibility re-test needs a
+   materialized flag.
 1. **Air-hold end/checkpoint resource display gate.** Owner footage shows end
    actions displayed on plain-AHD chain finals (2194_03 m9) although the
    checkpoint vector takes the final only if AHX — display and judgement

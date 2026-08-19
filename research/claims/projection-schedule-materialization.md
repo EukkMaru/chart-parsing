@@ -6,7 +6,7 @@
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `parser.discovery`, `parser.events`, `timing.clock`, `state.ownership`, `interactions.cross_note`, `config.external`
-- Last reviewed: 2026-08-07
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -68,13 +68,16 @@ gameplay consumer.
   converts back with `0.06F`, and consults DCM only for a positive adjusted
   delta. Its ordered `30.0F <= raw` guard and two ordered out-of-bounds
   comparisons make unordered-NaN raw or projected values eligible.
-- The DCM query time is the keyed-adjusted entity time represented by
+- The DCM query time is the keyed-adjusted endpoint time represented by
   `(manager + adjusted_delta) * 16.666666F`. Endpoint retry recomputes the
   adjusted delta from the endpoint schedule/key and queries DCM at that
   endpoint time. The common active presentation helper uses the same
   manager-plus-positive-delta query before applying the base projection
   offset. No root-time, interval-relative, or manager-only DCM anchor exists
   on these paths.
+- Sustained-note updates call that common helper separately for every path
+  endpoint; the complete family inventory and builder boundary are recorded by
+  `claim.presentation.sustain-endpoint-dcm-projection`.
 
 ## Reasoning
 
@@ -108,7 +111,8 @@ viewer handoff.
 - Spec sections: `spec/c2s.md`, `spec/timing.md`,
   `spec/configuration.md`.
 - Reconstruction code: `C2sProjectionSchedule`, group-1 parser application,
-  finalization, keyed integration, DCM lookup, and materialization composition
+  finalization, keyed integration, DCM lookup, materialization composition,
+  and the per-endpoint sustained-presentation adapter
   in `include/chart/reconstruction.hpp`.
 - Tests: `tests/projection_schedule_test.cpp`,
   `tests/runtime_materialization_test.cpp`.
@@ -118,7 +122,8 @@ viewer handoff.
 Focused tests cover all accepted/rejected commands, exact field defaults,
 malformed and extra fields, signed-duration wrap, exact keyed sorting including
 equivalent/NaN starts, overlapping contributions, missing keys, backwards
-queries, DCM shift/end/zero/source-order rules, reset, the source-shaped near
+queries, DCM shift/end/zero/source-order rules, distinct factors for two
+sustained endpoints, reset, the source-shaped near
 guard, unordered-NaN eligibility, and end-to-end far-path eligibility. Corpus
 aggregation found 1,187 STP, 12,105 SFL, 3,113 SLP, and 2,986 DCM records with
 the expected arities across the snapshot's backward-compatible chart versions.

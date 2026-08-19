@@ -58,6 +58,289 @@ clean-room viewer must expose the camera pose/configuration as an external or
 owner-calibrated parameter and must not label a fitted pose canonical.
 Evidence: `claim.presentation.common-scene-camera`.
 
+## Background SpriteNode and common Sprite quad
+
+`projView::System` embeds an `air::Sprite` in a registered
+`air::SpriteNode`. Gameplay-scene construction assigns an externally obtained
+render-target handle to that Sprite and names the graph node `BG SpriteNode`.
+Its graph callback submits the Sprite through the default/null collector path.
+System teardown unregisters the graph node, releases the Sprite resource and
+optional UV transform, and destroys its embedded dynamic-primitive utility.
+
+An `air::Sprite` starts with null resource, translation `(0,0)`, dimensions
+`16x16`, scale `(1,1)`, rotation 0, UV rectangle `(0,0)-(1,1)`, packed color
+`0xffffffff`, no UV matrix, anchor mode 0, and topology selector 3. A successful
+resource load replaces the handle and dimensions with the loaded resource's
+integer width and height; failure retains a zero handle. Existing-handle
+assignment applies the same release/retain and dimension-copy lifecycle.
+
+Sprite draw requests the observed dynamic-primitive setup tuple `(4,3,6,1)`
+and emits one six-vertex triangle list. The anchor rectangle is:
+
+| Anchor modes | X range | Y range |
+| --- | --- | --- |
+| 0 | `[0,w]` | `[0,h]` |
+| 1 | `[-w/2,w/2]` | `[0,h]` |
+| 2 | `[-w,0]` | `[0,h]` |
+| 3 | `[0,w]` | `[-h/2,h/2]` |
+| 4 | `[-w/2,w/2]` | `[-h/2,h/2]` |
+| 5 | `[-w,0]` | `[-h/2,h/2]` |
+| 6 | `[0,w]` | `[-h,0]` |
+| 7 | `[-w/2,w/2]` | `[-h,0]` |
+| 8 and other values | `[-w,0]` | `[-h,0]` |
+
+Local XY is scaled independently, rotated, and translated in that order.
+Positions are emitted as `(x0,y0),(x0,y1),(x1,y0),(x0,y1),(x1,y1),(x1,y0)`;
+UVs use the corresponding
+`(u0,v0),(u0,v1),(u1,v0),(u0,v1),(u1,v1),(u1,v0)` sequence. A present UV
+matrix transforms every pair before submission, and the packed color is copied
+to all six vertices.
+
+The direct Sprite draw caller set is complete: the gameplay background node,
+font/ruby text, `air::LedObject`, and `EmoteControl`. The presentation owner's
+16 checked texture-row wrappers are also Sprite-backed, but they supply
+resource handles to Joint descriptors and are not a fifth direct Sprite draw
+owner. WindManager, AuraScene, and `star::SglVTFWaterLine` direct dynamic-
+primitive paths have separate RTTI/vtable owners outside chart-note
+presentation. The render-target pixels, loaded dimensions, texture data, and
+final material/pass composition remain external inputs. Evidence:
+`claim.presentation.air-sprite-dynamic-primitive-closure`.
+
+## Dynamic-primitive construction-root inventory
+
+The common `DynamicPrimitiveUtil` constructor has exactly 17 direct function
+roots in this snapshot. Two chart-side uses survive complete owner
+classification: `projView::JointBase` through one of four `air::Primitive`
+constructor overloads, and the background `air::Sprite`. Their reachable
+geometry, resource admission, callbacks, submission, and teardown are
+specified above and in the Joint section below.
+
+The remaining roots are assigned as follows:
+
+| Root family | Recovered owner boundary |
+| --- | --- |
+| two anonymous owners | sole allocator creates literal `DefaultDebugScene` |
+| extended utility constructor | only the default-debug owners, `air::GuiWindow`, and engine `Debug` system window; its default twin is unreferenced |
+| `air::GuiWindow` | generic window allocation, `air::GuiPanel`, and `air::GuiMenuBar` |
+| non-Joint `air::Primitive` overload calls | RTTI/vtable `air` GUI, graph/camera/light/filter/model/physical/IK debug and editor classes |
+| `font::TextBoxObject` | sole owner `font::FontManager` |
+| `surfride::SrRenderer` | sole direct owner `surfride::SrPlayer::Impl` |
+| `SpkDynamicPrimitive` | SPK debug/font/SGL and temporary particle-drawing functions |
+| direct specialized roots | WindManager, AuraScene, registered `star::SglMask`, and `star::SglVTFWaterLine` |
+
+The four generic `air::Primitive` overloads have complete caller counts
+2/5/5/5. `projView::JointBase` is the only chart class among those 17 callers;
+the other 16 are assigned debug/editor owners, including two helpers reached
+only from RTTI `air::ModelDebugWindow`. Thus a generic helper appearance is not
+evidence for another note primitive.
+
+This inventory closes construction ownership, not external payload contents.
+Surfride animation data, SPK particles, SGL masks, Wind/Aura/water resources,
+and final material/pass pixels remain named external rendering boundaries and
+may be reopened only from a traced gameplay consumer. Evidence:
+`claim.presentation.dynamic-primitive-util-owner-inventory`.
+
+## Dynamic-primitive finalization and teardown
+
+The two dynamic vtables share a configuration slot, pending-write-pointer
+accessor, backend-count reset slot, and finalizer. Configuration stores the
+layout selector at `+0x08`, topology/mode at `+0x0c`, vertex count at `+0x10`,
+and the one-byte submission flag at `+0x1c`. It resolves the layout selector's
+external byte stride into `+0x14`, computes the 32-bit product
+`vertex_count * stride` at `+0x18`, mirrors selector/mode into `+0x90/+0x94`,
+and stores the acquired write pointer at `+0x150`. The accessor returns the
+address of that pointer field, which geometry builders dereference before
+writing vertices.
+
+The shared renderer resolves selectors through a 17-entry external layout
+table and returns zero when the backend is absent. Its allocator records the
+selector, topology/mode, and count, rounds the backend's current byte offset up
+to a stride boundary, adds two stride units only when topology/mode is 4,
+allocates `count*stride` after that prefix, and returns the write address after
+the prefix. Concrete layout entries and allocation storage remain external.
+The reset virtual clears only the backend's recorded vertex count; it neither
+clears owner-local submission state nor releases memory. Evidence:
+`claim.presentation.dynamic-primitive-entry-setup-reset-closure`.
+
+The common finalizer is installed in both the RTTI
+`sea::DynamicPrimitiveUtil` and `sea::DynamicPrimitiveEntryHelper` vtables.
+Its complete non-vtable direct caller set contains only the specialized
+WindManager and AuraScene producers; Joint and Sprite reach the same function
+through the installed virtual slot. No additional finalizer target is hidden
+behind the common construction roots.
+
+For one pending entry, finalization performs this exact ordered state update:
+
+1. OR bit 0 into the payload flags at utility offset `+0xa4`.
+2. Replace bit 7 of the submission flags at `+0x80` from the boolean byte at
+   `+0x1c`, preserving every other bit.
+3. Copy `+0x0c` to `+0x94` and `+0x08` to `+0x90`.
+4. Submit the payload at `+0x20` to the optional collector/default command
+   path.
+5. Clear the pending pointer at `+0x150` after submission returns.
+
+The common two-vertex line helper requests setup tuple `(3,1,2,1)`, emits two
+vertices with stride `0x10`, and reaches this same virtual finalizer.
+
+The common teardown function does only one thing: it restores the
+`sea::BasePrimitiveModule` vtable. It does not free a buffer, clear a
+container, or reset the finalizer fields. The complete non-unwind destructor
+caller set maps back to every construction-root family: default-debug and
+extended utilities, GUI window, generic `air::Primitive`, font text box,
+Surfride renderer, SPK primitive, SGL mask, Sprite, Wind, Aura, and water line.
+Compiler unwind handlers cover the same families' partial-construction paths.
+Class-local storage is released by the surrounding owner destructor, not by
+the shared helper. The Surfride cleanup call is anchored at the direct call
+instruction because that small cleanup chunk is not safely represented as a
+standalone Ghidra function in this project.
+
+Field semantics beyond their observed offsets, the optional collector's
+external command payload, and backend rendering remain unnamed boundaries.
+Evidence:
+`claim.presentation.dynamic-primitive-finalizer-teardown-closure`.
+
+The common standalone convenience builders are also exhaustively assigned.
+They comprise flagged/unflagged 3D two-vertex lines, one flagged 2D triangle,
+and flagged/unflagged 3D triangles. Three variants have no live reference; all
+live engine calls collapse to a literal RAM/VRAM/draw-call/vertex performance
+debug overlay and its private helpers, except the separately owned
+`star::SglVTFWaterLine` line producer. No runtime note, projView Joint, or
+gameplay-scene owner reaches these builders. Evidence:
+`claim.presentation.dynamic-primitive-convenience-helper-owner-closure`.
+
+Primitive topology/mode selection also updates submission flags; it is not
+only a geometry label. The common setter stores the low six mode bits, clears
+the extended-mode bit for signed modes below 33 and sets it otherwise, clamps
+the table lookup to row 61, and applies two executable-owned table properties
+to payload bits `0x20/0x40` plus the inverse first property to auxiliary bit
+`0x08`. Modes above 32 force payload bit `0x20` after table application.
+
+All chart-reachable values are closed: mode 2 has table properties `(1,1)`,
+while modes 3 and 4 have `(1,0)`. Thus mode 2 sets payload bits `0x20` and
+`0x40`; modes 3/4 set `0x20` and clear `0x40`; all three clear the extended
+`0x800` and auxiliary `0x08` bits. The common finalizer later adds payload bit
+0 and replaces bit 7 from its per-entry flag. The setter's 28-call inventory
+contains only the closed Sprite and Joint chart paths plus already assigned
+GUI/debug/font/Surfride/SPK/SGL/Wind/Aura owners. Evidence:
+`claim.presentation.primitive-topology-derived-flags`.
+
+## External presentation-table provenance
+
+The common table loader constructs each path as:
+
+```text
+selected_database_directory + "\\" + registered_table_record_name + ".bin"
+```
+
+The executable registers and consumes these six presentation-relevant table
+families:
+
+| Effective basename | Row stride | Checked invalid-row result | Recovered first consumer |
+| --- | ---: | --- | --- |
+| `NotesEffectTableRecord.bin` | `0x44` | resource ID `-1` | ordinary result-feedback span/effect selection |
+| `NotesCharaEffectTableRecord.bin` | `0x28` | resource IDs `-1`; associated parameters `0` | Slide extended-feedback kinds 6/7 |
+| `ModelTableRecord.bin` | `0x14` | shared empty path; auxiliary value `0` | checked model path/resource resolution |
+| `ModelSetTableRecord.bin` | `0x30` | checked signed IDs `-1` | model/model-set preload and load selection |
+| `TextureTableRecord.bin` | `0x10` | shared empty path | checked texture resource-wrapper loading, including AirLadder |
+| `FieldLineFileTableRecord.bin` | `0x20` | missing key or checked signed ID `-1` | field-line selection followed by checked ModelTable lookup |
+
+The basename, row stride, field location, invalid fallback, and executable
+consumer are normative. The selected database directory, concrete row values,
+resource paths, models, textures, and final presentation payloads are external
+and must remain supplied parameters. A clean-room implementation must not
+replace a missing row with a visually plausible constant. Evidence:
+`claim.configuration.external-presentation-table-provenance`.
+
+## External presentation resource pools
+
+One presentation owner supplies both runtime note-model instances and the
+texture wrappers installed by the six recovered Joint initializers. During
+power-on population it clears prior contents, checks ModelSet IDs 0 through
+407, and creates a keyed pool entry only when the checked
+`ModelSetTableRecord` field at `+0x1c` is nonzero. It then creates exactly 16
+`air::Sprite`-backed texture wrappers. Wrapper slot `i` selects checked
+`TextureTableRecord` row `i` while `i < row_count`; later slots repeat row
+`row_count - 1`. A zero-row table selects `-1` for every slot and leaves every
+wrapper invalid. Tables longer than 16 still populate only rows 0 through 15.
+Each wrapper loads through the Sprite resource path and exposes the resulting
+handle to Joint descriptors; the wrappers are not separate direct Sprite draw
+owners. A Joint handle lookup accepts only an unsigned index below the current
+wrapper count, so negative and out-of-range indices return zero.
+
+Model-set ID `-1` does not produce a pool entry. Other IDs find or append a
+0x2c-byte keyed entry. Runtime acquisition reuses the first free instance or
+lazily creates and loads one `InstancingModel`; release deactivates the
+matching occupied instance and makes it reusable. A tracked ID/handle pair is
+cleared only after successful release, and replacement releases the old pair
+before acquiring the requested ID.
+
+The separate RTTI `CacheManager` singleton has no direct runtime-note or Joint
+resource consumer. It must not be substituted for this presentation owner.
+This distinction does not make the external table rows, model paths, texture
+paths, meshes, materials, or resource payloads executable-owned. They remain
+external inputs, and the asset-free viewer reconstructs their original
+primitive roles rather than cloning the proprietary cache. Evidence:
+`claim.presentation.model-resource-pool-boundary`.
+
+## Cross-family precompute ownership
+
+Fresh chart setup clears `NotesPreCalcManager` and creates precomputes for only
+four accepted parsed types:
+
+| Parsed type | Family | Independent manager map | Object size |
+| ---: | --- | ---: | ---: |
+| 2 | Slide | `+0x04` | `0x78` |
+| 9 | AirLadder | `+0x0c` | `0x78` |
+| 10 | AirSolid | `+0x1c` | `0x5c` |
+| 13 | HeavenHold | `+0x14` | `0x54` |
+
+Each entry is keyed by the accepted-record identity at parsed `+0x84`. Every
+other note type bypasses this manager. The corresponding runtime family uses
+an exact unsigned-key lookup in only its own map; a missing key takes the
+binary's out-of-range failure path and never selects another entry or a
+fallback precompute.
+
+The common clear routine runs before each fresh chart population and from the
+recovered scene/gameplay reset paths. It destroys every family-owned object,
+releases all map nodes, restores all four sentinels, and zeros all four counts.
+Family-local fields and their observable geometry/lifetime consumers remain in
+the four note specifications. Evidence:
+`claim.presentation.notes-precalc-manager-map-closure`.
+
+## Joint dynamic-primitive ownership
+
+The executable has one common `projView::Joint` graph node. Construction
+registers it with the scene graph, initializes topology 4 and a zero resource
+handle, and reserves 256 vertices of 0x18 bytes. Its graph callback submits
+only when the runtime resource handle is nonzero and the vertex vector is
+nonempty with cardinality divisible by three. Submission copies the descriptor
+and vertices into dynamic-primitive state; a null optional collector reaches
+the adjacent-compatible batch check and default command queue. Destruction
+releases the vertex vector and unregisters the graph node.
+
+The complete constructor-owner set is:
+
+| Wrapper | Reachable owner | Child count | Topology/mode |
+| --- | --- | ---: | --- |
+| `JointSlide` | Slide precompute | 3 | `[4,3,3]` |
+| `JointAirSlide` | AirLadder precompute; AirSlide runtime | 3 | `[3,3,2]` |
+| `JointAirSolid` | AirSolid precompute | 1 | `3` for a submitted primitive |
+| `JointHeavenHold` | HeavenHold precompute | 1 | `4` |
+| `JointHold` | Hold runtime | 1 | `4` |
+| `JointField` | no reachable owner | 1 | `0`, excluded |
+
+For the shared Air-path initializer, the first topology is 3 for selector 8 or
+9 and 4 otherwise; the remaining topologies are 3 and 2. AirLadder supplies
+literal 9 and AirSlide supplies literal 8. Thus both exact reachable triples
+are `[3,3,2]`; the former AirLadder `[4,3,2]` transcription is superseded.
+
+The Field wrapper is retained as a negative path: its sole allocation helper
+has no incoming reference in this snapshot. External texture rows, materials,
+and final pixels remain unavailable resource inputs, but every Joint-backed
+chart producer, callback, topology, submission boundary, and teardown is
+assigned. Evidence:
+`claim.presentation.joint-dynamic-primitive-producer-closure`.
+
 ## Projection and viewport conversion
 
 Matrices are row-major and transform column vectors. The perspective matrix
@@ -122,8 +405,9 @@ construct exact packed colors through one four-channel byte writer:
 | low-alpha white | `0x40ffffff` | AirLadder/AirSlide stream 2 |
 | alternate gray | `0xff666666` | Hold, HeavenHold, Slide, AirSlide mode 2 |
 
-Hold, HeavenHold, and Slide modes 0/1 use base white and mode 2 uses alternate
-gray. AirSolid always uses base white. The shared Air path builder uses base
+Hold and HeavenHold modes 0/1 use base white and mode 2 uses alternate gray.
+Slide's main stream follows that selector, but its fixed-width center stream
+uses base white in every mode. AirSolid always uses base white. The shared Air path builder uses base
 white for primary streams in modes 0/1, alternate gray in mode 2, and
 low-alpha white for stream 2 in every mode. Slide's mode-1 overlay separately
 uses immediate `0x20ffffff`.
@@ -387,6 +671,32 @@ order. The selector does not change the persistent Slide path mesh. Evidence:
 `claim.presentation.shared-result-feedback` and
 `claim.note.slide-path-presentation-geometry`.
 
+Before those two submissions, `CharaEffectManager` computes two independent
+mutating admission flags against current NotesManager presentation time. Kind
+6 receives the lane-overlap flag. It owns 32 half-lane subcell expiries and the
+following footprint table for decoded widths 1 through 16:
+
+```text
+2, 4, 6, 8, 2, 12, 2, 16, 2, 2, 2, 2, 2, 2, 2, 32
+```
+
+Every width uses duration `1.0`. For lane `l`, width `w`, and footprint `p`,
+the reserved endpoints are `2*l + w - p/2` and
+`2*l + w - 1 + p/2`, each clamped to 0..31. Invalid lanes or `l+w > 16` are
+rejected. The comparison loop checks expiry strictly greater than current time
+over `[first,last)`, but acceptance writes `current+1.0` over
+`[first,last]`. This last-cell asymmetry is normative.
+
+Kind 7 receives a separate global flag. It rejects while current time is
+strictly below the retained next-admission value; otherwise it stores
+`current+7.0` and accepts. The two gates are both evaluated and reserve state
+independently, so failure of one does not prevent mutation by the other.
+Gameplay reset and the final preparation transition clear all 32 expiries and
+the global value. Evidence:
+`claim.presentation.slide-extended-feedback-admission`; reconstruction:
+`check_and_reserve_slide_chara_effect_lane_overlap` and
+`check_and_reserve_slide_chara_effect_global_cooldown`.
+
 ## Effect-list ownership, lifetime, and submission
 
 The effect manager owns ten fixed lists in this update/lifetime order:
@@ -404,18 +714,69 @@ The effect manager owns ten fixed lists in this update/lifetime order:
 | 8 | Mine | 48 | 0 |
 | 9 | MineBG | 4 | 5 |
 
-Normal gameplay submission requires active count below capacity and an expired
-list cooldown. Cooldown count converts with frame rate 60 or 120 as rounded
-`(1000 / frame_rate) * count`, so count 5 becomes 83 or 42 milliseconds. The
-staged note-view preload temporarily enables tuple-deduplicating force mode;
-normal mode is restored when preload completes.
+Normal gameplay admission requires the list's submissions-since-update counter
+to be below capacity and its cooldown to be expired. This is not an
+active-occupancy comparison. On a non-forced append, active occupancy already
+at capacity causes the oldest effect to be stopped, marked terminal, and
+removed immediately before the new effect is appended. The cooldown then
+restarts. A forced/preload append skips both eviction and cooldown restart, so
+forced active occupancy can exceed capacity. Cooldown count converts with frame
+rate 60 or 120 as rounded `(1000 / frame_rate) * count`, so count 5 becomes 83
+or 42 milliseconds. The staged note-view preload temporarily enables
+tuple-deduplicating force mode; normal mode is restored when preload completes.
 
 Each accepted external player is assigned the current process-global 32-bit
 sequence key and the key increments with wrap. The executable binds the player
 to the selected `MainScene` or `BgScene`, starts it with that sequence and its
 transform parameters, and appends it to the fixed list. List updates use the
-table order and remove an object only when its own state becomes 3. This proves
-trigger, ownership, update, and creation-key order. It does not prove that list
+table order, erase objects whose state reaches 3, record maximum post-erase
+occupancy, and reset the submissions-since-update counter. Normal reset and the
+final shader-preparation transition clear all ten lists, their cooldowns,
+maximum occupancy, and accepted-total counters. The clear slot does not itself
+zero submissions-since-update; the shader path updates first, and ordinary
+updates own that counter reset. This proves trigger, ownership, update,
+capacity eviction, reset, and creation-key order. It does not prove that list
 index is final draw order: scene sorting, camera, depth/blend state, external
 player geometry, materials, textures, and animation payloads remain downstream
-inputs. Evidence: `claim.presentation.shared-result-feedback`.
+inputs. Evidence: `claim.presentation.shared-result-feedback` and
+`claim.presentation.effect-list-lifecycle-closure`.
+
+Each appended handle is a four-state executable wrapper around that external
+player. Construction begins with current and pending state `-1`, visibility
+true, and stopped false. Start queues state 1. On each unpaused update, a
+pending transition is applied first; state 1 update queues state 2, and state 2
+update queues state 3 when the external player lookup no longer returns an
+instance. State 3 is terminal. All enter/exit callbacks and the state 0/state 3
+update callbacks are no-ops.
+
+The list tests current state after updating, not pending state. Natural
+external disappearance therefore takes two list updates to remove: the first
+queues state 3 while current remains 2, and the second applies 3 before the
+terminal check. An explicit stop queues state 3 idempotently; because note work
+precedes the ordinary all-list update, that later update can apply and remove
+the stopped object in the same outer gameplay pass. Capacity eviction removes
+the oldest list handle immediately instead.
+
+The wrapper retains a visibility byte. Visible clears bit `0x4` on the
+external instance, hidden sets it, and the wrapper reapplies the bit after
+every update. The Slide-retained effect position setter submits an identity
+4x4 matrix whose translation is the supplied `(x,y,z)` in elements 12..14.
+Slide construction and parsed-record loading also arm a one-shot latch with
+`-1`. The first retained-handle update in Slide presentation phase 2 shows and
+repositions the player, selects external resource entry 0, and clears the
+latch; non-phase-2 updates hide it without consuming the latch. No reachable
+writer rearms it until another construction/load.
+
+The loading-only Slide object independently walks every retained handle at
+resource steps 11, 12, and 13, applying visible plus entry 0, visible plus
+entry 1, then hidden plus entry 1. Steps 14..19 do not control those handles,
+and step 20 declares the Slide preload ready. Entry selection uses the loaded
+external player table and fallback, so the request IDs and timing are exact
+while their mesh/animation payload remains external. External payload also
+determines geometry and natural instance lifetime. Evidence:
+`claim.presentation.effect-player-state-machine-closure`; reconstruction:
+`FeedbackEffectPlayerState`, `update_feedback_effect_player_state`,
+`stop_feedback_effect_player_state`, `apply_feedback_effect_visibility_flag`,
+`feedback_effect_translation_matrix`,
+`update_slide_retained_feedback_control`, and
+`slide_preload_feedback_control`.

@@ -1,9 +1,12 @@
 # GitHub issue and temporary-handoff verification
 
-Verified against the exact local `game.exe` snapshot on 2026-08-07. GitHub
-state is inventory metadata, not an evidence grade. “Binary answered” means a
-closed producer/consumer path exists in this snapshot; “product partial” means
-the current offline viewer still does not implement all of that answer.
+Issues 1-12 were verified against the exact local `game.exe` snapshot on
+2026-08-07. The requested updated-issue pass rechecked issues 13-15, 17, and 18
+on 2026-08-18. Issue 16 is deliberately excluded because the owner designated
+it as human-only; this document makes no finding about it. GitHub state is
+inventory metadata, not an evidence grade. “Binary answered” means a closed
+producer/consumer path exists in this snapshot; “product partial” means the
+current offline viewer still does not implement all of that answer.
 
 GitHub issue 12 was rechecked on 2026-08-09. Its body is unchanged, it has no
 comments, and its GitHub `updated_at` value remains 2026-08-07 08:00:13 UTC.
@@ -11,23 +14,29 @@ It is the same issue included in this twelve-issue pass, not a new thirteenth
 issue or a new binary question. The active claims cited below still answer
 each requested verification item against the unchanged binary hash.
 
-There are exactly 12 repository issues. Issues 1, 4, and 5 are closed on
-GitHub; issues 2, 3, and 6 through 12 are open as of this verification.
+The old twelve-issue inventory below is retained for continuity and the five
+newly reviewed issues follow it. States are the GitHub states observed on
+2026-08-18; they do not change local evidence maturity.
 
 | Issue | GitHub state | Binary verdict | Viewer/product state | Remaining boundary |
 | ---: | --- | --- | --- | --- |
 | [1](https://github.com/EukkMaru/chart-parsing/issues/1) SLP vocabulary | closed | answered | implemented and differentially covered | None for SLP grammar/schedule; broader camera is separate. |
 | [2](https://github.com/EukkMaru/chart-parsing/issues/2) profile 7 physical meaning | open | interface answered; proposed meaning unprovable | parameterized | Inclusive range synthesis and profile index 7 are exact. External range values and “upward exit present/absent” label are unavailable. |
 | [3](https://github.com/EukkMaru/chart-parsing/issues/3) ALD judged checkpoints | open | answered; issue premise is stale | implemented | Result-state simulation and external checkpoint resources remain separate viewer work. |
-| [4](https://github.com/EukkMaru/chart-parsing/issues/4) Slide checkpoint classes | closed | answered | implemented for ordinary Slide | HeavenHold-retyped Slide is a different presentation path. |
+| [4](https://github.com/EukkMaru/chart-parsing/issues/4) Slide checkpoint classes | closed | answered | implemented for ordinary Slide; HLD style routes to the separate HeavenHold path | Gameplay-state-driven result transitions and external resources remain product boundaries. |
 | [5](https://github.com/EukkMaru/chart-parsing/issues/5) playfield proportions | closed | not a binary closure | fitted and owner-accepted baseline | Shared camera/viewport and final resource geometry remain open. |
 | [6](https://github.com/EukkMaru/chart-parsing/issues/6) AHX missing | open | answered | fixed | None for recognition; AirHold final pixels/resources remain open. |
 | [7](https://github.com/EukkMaru/chart-parsing/issues/7) sustain endpoint scroll | open | answered | endpoint keys and DCM scope implemented | Common camera/clipping and family-specific final resource pixels remain open. |
 | [8](https://github.com/EukkMaru/chart-parsing/issues/8) ALD normalization | open | answered | fixed for bounded widths, integer-tenth verticals, sequential first-compatible chaining, endpoint keys, and fixed transform | External type-9 resources/result-state integration remain open. |
-| [9](https://github.com/EukkMaru/chart-parsing/issues/9) Slide chains/width | open | answered | source-order first-compatible chains, six-field legacy width inheritance, and post-shrink endpoint width fixed | HLD-style type-13/HeavenHold presentation is still not faithfully rendered. |
+| [9](https://github.com/EukkMaru/chart-parsing/issues/9) Slide chains/width | open | answered | source-order first-compatible chains, six-field legacy width inheritance, post-shrink endpoint width, and HLD-to-Heaven routing fixed | Phase/result simulation and external materials/final pixels remain. |
 | [10](https://github.com/EukkMaru/chart-parsing/issues/10) timing/meter | open | answered | fake BPM seed removed; zero behavior, meter steps, and snapshot three-way introsort implemented | Hostile numeric failure parity and seek-equivalent playback state remain broader parser/product work. |
 | [11](https://github.com/EukkMaru/chart-parsing/issues/11) parser robustness | open | answered for listed blind spots | exact registry, prefix numbers, legacy Slide width fallback, and orphan suppression pass the full corpus browser audit | JS exception/range behavior and every hostile numeric domain are not yet a complete clean-room parser replacement. |
-| [12](https://github.com/EukkMaru/chart-parsing/issues/12) verification ledger | open | all listed questions answered | canonical inputs implemented; asset substitutes labeled | External resources, replacement-glyph shape/angle, camera, and type-13 presentation remain open rows. |
+| [12](https://github.com/EukkMaru/chart-parsing/issues/12) verification ledger | open | all listed questions answered | canonical inputs and type-13 authored mesh implemented; asset substitutes labeled | External resources, replacement-glyph shape/angle, runtime phase integration, and owner pixels remain open rows. |
+| [13](https://github.com/EukkMaru/chart-parsing/issues/13) meter-grid alignment | closed | answered, including the later zero-component question | record-anchored bar/beat generation and terminal zero anchor implemented | A continuously visible cabinet field/grid must come from a static/external layer; the recovered generated vectors stop. |
+| [14](https://github.com/EukkMaru/chart-parsing/issues/14) World's End acceptance gauntlet | open | not one binary claim; its reported divergences were routed to owning traces | full parser audit passes; group-1 builder is now independently differential-tested; AirHold replacement root restored | End-to-end milestone and visual acceptance remain owner work. |
+| [15](https://github.com/EukkMaru/chart-parsing/issues/15) bounded decomp work order | open | all listed static questions answered | AirHold fields/resources, zero-MET vector, Heaven NON selector absence, Slide center color, and per-endpoint DCM adopted | External resource contents and human visual review only. |
+| [17](https://github.com/EukkMaru/chart-parsing/issues/17) group-1 builder differential | open | acceptance is harness/product coverage, not a new binary rule | actual viewer parser/builder matches an independent reference over 595 group-1 charts/19,890 records; all three deliberate mutations fail comparison | Node-only standalone verifier could not run locally; the browser-hosted equivalent passed. |
+| [18](https://github.com/EukkMaru/chart-parsing/issues/18) viewer provenance backlog | open | all 42 suggested sources checked; stale premises corrected | every live rule is labeled binary, product, or mixed; ledger: `research/VIEWER_PROVENANCE_AUDIT.md` | No unresolved provenance item remains in the issue's listed scope. |
 
 ## Handoff answers
 
@@ -50,7 +59,11 @@ root-only, or interval-relative anchor on these paths.
 The older `2442_03` note reporting a later Slide affected after the DCM interval
 does not match this binary path and predates other viewer corrections. It is
 retained only as a stale/unreproduced observation; it does not justify a second
-query rule. Evidence: `claim.timing.projection-schedule-materialization`.
+query rule. Sustained Hold, Slide, AirHold, AirSlide, AirLadder, AirSolid, and
+HeavenHold updates call that helper independently for every authored endpoint;
+interpolation/clipping happens only after those endpoint projections. Evidence:
+`claim.timing.projection-schedule-materialization` and
+`claim.presentation.sustain-endpoint-dcm-projection`.
 
 ### Issue 12 verification requests
 
@@ -112,15 +125,18 @@ records, rejected associations, or harness errors. A separate 20-chart
 coverage-spread headless render batch completed successfully with populated,
 materially different outputs and empty unknown/rejection panels; focused
 legacy and modern AIR-family renders were inspected after the compatibility
-fix. These checks establish parser compatibility and product-path stability,
-not visual fidelity or owner acceptance.
+fix. The refreshed audit also covered all 595 charts containing any group-1
+record and all 19,890 such records: actual viewer keyed schedules and
+source-order DCM lists matched the independent reference with zero mismatches.
+Deliberate DCM-in-key-0, accepted-SFE, and interval-CLK mutations were all
+detected. These checks establish parser/builder compatibility and product-path
+stability, not visual fidelity or owner acceptance.
 
 ## Product conclusion
 
-The issue set is fully investigated, but it is not the project completion
-boundary. Binary questions in the issue/handoff set are answered; known
-remaining work is implementation or absent-resource/camera scope. The largest
-canonical viewer gaps exposed by this pass are faithful type-13/HeavenHold
-presentation, full JS numeric failure parity, seek-equivalent playback state,
-the shared camera/viewport, and
-external-resource-aware result-state presentation without copying assets.
+The reviewed issue set, except deliberately excluded human-only issue 16, has
+no listed static-analysis question left unanswered. That is not the project
+completion boundary. Remaining work includes binary saturation outside the
+issue list, external-table loader/selector/fallback provenance, viewer state
+integration, hostile numeric failure parity, seek-equivalent playback, absent
+resource/material content, and owner visual/gameplay acceptance.

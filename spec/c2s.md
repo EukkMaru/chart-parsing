@@ -378,7 +378,11 @@ Evidence: `claim.note.slide-hld-heaven-retyping`.
 `AHD` and `AHX` resolve to secondary type 5. Their sixth token selects the
 compatible root family for first attachment or type 5 for continuation. Only
 AHX-tagged saved endpoints become authored timing checkpoints; AHD extends the
-path/end without adding one. The exact match, continuation, construction, and
+path/end without adding one. The handler consumes exactly six data fields,
+through that root-family/duration shape. Because group-2 descriptor arity
+checking is disabled, later fields are accepted but ignored. Corpus `DEF` and
+`PNK` suffixes therefore are not typos and do not select AirHold resources or
+behavior. The exact match, continuation, construction, and
 consumer rules are normative in `spec/notes/air_hold.md`. Evidence:
 `claim.note.air-hold-secondary-judgement`.
 

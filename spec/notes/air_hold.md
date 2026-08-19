@@ -6,6 +6,13 @@
 standalone root record. The sixth event token names the record family being
 attached or extended.
 
+The command handler consumes exactly six data fields. Descriptor arity
+validation is disabled on this path, so any later field is accepted but not
+read. In particular, corpus suffixes `DEF` and `PNK` do not select style,
+color, geometry, judgement, or a resource table. They are valid ignored extras,
+not chart typos. Reconstruction: `air_hold_consumed_data_field_count` and
+`air_hold_data_field_is_consumed`.
+
 For an initial attachment, the parser searches for a root whose type equals
 that token's resolved type and whose current-endpoint position, lane, and width
 equal the command fields under the parser epsilon comparison. HOLD supplies
@@ -194,6 +201,12 @@ scale is 1 when external native width is below 1, otherwise
 width-indexed and two fixed resources for the root/path plus two width-indexed
 resources for every authored AHX checker. Resource identities and intrinsic
 geometry are external data; their consumers and transforms are normative.
+
+The authored-checker resource count is the number of saved AHX endpoints plus
+the final endpoint only when the final command is AHX. A final AHD therefore
+creates no checkpoint pair. This does not remove the separate fixed
+path-envelope pair, which load constructs for every AirHold regardless of the
+final command or any ignored suffix.
 
 The selected resource wrapper supplies three external offsets. The root
 transform is:

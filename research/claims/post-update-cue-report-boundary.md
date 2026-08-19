@@ -2,11 +2,11 @@
 
 - ID: `claim.pipeline.post-update-cue-report-boundary`
 - State: active
-- Maturity: supported
+- Maturity: verified
 - Confidence: high
 - Owner: codex-root
 - Coverage rows: `pipeline.boundaries`, `audit.indirect_calls`
-- Last reviewed: 2026-07-22
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -20,19 +20,22 @@ independent of post-gameplay presentation lifetime.
 
 ## Anchors
 
-- `game.exe @ RAM:00da9820, FUN_00da9820, sole scheduler call and outer-update order`
-- `game.exe @ RAM:00da5bd0, FUN_00da5bd0, bounded cue/event scheduler`
+- `game.exe @ RAM:00da9820, FUN_00da9820, sole scheduler call and outer-update order, hash ce8c5ca2608c3b0e7c39932b2e6042056865380a6824f611ea0342be79c90f1c`
+- `game.exe @ RAM:00da5bd0, ProcessPostUpdateCueScheduler, bounded cue/event scheduler, hash 78ca6812ca3eedb0e9b2bf3069dfd5a242d58e478489b9b3f09d0d7015a678ac`
 - `game.exe @ RAM:00b98010 and RAM:00b96440, current-time input`
 - `game.exe @ RAM:00a84520 and RAM:00a845b0, configured resource selection`
 - `game.exe @ RAM:007ed890 and RAM:007ee190, bounded event-table insertion`
 - `game.exe @ RAM:00a850c0 and RAM:00a84870, cue-controller selection and launch`
 - `game.exe @ RAM:00a83750 and RAM:01222570, controller/backend initialization`
-- `game.exe @ RAM:00da03e0, RAM:00da06c0, and RAM:00da3a10, field initialization and reset`
-- `game.exe @ RAM:00da25b0, FUN_00da25b0, scene-transition callback registration`
-- `game.exe @ RAM:00da2d30, FUN_00da2d30, cue-time scene-transition consumer`
-- `game.exe @ RAM:00da2630, FUN_00da2630, teardown callback registration`
-- `game.exe @ RAM:00da1d20, FUN_00da1d20, report submission and cue-state reset`
-- `game.exe @ RAM:00a85f90, FUN_00a85f90, bounded report/log consumer`
+- `game.exe @ RAM:00da03e0, field initialization/reset, hash 2542baee56d6eec2057b4e3756e436538ae32f98c286d730a87d35390c5f92bd`
+- `game.exe @ RAM:00da3a10, constructor initialization, hash e86da15c33a46d773787edde2d4eda2ed149d9295500d9336d601bef1cffc253`
+- `game.exe @ RAM:00da25b0, FUN_00da25b0, scene-transition callback registration, hash 25d0593431056fc7b4660823a4f69165f41ca073c604e666e597ce85cc5204a0`
+- `game.exe @ RAM:00436d72, sole registered thunk to RAM:00da2d30`
+- `game.exe @ RAM:00da2d30, UpdatePostGameplayCueTransition, cue-time scene-transition consumer, hash 29b3befc48c997f7b19c20bc8e0c2d89597a64cc23be81b539421d07e499c762`
+- `game.exe @ RAM:00da2630, FUN_00da2630, teardown callback registration, hash 5dcbce834f4bf706fa5931fcd6a5b3df56be2b98d2e8ae221a2f097fd3514ef0`
+- `game.exe @ RAM:00452919, sole registered thunk to RAM:00da1d20`
+- `game.exe @ RAM:00da1d20, ReportAndResetPostUpdateCueState, report submission and cue-state reset, hash 8dffbb62aeebb797786626c06097b07d1809727d1352c6c4aa07d9a9eccc6150`
+- `game.exe @ RAM:00a85f90, FUN_00a85f90, bounded report/log consumer, hash 3ba4afd8bb267bba3a86b3080473b28e10c9fccbd27336b65e5d10eb6ac8e7c8`
 
 ## Observations
 
@@ -46,6 +49,13 @@ independent of post-gameplay presentation lifetime.
   trigger increments the count, captures the first trigger time, inserts a
   type-6 record in the bounded event table, starts a selected cue controller,
   and resets a local timer.
+- The retained field lifecycle is exact. `+0x52c` is the trigger count;
+  `+0x530/+0x534` capture the first successful trigger's scene time;
+  `+0x538..+0x544` retain two externally resolved configuration pairs; and
+  `+0x548/+0x54c` are the two cue handles. The constructor first seeds the
+  fields, initialization installs the live handles and resets the count/pairs,
+  the scheduler is their only gameplay-update writer, and the registered
+  report callback is their terminal reader/reset owner.
 - Construction and gameplay reset initialize the trigger count, timestamp
   pairs, cue handles, prior-observation fields, and retained maximum cue time.
   These fields belong to the scene owner rather than the active-note manager,
@@ -95,9 +105,14 @@ the call is temporally inert for the enclosing scene.
 
 ## Consequences
 
-- Ghidra mutations: none in the live project; GhidraMCP remained unavailable,
-  so analysis used the temporary static project clone. Missing thunk functions
-  were materialized only in that clone to resolve callback registrations.
+- Ghidra mutations: the exact live project now names `RAM:00da5bd0`
+  `ProcessPostUpdateCueScheduler`, `RAM:00da2d30`
+  `UpdatePostGameplayCueTransition`, and `RAM:00da1d20`
+  `ReportAndResetPostUpdateCueState`. Compact comments at `RAM:00da9820`,
+  `RAM:00da5bd0`, `RAM:00da25b0`, `RAM:00da2d30`, `RAM:00da2630`,
+  `RAM:00da1d20`, `RAM:00a85f90`, `RAM:00da03e0`, and `RAM:00da3a10`
+  preserve caller order, callback registration, field ownership, reset, and
+  the outcome boundary. The project was saved after mutation.
 - Spec sections: `spec/timing.md` post-update cue/report boundary.
 - Reconstruction code: none; the recovered logic is outside judgement and
   result outcomes.
@@ -106,9 +121,10 @@ the call is temporally inert for the enclosing scene.
 
 ## Verification
 
-The sole outer caller, trigger predicates and cap, configured-resource and
-cue-controller chain, constructor/gameplay resets, both registered scene
-callbacks, report serializer, controller clearing, and all gameplay-owner
-writes in those paths were inspected independently. The only recovered
-gameplay-adjacent downstream dependency is the post-gameplay scene-state
-condition.
+The exact current project confirms the scheduler thunk has one call reference
+from the outer update. Callback thunks `00436d72` and `00452919` each have one
+data reference, from the two named registration functions. Constructor and
+initialization stores, scheduler reads/writes, report arguments and clears,
+cue-controller clearing, the report sink, and every gameplay-owner write in
+those paths were rechecked. The only recovered gameplay-adjacent downstream
+dependency is the post-gameplay scene-state condition.

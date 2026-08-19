@@ -8,7 +8,7 @@
 - Coverage rows: `note.slide`, `state.ownership`; viewer rows
   `render.slide`, `render.playfield_projection`,
   `render.feedback_layering`, and `config.external_presentation`
-- Last reviewed: 2026-08-03
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -77,7 +77,9 @@ one-lane-wide center mesh, and a mode-1-only full-width overlay.
   coordinates `0.15`/`0.85`, plus two side strips reaching coordinates 0/1.
   Winding is selected from the projected-end versus projected-start order.
 - Stream 1 always emits a six-vertex vertical-zero quad with render-space half
-  extent 2, which is exactly one chart lane in total width. Stream 2 emits a
+  extent 2, which is exactly one chart lane in total width. All four source
+  corners read exact base white `0xffffffff` unconditionally; Slide mode does
+  not recolor this center stream. Stream 2 emits a
   six-vertex full-width quad only in mode 1 and uses packed color
   `0x20ffffff`.
 - Three formerly missed static initializers construct the neighboring packed
@@ -138,6 +140,8 @@ structure while keeping material-dependent appearance outside the claim.
   the missed static initializer functions at `004cf1d0`, `004cf1f0`, and
   `004cf220` after dry-run and documented their exact destinations/values.
   Default symbols and types were retained.
+  A supported decompiler comment at `00c0a3d0` distinguishes the unconditional
+  white center stream from the mode-colored main stream.
 - Spec sections: `spec/notes/slide.md` and `docs/VIEWER_ROADMAP.md`.
 - Reconstruction code: Slide presentation mode, point/segment preparation,
   coordinate grouping, zero split, projected clipping, three vertex-stream
@@ -155,4 +159,5 @@ past culling, simultaneous near/far clipping with interpolation, exact stream
 counts and extents, width-change tessellation coordinates, overlay gating and
 color, Joint order, topology values, exact static colors, main-color choice,
 and pulse extrema.
+Center-stream tests assert exact `0xffffffff` independently of caller/mode.
 The full CTest and harness results are recorded in the session handoff.

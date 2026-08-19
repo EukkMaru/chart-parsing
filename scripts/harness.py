@@ -423,6 +423,8 @@ def command_viewer_audit(args: argparse.Namespace) -> int:
     fields = (
         "charts", "parseErrors", "unknownRecords",
         "rejectedAssociations", "harnessErrors",
+        "group1Charts", "group1Records", "scheduleMismatches",
+        "mutationChecks", "mutationFailures",
     )
     if any(not isinstance(report.get(field), int) for field in fields):
         print("viewer audit FAILED: malformed parser report")
@@ -443,6 +445,11 @@ def command_viewer_audit(args: argparse.Namespace) -> int:
     print(f"parse errors           {report['parseErrors']}")
     print(f"unknown records        {report['unknownRecords']}")
     print(f"rejected associations  {report['rejectedAssociations']}")
+    print(f"group-1 charts         {report['group1Charts']}")
+    print(f"group-1 records        {report['group1Records']}")
+    print(f"schedule mismatches    {report['scheduleMismatches']}")
+    print(f"mutation checks        {report['mutationChecks']}")
+    print(f"mutation failures      {report['mutationFailures']}")
     if rejected_by_command:
         breakdown = " ".join(
             f"{command}={rejected_by_command[command]}"
@@ -456,9 +463,16 @@ def command_viewer_audit(args: argparse.Namespace) -> int:
         )
         print(f"rejected by reference  {breakdown}")
     print(f"harness errors         {report['harnessErrors']}")
+    zero_fields = (
+        "parseErrors", "unknownRecords", "rejectedAssociations",
+        "harnessErrors", "scheduleMismatches", "mutationFailures",
+    )
     failures = (
         report["charts"] != len(manifest) or
-        any(report[field] != 0 for field in fields[1:])
+        any(report[field] != 0 for field in zero_fields) or
+        report["group1Charts"] <= 0 or
+        report["group1Records"] <= 0 or
+        report["mutationChecks"] < 3
     )
     print("viewer audit " + ("FAILED" if failures else "OK"))
     return 1 if failures else 0

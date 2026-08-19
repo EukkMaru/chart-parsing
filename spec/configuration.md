@@ -1,5 +1,21 @@
 # Gameplay configuration
 
+## External presentation-table source boundary
+
+The generic table manager derives each table path from the selected database
+directory and the registered record-class name. The six gameplay-presentation
+families therefore resolve to `NotesEffectTableRecord.bin`,
+`NotesCharaEffectTableRecord.bin`, `ModelTableRecord.bin`,
+`ModelSetTableRecord.bin`, `TextureTableRecord.bin`, and
+`FieldLineFileTableRecord.bin`. Their exact row strides, checked fallback
+values, and first consumers are normative in `spec/presentation.md`.
+
+Only the basename-selection algorithm is executable-owned. The directory,
+deployed rows, strings, resource IDs, and referenced asset contents are absent
+external inputs; implementations must expose them or suppress the associated
+request according to the recovered checked fallback. Evidence:
+`claim.configuration.external-presentation-table-provenance`.
+
 ## Result-feedback presentation tables
 
 The common result-feedback path consumes three externally loaded selector

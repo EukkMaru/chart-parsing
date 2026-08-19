@@ -1,9 +1,11 @@
-// Differential audit: the viewer's chart-region scroll implementation against
-// an independent reference transcribed from spec/timing.md. Extracts the
-// live function bodies from scripts/c2s-viewer.html so the test exercises the
-// shipped code, not a copy. Run: node scripts/verify_scroll_schedule.mjs
+// Differential audit: the viewer's group-1 parser, schedule builder, and
+// chart-region transforms against independent references transcribed from
+// spec/c2s.md and spec/timing.md. Extracts the live function bodies from
+// scripts/c2s-viewer.html so the test exercises shipped code, not a copy.
+// Run: node scripts/verify_scroll_schedule.mjs
 //
 // Scope (GitHub issue 1 close-out, VIEWER_ROADMAP queue item 1):
+//   - actual STP/SFL/SFE/SLP/DCM/CLK parse-and-build separation
 //   - STP/SFL/SLP additive interval transform semantics
 //   - DCM source-order projection-factor query
 //   - SLA tag selection (integer-span and tolerant float-span)
@@ -29,9 +31,20 @@ function extractSelectSlaKey() {
   if (!m) throw new Error("cannot extract selectSlaKey");
   return m[0];
 }
+function extractMatch(pattern, label) {
+  const m = html.match(pattern);
+  if (!m) throw new Error(`cannot extract ${label}`);
+  return m[0];
+}
 
 // The functions close over `show`, `chart`, and `slas`; supply those.
 const shell = `
+  ${extractMatch(/  const REGION = \{[\s\S]*?\n  \};/, "REGION")}
+  ${extractMatch(/  const c2sInt =[^;]*;/, "c2sInt")}
+  ${extractMatch(/  const c2sFloat = value => \{[\s\S]*?\n  \};/, "c2sFloat")}
+  ${extractFunction("snapshotMsvcSort")}
+  ${extractFunction("parseProjectionRecord")}
+  ${extractFunction("buildProjectionSchedules")}
   const show = { applySlp: true };
   let chart = null;
   let slas = [];
@@ -42,6 +55,8 @@ const shell = `
     scrolledTime,
     scrollFactor,
     selectSlaKey: (...a) => selectSlaKey(...a),
+    parseProjectionRecord,
+    buildProjectionSchedules,
     setChart: c => { chart = c; },
     setSlas: s => { slas = s; },
   };
@@ -105,6 +120,92 @@ function refSelectSlaKey(slaRegions, p, lane, width, floatSpan = false) {
   return key;
 }
 
+// Group-1 descriptor/handler table transcribed independently from
+// spec/c2s.md. SFE is registered but rejected; CLK is a point record; DCM is
+// factor-only. Only STP/SFL/SLP can enter a keyed interval set.
+const REF_GROUP1 = {
+  STP: { disposition: "keyed", factor: false, key: false },
+  SFL: { disposition: "keyed", factor: true, key: false },
+  SFE: { disposition: "rejected", factor: true, key: false },
+  SLP: { disposition: "keyed", factor: true, key: true },
+  DCM: { disposition: "factor", factor: true, key: false },
+  CLK: { disposition: "point", factor: false, key: false },
+};
+
+const refInt = value => Number.isNaN(Number.parseInt(value, 10))
+  ? 0 : Number.parseInt(value, 10);
+const refFloat = value => {
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+function parseGroup1With(parser, text) {
+  const records = [];
+  for (const line of text.split(/\r?\n/)) {
+    const tokens = line.split(/[\t ]+/).filter(Boolean);
+    if (!tokens.length) continue;
+    const record = parser(tokens[0], tokens.slice(1), records.length);
+    if (record) records.push(record);
+  }
+  return records;
+}
+
+function refParseProjectionRecord(cmd, fields, sourceOrder) {
+  const def = REF_GROUP1[cmd];
+  if (!def) return null;
+  return {
+    cmd, disposition: def.disposition, sourceOrder,
+    m: refInt(fields[0]), t: refInt(fields[1]),
+    dur: def.disposition === "point" ? 0 : refInt(fields[2]),
+    factor: def.factor ? refFloat(fields[3]) : null,
+    key: def.key ? refInt(fields[4]) : 0,
+  };
+}
+
+// Schedule separation is independent of BPM. Materialize the exact parsed
+// chart positions into an identity time domain so this test isolates the
+// parser/builder boundary while the existing transform sweep covers timing.
+function materializeProjectionRecords(records, resolution = 384) {
+  for (const record of records) {
+    record.p = record.m * resolution + record.t;
+    record.time = record.p;
+    record.endTime = record.dur > 0 ? record.p + record.dur : record.p;
+  }
+  records.sort((left, right) => left.time - right.time);
+  return records;
+}
+
+function refBuildProjectionSchedules(records) {
+  const regionsByKey = new Map();
+  for (const record of records) {
+    if (record.disposition !== "keyed" || record.endTime <= record.time) continue;
+    const key = record.key || 0;
+    const factor = record.cmd === "STP" ? 0 : record.factor;
+    if (!regionsByKey.has(key)) regionsByKey.set(key, []);
+    regionsByKey.get(key).push({
+      p: record.p, start: record.time, end: record.endTime, factor,
+    });
+  }
+  for (const list of regionsByKey.values()) {
+    list.sort((left, right) => left.p - right.p);
+  }
+  const dcm = records
+    .filter(record => record.disposition === "factor")
+    .sort((left, right) => left.sourceOrder - right.sourceOrder)
+    .map(record => ({
+      start: record.time, end: record.endTime, factor: record.factor,
+    }));
+  return { regionsByKey, dcm };
+}
+
+function canonicalSchedule(schedule) {
+  return JSON.stringify({
+    regionsByKey: [...schedule.regionsByKey.entries()]
+      .sort((left, right) => left[0] - right[0]),
+    dcm: schedule.dcm,
+  });
+}
+
 // ---- comparison harness -------------------------------------------------
 
 let checks = 0, failures = 0;
@@ -114,6 +215,26 @@ function expectEqual(label, got, want) {
   if (!same) {
     failures++;
     console.error(`FAIL ${label}: viewer=${got} reference=${want}`);
+  }
+}
+
+function expectScheduleEqual(label, got, want) {
+  checks++;
+  const gotText = canonicalSchedule(got);
+  const wantText = canonicalSchedule(want);
+  if (gotText !== wantText) {
+    failures++;
+    console.error(`FAIL ${label}: viewer=${gotText} reference=${wantText}`);
+  }
+}
+
+let mutationChecks = 0;
+function expectMutationDetected(label, mutant, reference) {
+  checks++;
+  mutationChecks++;
+  if (canonicalSchedule(mutant) === canonicalSchedule(reference)) {
+    failures++;
+    console.error(`FAIL mutation ${label}: deliberate builder bug was not detected`);
   }
 }
 
@@ -196,12 +317,56 @@ runSla([SLA(0, 4, 4, 1000, 3)], 100, 3.999995, 4, true);
 runSla([SLA(0, 4, 4, 1000, 3)], 100, 3.99997, 4, true);
 runSla([SLA(0, 4, 4, 1000, 3)], 100, 4, 4.000005, true);
 
+// Builder mutation sentinels required by issue 17. They prove the comparison
+// rejects the three historical/credible category leaks instead of merely
+// comparing a green implementation to itself.
+const builderSentinelText = [
+  "STP\t0\t0\t96",
+  "SFL\t0\t96\t96\t2",
+  "SFE\t0\t192\t96\t3",
+  "SLP\t0\t288\t96\t0.5\t7",
+  "DCM\t1\t0\t96\t4",
+  "CLK\t1\t96",
+  "SLP\t2\t0\t0\t9\t8",
+].join("\n");
+const sentinelActualRecords = materializeProjectionRecords(
+  parseGroup1With(viewer.parseProjectionRecord, builderSentinelText));
+const sentinelReferenceRecords = materializeProjectionRecords(
+  parseGroup1With(refParseProjectionRecord, builderSentinelText));
+const sentinelActual = viewer.buildProjectionSchedules(sentinelActualRecords);
+const sentinelReference = refBuildProjectionSchedules(sentinelReferenceRecords);
+expectScheduleEqual("group1 builder sentinel", sentinelActual, sentinelReference);
+
+function copySchedule(schedule) {
+  return {
+    regionsByKey: new Map([...schedule.regionsByKey.entries()].map(
+      ([key, list]) => [key, list.map(interval => ({ ...interval }))])),
+    dcm: schedule.dcm.map(interval => ({ ...interval })),
+  };
+}
+const dcmLeak = copySchedule(sentinelActual);
+if (!dcmLeak.regionsByKey.has(0)) dcmLeak.regionsByKey.set(0, []);
+dcmLeak.regionsByKey.get(0).push({ p: 384, ...dcmLeak.dcm[0] });
+expectMutationDetected("DCM enters key-0 schedule", dcmLeak, sentinelReference);
+
+for (const [command, label] of [["SFE", "SFE accepted"], ["CLK", "CLK interval"]]) {
+  const leak = copySchedule(sentinelActual);
+  const record = sentinelActualRecords.find(candidate => candidate.cmd === command);
+  if (!leak.regionsByKey.has(0)) leak.regionsByKey.set(0, []);
+  leak.regionsByKey.get(0).push({
+    p: record.p, start: record.time,
+    end: record.endTime > record.time ? record.endTime : record.time + 1,
+    factor: record.factor ?? 0,
+  });
+  expectMutationDetected(label, leak, sentinelReference);
+}
+
 // ---- corpus sweep -------------------------------------------------------
 
 import { readdirSync, existsSync } from "node:fs";
-const musicRoot = process.env.C2S_MUSIC_ROOT ??
-  join(process.env.HOME ?? "", "Downloads", "music");
+const musicRoot = process.env.C2S_MUSIC_ROOT ?? join(here, "..", "music");
 let corpusCharts = 0, corpusQueries = 0;
+let builderCharts = 0, builderRecords = 0;
 if (existsSync(musicRoot)) {
   const R = 384;
   for (const dir of readdirSync(musicRoot)) {
@@ -211,8 +376,22 @@ if (existsSync(musicRoot)) {
     catch { continue; }
     for (const file of files) {
       const text = readFileSync(join(chartDir, file), "utf8");
-      if (!/^(SLP|STP|SFL|DCM|SLA)\t/m.test(text)) continue;
+      const hasGroup1 = /^(STP|SFL|SFE|SLP|DCM|CLK)[\t ]/m.test(text);
+      const hasSla = /^SLA[\t ]/m.test(text);
+      if (!hasGroup1 && !hasSla) continue;
       corpusCharts++;
+      if (hasGroup1) {
+        const actualRecords = materializeProjectionRecords(
+          parseGroup1With(viewer.parseProjectionRecord, text));
+        const referenceRecords = materializeProjectionRecords(
+          parseGroup1With(refParseProjectionRecord, text));
+        const actualSchedule = viewer.buildProjectionSchedules(actualRecords);
+        const referenceSchedule = refBuildProjectionSchedules(referenceRecords);
+        expectScheduleEqual(`${dir}/${file} group1 builder`,
+                            actualSchedule, referenceSchedule);
+        builderCharts++;
+        builderRecords += actualRecords.length;
+      }
       // minimal parse: BPM schedule + region records, mirroring the viewer's
       // reading of the recovered field shapes
       const bpm = [];
@@ -283,6 +462,8 @@ if (existsSync(musicRoot)) {
 }
 
 console.log(`charts with regions: ${corpusCharts}`);
+console.log(`group1 builder charts: ${builderCharts} (${builderRecords} records)`);
+console.log(`mutation sentinels:   ${mutationChecks}`);
 console.log(`total comparisons:   ${checks} (${corpusQueries} corpus, ${checks - corpusQueries} synthetic)`);
 console.log(failures === 0 ? "PASS: viewer matches the spec reference on every vector"
                            : `FAIL: ${failures} divergences`);

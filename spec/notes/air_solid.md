@@ -107,6 +107,8 @@ Codes 0 through 14 select an externally loaded primitive resource. Code 15,
 `NON`, stores the missing-resource sentinel. The resource's contents are
 external data; vertices use exact startup color `0xffffffff`. Preload reports
 ready immediately, while primitive setup occurs during precompute/runtime load.
+A valid handle selects topology 3. Invalid resource selection leaves a zero
+handle and suppresses submission before topology can affect an output.
 
 ## Projection and geometry
 

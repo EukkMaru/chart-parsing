@@ -151,11 +151,22 @@ reverses the surviving path and reflects projected, lateral, vertical, and
 resource-coordinate values about the first/final midpoint. Retyped HLD and
 zero/`NON` ALD retain selector zero, so neither transformation applies.
 
+`NON` is consumed only by the earlier class-selection rule. HeavenHold preload
+loads every width row of the ordinary root/body and attached-secondary body
+tables, and runtime lookup branches only on width, command-form/alternate-root
+state, and attached-secondary state. It does not read parsed type 9, style code
+15, or the `NON` text. The executable therefore has no NON-specific null-
+resource selector. External table contents remain unavailable: body
+invisibility is independently explained by the exceptional ALD empty-path
+phase reaching completion, while an absent start image in footage cannot be
+attributed to a code-side NON selector without external-resource evidence.
+
 The shared builder requires matching projected/path-vector cardinalities,
 clips every span to projected range `[-600, 50]`, and emits one six-vertex
 single-sided quad per surviving span. Vertices are `0x18` bytes. Lateral half
 extent is decoded width times two render units, exactly the authored lane span
-under the four-units-per-lane transform. HeavenHold has one body stream, not
+under the four-units-per-lane transform. The body stream uses topology 4.
+HeavenHold has one body stream, not
 Slide's or AirLadder's three streams.
 
 The root resource is visible while start phase is not 4. The body resource is

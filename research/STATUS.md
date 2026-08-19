@@ -2,8 +2,9 @@
 
 ## Snapshot
 
-- Research milestone: all 12 GitHub issues and both temporary handoff notes
-  have been investigated against the exact snapshot. The corrected ALD
+- Research milestone: GitHub issues 1-15, 17, and 18 have been investigated
+  against the exact snapshot or classified as product/owner work; human-only
+  issue 16 is deliberately excluded. The corrected ALD
   presentation slice, ordinary Slide endpoint/path presentation, and
   HeavenHold authored presentation slices are complete.
   `claim.note.air-ladder-precalc-presentation` closes authored/generated
@@ -22,6 +23,39 @@
   comments, and all seven requested checks still map to active exact-binary
   claims. Its open GitHub state reflects remaining product boundaries, not a
   newly reported or unanswered binary question.
+- The updated 2026-08-18 issue pass closes every static question listed in
+  issue 15, puts the actual group-1 parser/schedule builder under an independent
+  corpus differential for issue 17, and classifies all 42 issue-18 viewer
+  provenance items. The durable ledgers are
+  `research/GITHUB_ISSUE_VERIFICATION.md` and
+  `research/VIEWER_PROVENANCE_AUDIT.md`.
+- The follow-on external-table provenance slice closes six presentation
+  families from the shared path composer through typed row access and first
+  consumer. Their exact basenames are the registered record names plus `.bin`;
+  row strides and invalid fallbacks are recovered, while only the selected
+  database directory, row contents, and referenced resources remain external.
+  Evidence: `claim.configuration.external-presentation-table-provenance`.
+- A later resource-pool rewalk corrected the 16-wrapper TextureTable rule:
+  slots beyond a short nonempty table repeat its last row, while a zero-row
+  table selects `-1` and leaves every wrapper invalid. The complete six-caller
+  Joint handle accessor, wrapper resize/clear/destruction paths, and zero-handle
+  submission gate are now explicit and tested. Evidence:
+  `claim.presentation.model-resource-pool-boundary`.
+- The EffectManager indirect-hook rewalk corrected another flattened rule:
+  EffList admission limits submissions since the previous update, not active
+  occupancy. Non-forced append separately evicts the oldest active effect at
+  capacity; forced preload can exceed capacity. All twelve vtable slots,
+  per-update reset, cooldown, statistics, both all-list clear owners, and every
+  all-list update owner are now closed and tested. Evidence:
+  `claim.presentation.effect-list-lifecycle-closure`.
+- The child EffectBase indirect layer is also closed. Its complete eight-slot
+  vtable and all twelve callbacks establish exact pending/current phases
+  `0..3`, one-update delayed natural terminal removal, same-pass explicit stop
+  after note work, retained visibility bit `0x4`, Slide position matrix,
+  one-shot runtime entry-0 selection, preload's exact visible/entry sequence,
+  and destruction. Only external player payload and natural disappearance
+  time remain inputs. Evidence:
+  `claim.presentation.effect-player-state-machine-closure`.
 - Binary: `game.exe`, SHA-256 `4e492489fb8e63c5b3ffad5267e78b02fcf8d74a261b058fc296a7e968516520`
 - Ghidra project: local project `chart`
 - Current Ghidra writer: codex-root (binary saturation and external-source
@@ -71,6 +105,78 @@
   the final gameplay pose remains an explicit calibrated parameter rather than
   a recovered constant; no camera selector/consumer/fallback remains open in
   `game.exe`.
+- External presentation-table lookup is now binary-backed by
+  `claim.configuration.external-presentation-table-provenance`: the common
+  manager's directory/name/`.bin` composition, six exact effective basenames,
+  typed row strides, checked fallbacks, and first feedback/model/texture/
+  field-line consumers are closed. The clean-room boundary retains absent row
+  values and assets as explicit inputs instead of inventing substitutes.
+- Runtime note-model and Joint-texture ownership is now binary-backed by
+  `claim.presentation.model-resource-pool-boundary`: the dedicated owner
+  performs the fixed ModelSet 0..407 inclusion scan, checked 16-row texture
+  population, lazy keyed model acquisition/reuse, activation, release, and
+  teardown. The separate RTTI `CacheManager` has no direct runtime-note or
+  Joint initializer references; its unrelated game-object consumers are not
+  conflated with this path. Concrete resource rows and payloads remain
+  external.
+- Cross-family precompute ownership is now closed by
+  `claim.presentation.notes-precalc-manager-map-closure`: fresh chart load
+  clears the manager, dispatches only parsed types 2/9/10/13, and stores Slide,
+  AirLadder, AirSolid, and HeavenHold objects in four independent exact-key
+  maps. All getters, family consumers, owned-object destruction, and recovered
+  chart/scene/gameplay resets are enumerated; a missing key throws rather than
+  choosing a fallback.
+- Joint-backed primitive ownership is now closed by
+  `claim.presentation.joint-dynamic-primitive-producer-closure`: the sole base
+  Joint constructor has exactly six RTTI wrapper callers, five assigned to
+  reachable Hold/Slide/AirSlide/AirLadder/AirSolid/HeavenHold owners and one
+  retained as an unreachable Field exclusion. The common graph callback,
+  resource admission, descriptor initializers, topology values, batching,
+  default command append, and unregistering teardown are closed. This sweep
+  corrected a real prior contradiction: AirLadder's producer passes selector
+  9, so its topology triple is `[3,3,2]`, not `[4,3,2]`.
+- Common Sprite-backed primitive ownership is now closed by
+  `claim.presentation.air-sprite-dynamic-primitive-closure`: `air::Sprite`
+  construction/resource replacement, exact 3-by-3 anchor rules, six-vertex
+  position/UV order, scale-rotation-translation, optional UV matrix, color,
+  submission, and teardown are reconstructed. Its complete four-function draw
+  caller set assigns the sole chart-system use to the `projView::System`
+  background SpriteNode and excludes font/ruby, `air::LedObject`, and
+  `EmoteControl`. The 16 presentation-pool wrappers are confirmed
+  Sprite-backed handle carriers for Joint descriptors, not another direct
+  Sprite draw path; WindManager, AuraScene, and `star::SglVTFWaterLine` direct
+  primitive producers have separate non-note owners.
+- The common constructor-root sweep is now closed by
+  `claim.presentation.dynamic-primitive-util-owner-inventory`: the sole
+  `DynamicPrimitiveUtil` constructor thunk has exactly 17 function roots, all
+  assigned. All four `air::Primitive` overload caller sets are complete; RTTI
+  maps every non-Joint caller to GUI/debug/editor classes, while
+  `projView::JointBase` is the sole chart-side owner. The two anonymous roots
+  belong only to literal `DefaultDebugScene`, the default extended overload is
+  unreferenced, and GUI/font/Surfride/SPK/SGL roots are retained as explicit
+  subsystem boundaries rather than guessed away.
+- The common primitive lifecycle is now closed in both directions by
+  `claim.presentation.dynamic-primitive-entry-setup-reset-closure` and
+  `claim.presentation.dynamic-primitive-finalizer-teardown-closure`. The two
+  dynamic vtables share exact configuration, pending-pointer, reset, and
+  finalizer slots; selector-to-stride rows and backing allocation remain
+  explicit renderer inputs. The finalizer's bit/copy/submit/clear ordering is
+  reconstructed, and the complete destructor reverse map agrees with every
+  construction family. This pass corrected an overclaim: the common
+  destructor restores only the base vtable and performs no hidden buffer or
+  container release.
+- The standalone convenience-helper reverse sweep is closed by
+  `claim.presentation.dynamic-primitive-convenience-helper-owner-closure`.
+  All five line/triangle variants are assigned: three are unreferenced, live
+  engine calls collapse to a literal performance/debug overlay, and the only
+  other live caller is the already excluded RTTI water-line owner. No chart
+  family obtains a second geometry path through these generic helpers.
+- Chart topology-derived submission flags are now closed by
+  `claim.presentation.primitive-topology-derived-flags`. The complete setter
+  caller inventory leaves only Joint and Sprite on the chart side; executable
+  table rows for modes 2/3/4 and the threshold/clamp/bit updates are exact.
+  These bits survive the common finalizer and are no longer treated as an
+  opaque backend side effect.
 - Shared scene pass behavior is now binary-backed by
   `claim.presentation.common-scene-pass-ordering`: active external `BasePass`
   objects are stably planned by `PassIndex`, submissions take the first exact
@@ -131,10 +237,13 @@
   the viewer. Its exact phase-state simulation remains a product gap alongside
   malformed numeric parity, seek-equivalent playback state, shared
   camera/viewport recovery, and result-state/external-resource integration.
-- Browser parser verification is now automatic: `harness.py viewer-audit`
+- Browser parser/builder verification is now automatic: `harness.py viewer-audit`
   serves the actual viewer to isolated headless Firefox and fails on parser
-  exceptions, unknown records, or rejected AIR-family associations. The full
-  7,752-chart corpus passed with zero in every failure category. A separate
+  exceptions, unknown records, rejected AIR-family associations, group-1
+  schedule mismatches, or ineffective mutation sentinels. The full 7,752-chart
+  corpus passed with zero in every failure category; 595 group-1 charts and
+  19,890 records matched the independent reference, and all three deliberate
+  builder mutations were detected. A separate
   20-chart coverage-spread render smoke plus focused legacy/modern renders
   loaded successfully with empty unknown panels. This does not close visual
   fidelity or owner review.
@@ -248,9 +357,17 @@
   effect gates and submit order, lane serial-group ownership, post-dispatch cue
   timing, Slide's two extended feedback effects, ten fixed effect-list
   capacities and cooldowns, normal/preload admission, lifetime update order,
-  scene selection, and monotonic player sequence are reconstructed by
+  scene selection, monotonic player sequence, four-state wrapper lifetime,
+  retained visibility, and Slide position control are reconstructed by
   `claim.presentation.shared-result-feedback`. External resource rows and
   final scene/material/camera composition remain explicit downstream work.
+- The fresh saturation rewalk found a previously unclaimed live manager on the
+  Slide extended-feedback path. `projView::CharaEffectManager` independently
+  gates kind 6 through a width-dependent 32-subcell expiry map and kind 7
+  through a seven-unit global cooldown; both reservations run without
+  short-circuiting and have closed reset/destruction paths. Exact constants,
+  the asymmetric last-cell rule, reconstruction, and tests are owned by
+  `claim.presentation.slide-extended-feedback-admission`.
 - Parsed type 0 constructs RTTI-identified `projView::TapNote`, with a start
   lane, table-decoded width, scheduled time, and embedded 16-lane checker. Its
   scheduled position is the parsed position converted directly to float and
@@ -630,10 +747,25 @@
   from vertex triples, companion fields retain peaks, and the closed reference
   set has no feedback into gameplay state.
 - The outer-update call immediately after lazy materialization is also
-  render-only. It filters one generated meter/grid vector through projected
+  render-only. It filters meter-derived bar-vector index 2 through projected
   visibility, stores accepted floats in a stack-local list, and submits them to
   view-marker rendering; no clock, queue, note, input, result, or terminal
-  owner is written.
+  owner is written. A MET record with either zero component is retained as the
+  terminal anchor in the bar and beat vectors before generation stops; later
+  MET records do not restart those vectors.
+- AHD/AHX consume six data fields. Later `DEF`/`PNK` suffixes are valid ignored
+  extras, not styles. Only AHX endpoints own checkpoint resource pairs; a final
+  AHD still participates in the always-present AirHold path envelope.
+- HeavenHold has no zero/`NON` null-resource selector. Preload covers every row
+  of its ordinary/secondary resource tables and runtime lookup uses width and
+  flags only. Exceptional ALD's empty generated path closes body phase, while
+  external resource contents remain the boundary for an observed missing root.
+- Slide's fixed-width center stream is exact base white in every mode. Its main
+  stream alone changes from white to gray in mode 2.
+- Sustained presentation applies keyed schedule adjustment and DCM separately
+  to each root/control/end point before geometry interpolation. Hold, Slide,
+  AirHold, AirSlide, AirLadder, AirSolid, and HeavenHold have all been checked;
+  none reuses an entity/root-time factor for the whole body.
 - The following post-update pass is RTTI-identified
   `projView::KeyBeamManager`. Its transient note-authored lane markers are
   cleared before input/manager work; afterward it samples the completed logical
@@ -651,7 +783,10 @@
   by teardown reporting. Its fields do not feed input, notes, candidates,
   judgement, results, or the gameplay clock. Observed cue time does participate
   in a registered post-gameplay scene-state callback, so presentation lifetime
-  may depend on the cue even though gameplay outcomes do not.
+  may depend on the cue even though gameplay outcomes do not. The exact live
+  project now closes its sole outer caller, both registered callback thunks,
+  constructor/initialization/report reset owners, controller clearing, and
+  terminal report sink.
 - HOLD's once-only end branch selects and starts an indexed feedback resource.
   It does not submit a result, alter checkpoint/start phases, or request note
   termination, so no implicit end checkpoint belongs in the reconstruction.
@@ -660,30 +795,39 @@
 
 ## Active question
 
-Which remaining viewer discrepancies are renderer/model bugs, which are
-resource-only fitted values, and which expose recoverable canonical behavior
-in the exact binary? Start with the open GitHub issues and preserve their
-evidence labels while resolving stale statements against the verified specs.
+The codex-root static-saturation pass has exhausted its current reachable
+queue. Besides the closed common primitive, resource-pool, feedback-list, and
+EffectBase paths, the last non-common residual—the post-update cue scheduler—
+is now reclosed in the exact live project through its sole caller, both
+registered callbacks, state initialization/reset, controller clearing, and
+report sink. No known binary-reachable presentation or gameplay path remains
+assigned to this investigator. The required next binary step is a fresh
+independent contradiction audit; codex-root cannot self-certify that gate.
+Issues 15, 17, and 18 no longer block the queue; owner-only issue 16 remains
+outside static work.
 
 ## Tooling handoff
 
 - The live Ghidra MCP connection is healthy for project `chart`, program
-  `game.exe`, and no writer ownership remains active.
-- The final persistent mutation creates and renames the static initializer at
-  `RAM:004b8fe0` to `InitializeSoundControllerArray` and records why its 51
-  fixed wrappers and sole embedded `sound::Sound` vtable make the HOLD
-  adjusted-end branch feedback/audio-only.
+  `game.exe`. The codex-root saturation session has released coverage/Ghidra
+  ownership for a fresh independent auditor.
+- The latest persistent mutation names the post-update cue scheduler,
+  transition callback, and report/reset callback at `RAM:00da5bd0`,
+  `00da2d30`, and `00da1d20`. It documents the sole outer caller, both callback
+  registrations, retained-field initialization/reset, terminal report sink,
+  and exact judgement-external/post-gameplay-lifetime boundary. Ghidra was
+  saved after the mutation pass.
 - Follow `docs/GHIDRA.md` and run `python3 scripts/harness.py doctor` before a
   focused canonical-renderer investigation. Reopen stage-one coverage only if
   exact-binary evidence changes verified gameplay behavior.
 
 ## Blockers
 
-- Stage two is not complete: issue-derived product gaps and systematic
-  presentation rows remain unresolved, visual comparison coverage is
-  incomplete, and an independent product review has not occurred. The twelve
-  issue bodies' listed binary questions are answered; an issue remaining open
-  on GitHub does not by itself mean its binary question is open.
+- Stage two is not complete: codex-root's static queue is exhausted, but the
+  required fresh independent binary contradiction audit is not complete.
+  Viewer integration, deterministic comparison coverage, robustness/offline
+  packaging, and owner review also remain incomplete. Human-only issue 16 is
+  deliberately excluded from the static queue.
 
 Externally absent judgement/profile values remain parameters. Their selection,
 defaults where executable-owned, lifetime, and consumers are reconstructed, so
@@ -691,10 +835,11 @@ their absence is not itself a completion blocker.
 
 ## Next handoff
 
-Preserve the verified stage-one ledger and the corrected HeavenHold field
-separation. Build the `pipeline.presentation_boundary` inventory from exact
-factories, managers, vtables, callbacks, shared transforms, resource loaders,
-and reset owners. Use it to order the remaining concrete presentation slices;
-do not run the final independent contradiction audit until those rows and the
-binary saturation pass are ready. Record only original prose/measurements; do
-not commit charts, footage, or extracted assets.
+Preserve the verified stage-one ledger, issue-15 corrections, issue-17
+differential, issue-18 provenance classifications, and the completed
+presentation saturation chain. The next binary investigator must freshly
+attempt the bidirectional contradiction audit rather than extending
+codex-root's confidence. Product work can meanwhile normalize remaining viewer
+state, implement deterministic seek/lifecycles, build the comparison matrix,
+and prepare owner review. Record only original prose and measurements; do not
+commit charts, footage, or extracted assets.

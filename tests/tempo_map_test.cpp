@@ -47,6 +47,9 @@ int main() {
     assert(six_eight.bar_ticks == 288);
     assert(!c2s_meter_grid_steps(0, 4).components_nonzero);
     assert(!c2s_meter_grid_steps(4, 0).components_nonzero);
+    assert(c2s_meter_grid_steps(0, 4).current_anchor_retained);
+    assert(c2s_meter_grid_steps(4, 0).current_anchor_retained);
+    assert(three_four.current_anchor_retained);
     assert(c2s_meter_grid_steps(-4, 3).beat_ticks == 0);
 
     // Input order is deliberately scrambled. Four scalar beats from major 0

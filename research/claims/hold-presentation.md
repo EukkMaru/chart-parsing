@@ -7,7 +7,7 @@
 - Owner: codex-root
 - Coverage rows: `render.hold`, `render.playfield_projection`,
   `render.feedback_layering`, `config.external_presentation`
-- Last reviewed: 2026-08-10
+- Last reviewed: 2026-08-18
 
 ## Statement
 
@@ -65,8 +65,9 @@ deltas separately control judgement-plane trimming and resource coordinates.
 - Each surviving body emits exactly six `0x18` vertices: lateral, zero
   vertical, projected depth, an executable-owned static packed color, and two
   resource coordinates. Winding depends only on projected endpoint order.
-  One dynamic primitive is submitted; a rejected body clears its prior vertex
-  count.
+  One topology-4 dynamic primitive is submitted; the descriptor initializer
+  leaves the Joint constructor's default topology unchanged. A rejected body
+  clears its prior vertex count.
 - Presentation mode is exact: path phase 2 selects mode 1; otherwise, after
   start phase 4, path phase 3 selects mode 2 and every other path phase selects
   mode 1; before start completion mode 0 is used. Modes 0 and 1 use exact

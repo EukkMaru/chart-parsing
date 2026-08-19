@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <title>c2s corridor — chart inspector</title>
 <style>
@@ -69,7 +72,10 @@
   }
 
   .wrap {
-    max-width: 1400px;
+    /* 1400 + the bird's-eye strip: the faithful field keeps its original
+       1036px column (and therefore its original height); the page widens
+       by the strip and its gap only. */
+    max-width: 1506px;
     margin: 0 auto;
     padding: 28px 24px 64px;
     display: flex;
@@ -90,11 +96,15 @@
 
   .stage {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    /* field | bird's-eye strip (~9% of the field's width) | rail. The
+       field's column is fixed at its pre-eye size so its height is
+       unchanged; the strip is scaled to that height. */
+    grid-template-columns: minmax(0, 1036px) 90px 300px;
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 90px 300px; } }
+  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } }
 
   .viewport {
     position: relative;
@@ -105,6 +115,22 @@
     box-shadow: var(--shadow);
   }
   canvas#field { display: block; width: 100%; height: auto; }
+  /* Bird's-eye panel: its own column beside the perspective field, about
+     30% of the field's width, orthographic, many lookaheads of range. */
+  .eyepanel {
+    position: relative;
+    background: #0a0c12;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    align-self: start;
+    /* height is set from the field's rendered height by script; the canvas
+       is absolutely positioned so its backing store never feeds back into
+       layout (which otherwise inflated the panel every frame). */
+    height: 583px;
+  }
+  canvas#eye { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   .drop {
     position: absolute;
@@ -210,6 +236,8 @@
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top">
@@ -225,6 +253,10 @@
         <span>Or click to choose one. The file stays on your machine — this page reads it locally and keeps no copy.</span>
         <button id="pick" type="button">Choose file</button>
       </div>
+    </div>
+
+    <div class="eyepanel" title="Bird's-eye: orthographic, lanes across and time down, many lookaheads of range. Air elements are squashed and slanted so stacked elements never hide the note beneath.">
+      <canvas id="eye" width="384" height="720"></canvas>
     </div>
 
     <div class="rail">
@@ -285,6 +317,10 @@
           <input id="tilt" type="range" min="0" max="100" value="62" step="1" aria-label="Camera pitch">
         </div>
         <div class="ctl">
+          <div class="lab"><span>Bird's-eye speed</span><b id="eyeval">1.0</b></div>
+          <input id="eyespeed" type="range" min="4" max="30" value="10" step="1" aria-label="Bird's-eye scroll speed, same scale as note speed (tenths)">
+        </div>
+        <div class="ctl">
           <div class="lab"><span>Bar subdivision</span><b id="oval">off</b></div>
           <input id="overlay" type="range" min="0" max="16" value="0" step="1" aria-label="Bar subdivision overlay">
           <div id="opat" style="font-size:10px;color:var(--ink-3);letter-spacing:.06em;min-height:14px"></div>
@@ -327,6 +363,7 @@
   </footer>
 </div>
 
+<script src="./c2s-schedule-reference.js"></script>
 <script>
 (() => {
   "use strict";
@@ -344,14 +381,18 @@
   // The far cap of a hold whose root carries an air-family secondary: the
   // recovered resource table splits on attachment (rows 289..274 vs 65..50);
   // the assets are external, so the split shows as a labeled shade.
-  const HOLD_CAP_ATTACHED = "#ffd9a8";
   // Product-choice hues applied to the three recovered asset-independent
   // ALD stream geometries. The packed VERTEX colors are recovered static
   // constants (0xffffffff for streams 0/1, 0x40ffffff for stream 2); only
-  // textures, materials, and final pixels are external.
+  // textures, materials, and final pixels are external. The canvas fill
+  // alphas (0.30/0.32/0.62) deliberately do NOT mirror those vertex alphas:
+  // the recovered alpha modulates an absent texture, so the silhouettes are
+  // ordered for legibility instead — a labeled product choice.
   const ALD_STREAM_ZERO = "#ff5ce0";
   const ALD_STREAM_TWO = "#a35cff";
   const ALD_STREAM_ONE = "#58275f";
+  // Recovered: each AirLadder generated checkpoint initializes its one-byte
+  // result-table index to 0xff. Source: claim.note.air-ladder-precalc-presentation.
   const ALD_UNRESOLVED_RESULT_INDEX = 0xff;
   // Provenance for the enumerations and helpers below: the orders ARE the
   // binary's code assignments — the 16-entry style table and SLD/HLD/GRN
@@ -370,7 +411,12 @@
   ];
   const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
   const SLIDE_HLD_STYLE_CODE = 1;
+  // Recovered exact order for extended Slide/Heaven feedback decoding.
+  // Source: claim.note.slide-presentation-classes and
+  // claim.presentation.heaven-hold-authored-mesh.
   const SLIDE_FEEDBACK = ["UP", "DW", "CE", "RC", "LC", "RS", "LS", "BS"];
+  // Recovered selector tables and out-of-range fallbacks.
+  // Source: claim.presentation.heaven-hold-authored-mesh.
   const HEAVEN_GEOMETRY_FLAGS = [0, 1, 0, 1, 0];
   const HEAVEN_GEOMETRY_MODES = [0, 0, 1, 1, 0x83];
   const heavenGeometryFlag = discriminator =>
@@ -418,10 +464,11 @@
     CHR: 4, AHD: 5, AHX: 5, FLK: 6, ASD: 8, ASC: 8,
     ALD: 9, ASO: 10, MNE: 11, SLA: 12, HHD: 13, HHX: 13,
   };
-  // Initial AHD/AHX and ASD/ASC attachment supports these root parsed types;
-  // type-13 HeavenHold roots attach through their chain's final endpoint and
-  // supply its stored vertical as the chain's base.
-  const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11, 13]);
+  // Recovered parser-time initial attachment roots. Type 13 is reached only
+  // after a compatible type-2 HLD chain is retyped later. Sources:
+  // claim.note.air-hold-secondary-judgement and
+  // claim.note.air-slide-secondary-judgement.
+  const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11]);
 
   // Group-1 chart-region forms. These rewrite a pending note's scheduled
   // position before the materialization test, above the 30.0F raw-delta
@@ -472,6 +519,8 @@
     return Number.isNaN(parsed) ? 0 : parsed;
   };
   const c2sWidth = value => Math.max(1, Math.min(16, c2sInt(value)));
+  // Recovered shared enum fallback: missing/unknown exact strings select row
+  // zero. Source: claim.parser.event-token-fallback and family decode claims.
   const exactIndexOrZero = (table, value) => {
     const index = table.indexOf(value || "");
     return index < 0 ? 0 : index;
@@ -609,6 +658,49 @@
     return records;
   }
 
+  // Group-1 parsing is kept in a named helper so the corpus differential can
+  // execute the exact shipped parser path. Shapes are the executable's
+  // accepted STP/SFL/SLP/DCM/CLK cases plus registered-but-rejected SFE;
+  // see claim.timing.projection-schedule-materialization.
+  function parseProjectionRecord(cmd, fields, sourceOrder) {
+    const def = REGION[cmd];
+    if (!def) return null;
+    return {
+      cmd, def, sourceOrder,
+      m: c2sInt(fields[0]), t: c2sInt(fields[1]),
+      dur: def.point ? 0 : c2sInt(fields[2]),
+      factor: def.factor ? c2sFloat(fields[3]) : null,
+      key: def.key ? c2sInt(fields[4]) : 0,
+    };
+  }
+
+  // Build the two independent projection structures from parsed group-1
+  // records. Only STP/SFL/SLP enter keyed adjustment. DCM stays source-order
+  // in its factor list; SFE, CLK, and nonpositive-time spans enter neither
+  // keyed schedule. This boundary is differentially covered over every local
+  // chart carrying any group-1 record by verify_scroll_schedule.mjs.
+  function buildProjectionSchedules(regions) {
+    const regionsByKey = new Map();
+    for (const r of regions) {
+      if (r.cmd !== "STP" && r.cmd !== "SFL" && r.cmd !== "SLP") continue;
+      if (r.endTime <= r.time) continue;
+      const key = r.def.key ? r.key : 0;
+      const factor = r.def.factor ? r.factor : 0;
+      if (!regionsByKey.has(key)) regionsByKey.set(key, []);
+      regionsByKey.get(key).push({
+        p: r.p, start: r.time, end: r.endTime, factor,
+      });
+    }
+    for (const list of regionsByKey.values()) {
+      snapshotMsvcSort(list, (left, right) => left.p + 0.5 < right.p);
+    }
+
+    const dcm = regions.filter(r => r.cmd === "DCM")
+      .sort((a, b) => a.sourceOrder - b.sourceOrder)
+      .map(r => ({ start: r.time, end: r.endTime, factor: r.factor }));
+    return { regionsByKey, dcm };
+  }
+
   (() => {
     const precedes = (left, right) => left.p + 0.5 < right.p;
     const equivalent = Array.from({ length: 42 }, (_, source) => ({ p: 3, source }));
@@ -627,6 +719,9 @@
   // source order so a secondary cannot attach to a later root and two roots
   // cannot both claim one AIR-family slot. Failed searches are reported and
   // omitted, matching the parser diagnostic path rather than drawing orphans.
+  // Sources: spec/matching.md, claim.note.air-secondary-judgement,
+  // claim.note.air-hold-secondary-judgement, and
+  // claim.note.air-slide-secondary-judgement.
   function normalizeEventAssociations(rawNotes) {
     const notes = [], rejected = [], roots = [];
     const slideChains = [], heavenChains = [];
@@ -656,6 +751,9 @@
       }
       return root.note;
     };
+    // Recovered attachment-time ownership: HOLD uses its end; Slide/Heaven
+    // chains use their final control; ALD/ASO use their authored end. Sources:
+    // the three air-secondary family claims and their note specs.
     const rootAttachmentPoint = root => {
       const geometry = rootLaneWidthPoint(root);
       let p = root.note.p;
@@ -679,6 +777,9 @@
       n.parsedType = PARSED_TYPE[n.cmd];
 
       if (n.kind === "slide") {
+        // Recovered continuation key: exact style plus saved endpoint
+        // position/lane/width. Source: spec/notes/slide.md and
+        // claim.note.slide-path-sustain-judgement.
         let chain = slideChains.find(candidate =>
           candidate.styleCode === n.slideStyleCode &&
           sameStart(candidate.last, n));
@@ -701,6 +802,9 @@
         const start = {
           p: n.p, lane: n.lane, width: n.width, vertical: n.h0,
         };
+        // Recovered continuation key, including command form, feedback,
+        // discriminator/parity, geometry and vertical. Source:
+        // claim.presentation.heaven-hold-authored-mesh.
         let chain = heavenChains.find(candidate =>
           candidate.extended === n.heavenExtended &&
           candidate.feedbackCode === n.heavenFeedbackCode &&
@@ -748,11 +852,7 @@
           const root = compatibleRoot(requestedType, n);
           if (root) {
             root.secondaryType = 5;
-            chain = {
-              root, segments: [], last: null,
-              rootBaseVertical: root.type === 13
-                ? (rootLaneWidthPoint(root).vertical ?? 1) : 1,
-            };
+            chain = { root, segments: [], last: null };
             airHoldChains.push(chain);
           }
         }
@@ -762,7 +862,6 @@
         }
         n.secondaryChain = chain;
         n.chainStart = chain.segments.length === 0;
-        if (n.chainStart) n.rootBaseVertical = chain.rootBaseVertical ?? 1;
         chain.segments.push(n);
         chain.last = endpointOf(n);
         notes.push(n);
@@ -773,6 +872,9 @@
         const requestedType = PARSED_TYPE[n.root];
         let chain = null;
         if (requestedType === 8) {
+          // Recovered continuation discriminator: a reference to ASD may only
+          // follow an ASD-marked endpoint, and ASC only an ASC endpoint.
+          // Source: claim.note.air-slide-secondary-judgement.
           const referencedAction = n.root === "ASD";
           chain = airSlideChains.find(candidate =>
             sameStart(candidate.last, n) &&
@@ -781,11 +883,7 @@
           const root = compatibleRoot(requestedType, n);
           if (root) {
             root.secondaryType = 8;
-            chain = {
-              root, segments: [], last: null,
-              rootBaseVertical: root.type === 13
-                ? (rootLaneWidthPoint(root).vertical ?? 1) : 1,
-            };
+            chain = { root, segments: [], last: null };
             airSlideChains.push(chain);
           }
         }
@@ -795,7 +893,6 @@
         }
         n.secondaryChain = chain;
         n.chainStart = chain.segments.length === 0;
-        if (n.chainStart) n.rootBaseVertical = chain.rootBaseVertical ?? 1;
         chain.segments.push(n);
         chain.last = endpointOf(n);
         notes.push(n);
@@ -825,6 +922,8 @@
       }
 
       notes.push(n);
+      // Parsed type 12 is an SLA selector region, not a runtime/root factory
+      // candidate. Source: claim.parser.sla-materialization-selection.
       if (n.parsedType !== 12) {
         roots.push({
           type: n.parsedType, note: n, secondaryType: null, chain: null,
@@ -838,9 +937,10 @@
       if (root.secondaryType !== null) root.note.airAttachedSecondary = true;
     }
 
-    // The air-hold anchor chain forces its FINAL saved endpoint as a judged
-    // checkpoint whether the last command is AHD or AHX
-    // (spec/notes/air_hold.md) — every air hold ends with an air action.
+    // The final saved endpoint is flagged for the DISPLAYED end action —
+    // owner footage (2194_03 m9) shows it on plain-AHD finals too. Judged
+    // action checkers exist only for authored AHX endpoints
+    // (spec/notes/air_hold.md); this flag drives display, not judgement.
     for (const chain of airHoldChains) {
       const last = chain.segments[chain.segments.length - 1];
       if (last) last.isChainFinal = true;
@@ -872,6 +972,8 @@
   // (claim.parser.derived-command-overwrite).
   function parseC2s(text) {
     const lines = text.split(/\r?\n/);
+    // Recovered reset defaults. BPM_DEF 150 is retained as header state but
+    // does not synthesize a BPM event. Source: claim.parser.header-default-dispatch.
     const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
     const bpmEvents = [], metEvents = [], rawNotes = [], markers = [], regions = [];
     const counts = new Map(), unknown = new Map();
@@ -893,16 +995,9 @@
       if (cmd === "BPM") { bpmEvents.push({ m: c2sInt(f[0]), t: c2sInt(f[1]), bpm: c2sFloat(f[2]) }); continue; }
       if (cmd === "MET") { metEvents.push({ m: c2sInt(f[0]), t: c2sInt(f[1]), n: c2sInt(f[2]), d: c2sInt(f[3]) }); continue; }
 
-      const reg = REGION[cmd];
-      if (reg) {
-        regions.push({
-          cmd, def: reg,
-          sourceOrder: regions.length,
-          m: c2sInt(f[0]), t: c2sInt(f[1]),
-          dur: reg.point ? 0 : c2sInt(f[2]),
-          factor: reg.factor ? c2sFloat(f[3]) : null,
-          key: reg.key ? c2sInt(f[4]) : 0,
-        });
+      const projectionRecord = parseProjectionRecord(cmd, f, regions.length);
+      if (projectionRecord) {
+        regions.push(projectionRecord);
         continue;
       }
 
@@ -913,8 +1008,8 @@
         // snapshot. Every other spelling is surfaced, including unknown T_*.
         if (!REGISTERED_CMDS.has(cmd) && !LEGACY_CMDS.has(cmd)) {
           unknown.set(cmd, (unknown.get(cmd) || 0) + 1);
-          // Every gameplay family in this format opens with measure and tick.
-          // That much is deducible for an unrecognised command; nothing else is.
+          // Product/corpus heuristic, not binary proof for an unknown command:
+          // place it only when its first two tokens look like measure/tick.
           const m = Number(f[0]), tk = Number(f[1]);
           if (Number.isInteger(m) && Number.isInteger(tk) && m >= 0 && tk >= 0) {
             markers.push({ cmd, m, t: tk, rest: f.slice(2) });
@@ -955,6 +1050,7 @@
           // The six-field legacy form constructs the control with the root
           // width. The binary's count includes the command token, so more
           // than seven total tokens means at least seven data fields.
+          // Source: spec/c2s.md and claim.parser.event-token-fallback.
           n.endWidth = f.length > 6 ? c2sWidth(f[6]) : n.width;
           n.style = f[7] || "";
           n.slideStyleCode = exactIndexOrZero(SLIDE_STYLE, n.style);
@@ -962,14 +1058,22 @@
           n.slideFeedbackCode = n.slideExtendedRoot
             ? exactIndexOrZero(SLIDE_FEEDBACK, f[8]) : 0;
           n.slideRuntime = n.slideStyleCode === 1 ? "heaven_hold" : "slide";
+          // Recovered unresolved endpoint sentinel. Source:
+          // claim.note.slide-presentation-classes.
           n.slideResultTableIndex = 0xff;
           break;
         case "air": n.root = f[4] || ""; n.style = f[5] || ""; break;
         // Only the X/D-marked spelling creates an authored checkpoint — the
         // air action. AHD and ASC extend the path and submit nothing, exactly
         // as SLC/SXC shape a slide without a bar.
+        // Sources: claim.note.air-hold-secondary-judgement and
+        // claim.note.air-slide-secondary-judgement.
         case "ahold":
-          n.root = f[4] || ""; n.dur = c2sInt(f[5]); n.style = f[6] || "";
+          // The binary consumes only root family and duration after the lane
+          // fields. Later DEF/PNK corpus labels are accepted extras, not an
+          // AirHold style selector.
+          n.root = f[4] || ""; n.dur = c2sInt(f[5]);
+          n.ignoredTrailingLabel = f[6] || "";
           n.isAction = cmd === "AHX"; break;
         case "aslide":
           n.root = f[4] || ""; n.h0 = c2sFloat(f[5]); n.dur = c2sInt(f[6]);
@@ -983,6 +1087,8 @@
           n.endWidth = c2sWidth(f[8]); n.h1 = aldVertical(f[9]);
           n.style = f[10] || "";
           n.styleCode = Math.max(0, C2S_STYLE.indexOf(n.style));
+          // Recovered exact class-selection exception. Source:
+          // claim.note.heaven-hold-judgement and spec/notes/heaven_hold.md.
           n.aldRuntime = n.interval === 0 && n.styleCode === 15
             ? "heaven_hold" : "air_ladder";
           break;
@@ -1033,6 +1139,7 @@
       if (!seg.length) return 0;
       let s = null;
       // The parser's comparison shifts the query by half one fixed-grid tick.
+      // Source: claim.timing.tempo-measure-schedule.
       for (let i = 0; i < seg.length && seg[i].p <= p + 0.5; i++) s = seg[i];
       if (!s) return 0;
       return s.ms + (p - s.p) * s.msPerTick;
@@ -1072,19 +1179,31 @@
     // MET field 1 is the beat unit and field 2 is the count. The producer uses
     // count*384/unit for the bar vector and 384/unit for the beat vector. Each
     // MET position restarts both sequences; either zero component terminates
-    // all subsequent subdivision generation.
+    // all subsequent subdivision generation. Sources:
+    // claim.timing.tempo-measure-schedule and
+    // claim.pipeline.meter-grid-render-boundary.
     snapshotMsvcSort(metEvents, (left, right) =>
       left.m * R + left.t + 0.5 < right.m * R + right.t);
+    // Recovered origin synthesis: when the sorted MET vector has no record at
+    // position zero, the reset/header MET_DEF pair becomes the zero anchor.
+    // Sources: claim.parser.header-default-dispatch and
+    // claim.timing.tempo-measure-schedule.
     if (!metEvents.length || metEvents[0].m * R + metEvents[0].t > 0) {
       metEvents.unshift({ m: 0, t: 0, n: head.metNum, d: head.metDen });
     }
     const uniqueMetEvents = [];
     for (const e of metEvents) {
       const p = e.m * R + e.t;
+      // Recovered snapshot behavior: the first record at an equivalent sorted
+      // position survives; later records at that position are discarded.
+      // Source: claim.timing.tempo-measure-schedule.
       if (uniqueMetEvents.length && uniqueMetEvents[uniqueMetEvents.length - 1].p === p) continue;
       uniqueMetEvents.push({ ...e, p });
     }
     const beats = [];
+    // Product choice: the binary owns marker generation between MET anchors,
+    // but not this browser's finite canvas extent. Eight measures minimum and
+    // two measures of trailing pad only keep the review grid useful.
     const lastGridTick = Math.max(
       8 * R,
       ...notes.map(n => n.p + Math.max(0, n.dur)),
@@ -1096,12 +1215,28 @@
       const end = index + 1 < uniqueMetEvents.length
         ? uniqueMetEvents[index + 1].p : lastGridTick;
       const unit = e.n, count = e.d;
-      if (unit === 0 || count === 0) { gridHaltedAt = e.p; break; }
-      const beatStep = Math.trunc(R / unit);
-      const barStep = Math.trunc((count * R) / unit);
-      // The executable's malformed signed/unsigned division domain can yield
-      // zero and nonprogress. Refuse to invent a finite grid for that domain.
-      if (beatStep <= 0 || barStep <= 0) { gridHaltedAt = e.p; break; }
+      if (unit === 0 || count === 0) {
+        // Both meter-derived vectors already contain the current MET anchor
+        // when the executable tests for zero. Retain one combined marker and
+        // terminate; later MET records do not restart either vector.
+        beats.push({ p: e.p, time: timeAt(e.p), bar: true,
+                     m: Math.floor(e.p / R), b: 1, terminalMeterAnchor: true });
+        gridHaltedAt = e.p;
+        break;
+      }
+      // Recovered arithmetic (spec/timing.md; c2s_meter_grid_steps): low-32-bit
+      // multiplication and UNSIGNED division. Negative/extreme authored
+      // components therefore yield huge (anchor-only) steps rather than
+      // negative ones; a resulting zero step is the source nonprogress domain
+      // and must not be replaced with a guessed grid.
+      const beatStep = Math.floor((R >>> 0) / (unit >>> 0));
+      const barStep = Math.floor((Math.imul(count, R) >>> 0) / (unit >>> 0));
+      if (beatStep === 0 || barStep === 0) {
+        beats.push({ p: e.p, time: timeAt(e.p), bar: true,
+                     m: Math.floor(e.p / R), b: 1, terminalMeterAnchor: true });
+        gridHaltedAt = e.p;
+        break;
+      }
       const bars = new Set();
       const beatPositions = new Set();
       for (let p = e.p; p < end; p += barStep) bars.add(p);
@@ -1131,14 +1266,17 @@
     // the 384-tick boundaries past the halt. Product fallback, not recovered
     // behavior; the generated vectors above are untouched.
     if (gridHaltedAt !== null) {
+      const held = new Set(beats.map(b => b.p));   // the recovered anchor may sit on R
       for (let p = Math.ceil(gridHaltedAt / R) * R; p < lastGridTick; p += R) {
+        if (held.has(p)) continue;
         beats.push({ p, time: timeAt(p), bar: true, m: Math.floor(p / R), b: 1 });
       }
     }
     beats.sort((a, b) => a.p - b.p);
 
-    // Positions where the signature actually changes, for the grid marker.
-    // Repeats of the value already in force are dropped: they mark nothing.
+    // Product display choice: only signature changes receive UI labels.
+    // Binary meter vectors still retain every surviving MET anchor, including
+    // a repeated value; dropping repeats here does not alter their generation.
     const meters = [];
     for (const e of uniqueMetEvents) {
       const prev = meters[meters.length - 1];
@@ -1147,35 +1285,10 @@
       meters.push({ p, time: timeAt(p), n: e.n, d: e.d });
     }
 
-    // Scroll schedules, one sorted interval list per key. STP and SFL are
-    // key 0 and so apply to everything; SLP carries its own key. STP's factor
-    // is 0, which stops the region dead.
-    const regionsByKey = new Map();
-    for (const r of regions) {
-      // "The chart-region transform is fully defined by STP/SFL/SLP
-      // intervals" (spec/timing.md; claim.timing.projection-schedule-
-      // materialization). DCM is ONLY the separate source-order
-      // projection-factor query specified alongside the far-path formula —
-      // it never joins this schedule. Folding it in double-applies every
-      // DCM chart: notes get time-warped as if by SFL and then
-      // factor-queried at the warped key, which lands in the wrong DCM
-      // window (the 8078_05 cramming/teleport divergence, owner-reported
-      // 2026-08-11).
-      if (r.cmd === "DCM" || r.def.point || r.def.dead || r.endTime <= r.time) continue;
-      const key = r.def.key ? r.key : 0;
-      const factor = r.def.factor ? r.factor : 0;
-      if (!regionsByKey.has(key)) regionsByKey.set(key, []);
-      regionsByKey.get(key).push({ p: r.p, start: r.time, end: r.endTime, factor });
-    }
-    for (const list of regionsByKey.values()) {
-      snapshotMsvcSort(list, (left, right) => left.p + 0.5 < right.p);
-    }
-
-    // DCM is a separate query and stays in source order even though region UI
-    // records above are sorted for drawing.
-    const dcm = regions.filter(r => r.cmd === "DCM")
-      .sort((a, b) => a.sourceOrder - b.sourceOrder)
-      .map(r => ({ start: r.time, end: r.endTime, factor: r.factor }));
+    // Use the named builder exercised by the full-corpus differential. It
+    // keeps DCM out of the STP/SFL/SLP keyed schedule and preserves DCM source
+    // order, including the owner-observed 8078_05 correction.
+    const { regionsByKey, dcm } = buildProjectionSchedules(regions);
 
     // A note takes the greatest positive tag among SLA regions that contain it
     // in time and fully contain its lane span. Everything else stays key 0.
@@ -1187,12 +1300,15 @@
       let key = 0;
       // 1/192 canonical scalar equals half of one fixed-resolution authored
       // tick, not R/192 ticks.
+      // Source: claim.parser.sla-materialization-selection.
       const q = p + 0.5;
       for (const s of slas) {
         if (s.tag <= key) continue;
         if (q < s.p || q >= s.p + s.dur) continue;
         const leftTolerance = floatSpan ? 0.00001 : 0;
         const rightTolerance = floatSpan ? 0.00001 : 0;
+        // The tolerant float-span variant's +/-0.00001 bounds are recovered,
+        // not fitted. Source: claim.parser.sla-materialization-selection.
         if (lane < s.lane - leftTolerance) continue;
         if (lane + width > s.lane + s.width + rightTolerance) continue;
         key = s.tag;
@@ -1206,6 +1322,7 @@
       // own independently selected key, never the root's. Direct presentation
       // consumers are recovered for HOLD (type 1), Slide (2), ALD (9), ASO
       // (10), and HeavenHold (13), in addition to materialization retry.
+      // Source: claim.presentation.sustain-endpoint-sla-selection.
       n.endSlaKey = n.dur > 0
         ? selectSlaKey(n.p + n.dur, n.endLane ?? n.lane, n.endWidth ?? n.width)
         : n.slaKey;
@@ -1395,13 +1512,16 @@
         lane: segment.endLane, width: segment.endWidth,
         vertical: segment.h1, segment,
       };
+      // Continuation compares the root's saved interval and parsed STYLE
+      // CODE (spec/notes/air_ladder.md; missing/unknown tokens share code 0).
       let chain = chains.find(candidate =>
         candidate.interval === segment.interval &&
-        candidate.style === segment.style && samePoint(candidate.last, start));
+        candidate.styleCode === segment.styleCode && samePoint(candidate.last, start));
       if (!chain) {
         chain = {
           interval: segment.interval,
           style: segment.style,
+          styleCode: segment.styleCode,
           root: start,
           controls: [],
           generated: [],
@@ -1496,7 +1616,8 @@
   // A bar split into N equal parts. Each position takes a colour by how coarse
   // a division it lands on: the bar start is 1, the finest level is 2, and
   // each coarser level above that counts up. Levels come from N's prime
-  // factors in ascending order, so 8 gives 1,2,3,2,4,2,3,2 and 12 gives
+  // Product display choice, not an executable rule: factors in ascending
+  // order, so 8 gives 1,2,3,2,4,2,3,2 and 12 gives
   // 1,2,2,3,2,2,4,2,2,3,2,2. A prime N has only one level, so every division
   // after the bar start is colour 2.
   const OVERLAY_COLORS = ["#ff1f5a", "#3d9bff", "#ffd21f", "#19e8a5", "#c44dff", "#ff8c1a"];
@@ -1541,9 +1662,10 @@
   // linear projected formula plus a pinhole camera, which a still frame
   // cannot distinguish from a reparameterization.
   const GEO = { yNear: 0.9238, yFar: 0.1637, halfNear: 0.30406, z0: 1, Z: 3.1299, airTop: 0.2482 };
-  // The ceiling of the air region, in lift units. Every air element is placed
-  // at or below it and nothing may exceed it; the slider scales the whole
-  // region by moving GEO.airTop.
+  // Product normalization for the fitted camera, not a recovered asset
+  // extent. AIR_PLANE maps 15.574 render units to lift 1.0; the binary values
+  // are resource attachment coordinates and external meshes may extend past
+  // them. Source boundary: claim.presentation.air-hold-model-path.
   const AIR_PLANE = 1.0;
 
   // Content is drawn past the nominal lookahead and then trimmed in screen
@@ -1561,6 +1683,9 @@
   const ALD_UNITS_PER_LIFT = 15.574;                   // render units at the plane
   const ALD_EFFECT_LIFT = 0.14999962 / ALD_UNITS_PER_LIFT;
   function liftHeight(v) {
+    // Product clipping choice: the binary's common transform permits negative
+    // attachment coordinates. This asset-free camera has no below-floor air
+    // volume, so negative normalized lift is clamped at its lane surface.
     return Math.max(0, ((v || 1) - 1) / 4);
   }
 
@@ -1662,9 +1787,6 @@
   // spec/timing.md: "primary parsed types 1, 2, 9, 10, 12, and 13 retry with
   // their endpoint and separate region key" (12 builds no runtime note).
   const ENDPOINT_RETRY_KINDS = new Set(["hold", "slide", "ald", "asolid", "heaven"]);
-  // Kinds whose drawn body takes the single entity-time projection-factor
-  // query (heaven runs its own recovered per-point path presentation).
-  const ENTITY_BODY_KINDS = new Set(["hold", "slide", "ahold", "aslide", "ald", "asolid"]);
   // With autoplay on, geometry is consumed at the judgement plane — but only
   // for notes whose time has come. A FUTURE note sitting past the line (a
   // bottom-entry note under a negative projection factor) keeps the render
@@ -1697,8 +1819,11 @@
   // optional metronome a woodblock on the meter-aware beat grid with the
   // downbeat rate-shifted up. Events within the merge window of the last
   // emitted click collapse to one playback, so coincident stacks and sub-tick
-  // generated cadences read as single hits. Guides fire at authored time: the
-  // scroll transforms move where a note is drawn, not when it is due.
+  // generated cadences read as single hits. Guides fire at authored time:
+  // projection schedules can change construction eligibility and presentation
+  // position, but do not replace manager time or the judgement classifier's
+  // due schedule. Sources: claim.timing.projection-schedule-materialization
+  // and claim.parser.sla-materialization-selection.
   // Sub-tick collapse is fixed: an interval-1 generated cadence is denser
   // than a cue can be heard as, and the owner accepted collapsing anything
   // below one authored tick. The exposed control is output delay instead,
@@ -1886,6 +2011,10 @@
       if (d > 0) d *= scrollFactor(v);
       return d;
     };
+    // Recovered correction to the retired single-entity-factor approximation:
+    // every sustained root/control/end calls depthAt independently, and DCM
+    // is queried at that keyed-adjusted endpoint. Source:
+    // claim.presentation.sustain-endpoint-dcm-projection.
 
     cx2.save();
     cx2.beginPath();
@@ -1912,6 +2041,8 @@
     cx2.closePath(); cx2.fill();
 
     // --- lane dividers
+    // Product display choice: every fourth divider is emphasized to group the
+    // sixteen lanes. No cabinet-field texture or divider cadence was recovered.
     for (let l = 0; l <= 16; l++) {
       const a = project(tFloor, l, 0, W, H), b = project(FAR, l, 0, W, H);
       cx2.strokeStyle = l % 4 === 0 ? "rgba(150,162,200,.30)" : "rgba(150,162,200,.11)";
@@ -2128,7 +2259,8 @@
     }
     vis.sort((a, b) => b.time - a.time);
 
-    // Charts stack coincident records — eight overlapping roots on four lanes,
+    // Product deduplication choice: charts stack coincident records — eight
+    // overlapping roots on four lanes,
     // fifteen identical marked segments at one junction — and a one-tick
     // marked segment puts its own note a hair before its end cap. All of that
     // is one note on the cabinet (corpus-observed stacking; the dedup is a
@@ -2143,9 +2275,12 @@
       if (n.kind !== "slide" || n.isRoot) headKeys.add(keyOf(n.vt0, n.lane));
     }
 
-    // Terminal resources go down before any root at the same position. A
-    // Slide final endpoint is the builder's forced ending-marker resource,
-    // not a synthetic judgement checkpoint; its original image is external.
+    // Recovered resources, product ordering: HOLD owns a far marker and Slide
+    // forces a final ending-marker resource, but the browser draws caps before
+    // roots only for deterministic overlap. Concrete binary scene occlusion
+    // remains external-keyed. Sources: claim.presentation.hold-root-body-transform,
+    // claim.note.slide-presentation-classes, and
+    // claim.presentation.cross-family-update-composition.
     for (const n of vis) {
       clipNote = n;
       const capped = !n.heavenPresentation &&
@@ -2157,7 +2292,9 @@
       const tEnd = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
       if (tEnd < tapClip() || tEnd > FAR) continue;
       const lane = n.endLane ?? n.lane;
-      // A cap that lands on a note the chain already draws is that note.
+      // Product deduplication choice: suppress a cap that lands in the same
+      // 8-ms/lane bucket as a solid note. The binary resource paths establish
+      // both objects, but do not establish this browser bucketing rule.
       if (headKeys.has(keyOf(n.vt1, lane))) continue;
       const k = keyOf(n.vt1, lane);
       if (solidKeys.has(k)) continue;
@@ -2167,12 +2304,12 @@
           drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, SLIDE_ENDPOINT);
         }
       } else {
-        // The hold far-marker resource table splits on attachment (rows
-        // 289..274 with an air-family secondary vs 65..50 without). The
-        // assets are external; the attached case gets a distinct labeled
-        // placeholder shade so the recovered selection is visible.
-        const capColor = n.airAttachedSecondary ? HOLD_CAP_ATTACHED : n.color;
-        drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, capColor);
+        // The executable selects a distinct external HOLD far-marker row when
+        // its primary owns AIR/AirHold/AirSlide secondary type 3/5/8. Those
+        // meshes are unavailable, so this asset-free glyph deliberately has
+        // no fabricated visual branch. Source:
+        // claim.presentation.hold-root-body-transform.
+        drawTap(n, tEnd, W, H, lane, n.endWidth ?? n.width, n.color);
       }
     }
 
@@ -2181,25 +2318,13 @@
       // The projection factor multiplies distance, so a fast note is pushed
       // further out for the same time delta and covers more ground per tick.
       const t0 = depthAt(n.time, n.slaKey);
-      let t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
-      if (ENTITY_BODY_KINDS.has(n.kind)) {
-        // A record's BODY takes one projection-factor query at the record's
-        // own entity time, per the recovered "same keyed-adjusted entity
-        // time" COMMON presentation helper — not one per endpoint. A
-        // micro-segment whose two query keys straddle a DCM boundary
-        // otherwise smears across the whole corridor (the 8078_05
-        // letter-formation ghost slides and air holds, invisible on the
-        // cabinet at every speed). Footage-constrained inference: exact
-        // per-vertex DCM anchoring is on the decomp work order. Adjacent
-        // records still factor independently, preserving the per-record
-        // compression footage (0961_03 m105); keyed scrolledTime stays
-        // per-endpoint (that part is recovered); endpoint RESOURCES (caps)
-        // stay per-endpoint entities.
-        const v1 = scrolledTime(n.endTime, now, n.endSlaKey ?? n.slaKey);
-        let d1 = v1 - now;
-        if (d1 > 0) d1 *= scrollFactor(n.vt0);
-        t1 = d1 / LA;
-      }
+      // Every path point is projected independently — keyed schedule
+      // adjustment and the DCM lookup are applied per endpoint, and the
+      // builders interpolate between already-projected values
+      // (claim.presentation.sustain-endpoint-dcm-projection, eight anchored
+      // family projections; supersedes the former single entity-time
+      // inference).
+      const t1 = depthAt(n.endTime, n.endSlaKey ?? n.slaKey);
 
       // One visibility rule for the one runtime class
       // (claim.judgement.heaven-hold-judgement): a zero/NON ALD is
@@ -2209,12 +2334,15 @@
       if (n.kind === "asolid" && !show.cosmetic) continue;
 
       if (n.heavenPresentation) {
-        // The zero/NON ALD origin selects the missing-resource sentinel and
-        // is invisible on the cabinet: owner footage at 2194_03 m87
-        // (2026-08-11) shows only the co-located EXTAP pair, the air-ups,
-        // and the crush above — no element for the heaven records. Its
-        // judgement still exists, so the recovered shape stays inspectable
-        // under the Shape pts debug toggle.
+        // The zero/NON ALD origin is invisible on the cabinet (owner footage
+        // 2194_03 m87, 2026-08-11: only the co-located EXTAP pair, air-ups,
+        // and the crush above). Code-side basis: its deliberately empty
+        // generated path reaches body phase 4 at the first eligible path
+        // update (claim.presentation.heaven-hold-authored-mesh) — there is
+        // NO NON null-resource selector; the absent START image remains an
+        // external-resource / footage boundary. Its judgement still exists,
+        // so the recovered shape stays inspectable under Shape pts, labeled
+        // a viewer extrapolation.
         if (n.kind !== "ald" || show.bars) {
           drawHeavenHold(n.heavenPresentation, W, H, depthAt);
         }
@@ -2230,24 +2358,32 @@
         if (n.aldRuntime === "air_ladder") drawAirTrace(n, t0, t1, W, H);
       } else if (n.kind === "aslide") {
         drawAirSlideTrace(n, t0, t1, W, H);
-        // The air-up start reaches the record's own authored height, which is
-        // what makes it line up with the path leaving that point. A type-13
-        // root lifts the base to its chain's stored final vertical.
+        // The replacement glyph uses the recovered authored AirSlide root
+        // vertical for scale. The initial attachment whitelist has no direct
+        // type-13 entry; an HLD-style type-2 root is retyped later with path
+        // value 1, so its recovered origin remains zero here. Sources:
+        // claim.presentation.air-slide-model-path and
+        // claim.presentation.common-air-transform. Glyph shape remains a
+        // product choice because the external model is absent.
         if (n.chainStart) {
           drawArrow(t0, n.lane, n.width, n.color, true, W, H,
-                    liftHeight(n.h0), 0,
-                    liftHeight(n.rootBaseVertical ?? 1));
+                    liftHeight(n.h0));
         }
       } else if (n.kind === "ahold") {
         drawAirHold(n, t0, t1, W, H);
         // The width-scaled AirHold root resource displays as the standard
         // air-up arrow rising from the root into the band (owner footage:
         // 8110_05 m98, 2026-08-11 — a flat start bar here read as a ghost
-        // note). The recovered transform origin stays the base; type-13
-        // roots lift it to their chain's stored final vertical.
+        // note). The recovered transform origin remains zero; the full-height
+        // arrow is an explicitly product-sized substitute for external mesh.
         if (n.chainStart) {
-          drawArrow(t0, n.lane, n.width, n.color, true, W, H, AIR_PLANE,
-                    0, liftHeight(n.rootBaseVertical ?? 1));
+          // Recovered: the AirHold root resource exists at common-transform
+          // origin zero and remains visible while its start phase is active.
+          // External mesh extent is unavailable, so the standard full-height
+          // asset-free arrow is a product substitute, corroborated by owner
+          // review rather than presented as a binary dimension. Source:
+          // claim.presentation.air-hold-model-path.
+          drawArrow(t0, n.lane, n.width, n.color, true, W, H);
         }
       } else if (n.kind === "hold" || n.kind === "slide") {
         drawSustain(n, t0, t1, W, H);
@@ -2260,6 +2396,9 @@
 
     clipNote = null;
     // --- windows overlay, drawn on top so trimming is legible
+    // Product scope: this diagnostic overlay visualizes ground-lane candidate
+    // windows only. Skipping Air-family objects is not a claim that their
+    // attached secondary judgement is absent.
     if (show.wings) {
       for (const n of vis) {
         clipNote = n;
@@ -2272,7 +2411,7 @@
         if (n.cmd === "MNE" || n.kind === "asolid") continue;
         if (n.kind === "air" || n.kind === "aslide" || n.kind === "ahold" ||
             (n.kind === "ald" && !n.heavenPresentation)) continue;
-        drawWindow(n, W, H, LA);
+        drawWindow(n, W, H, LA, depthAt);
       }
     }
     clipNote = null;
@@ -2695,6 +2834,9 @@
   }
 
   function aldStreamOneScale(renderVertical) {
+    // Exact type-9 stream-1 width attenuation: endpoint clamps plus the
+    // executable's linear expression between them. Source:
+    // claim.note.air-ladder-precalc-presentation.
     if (renderVertical <= 0) return 0.75;
     if (renderVertical >= 15.574) return 0.65;
     return (1 - renderVertical * 0.06420958) * 0.100000024 + 0.65;
@@ -2816,6 +2958,25 @@
       edges[1].push({ t, lane: lane + w, hA, hB });
     }
     const near = project(s0, 0, 0, W, H);
+    // Recovered shell (claim.note.air-solid-presentation): a face at height A
+    // and a face at height B, each spanning left edge to right edge along the
+    // segment, plus the end-A to start-B diagonal bridge — so an A==B segment
+    // still shows a filled surface rather than collapsing to a line.
+    const face = key => {
+      cx2.beginPath();
+      edges[0].forEach((e, i) => { const p = project(e.t, e.lane, e[key], W, H); i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y); });
+      for (let i = edges[1].length - 1; i >= 0; i--) { const e = edges[1][i]; const p = project(e.t, e.lane, e[key], W, H); cx2.lineTo(p.x, p.y); }
+      cx2.closePath(); cx2.fillStyle = n.color + "24"; cx2.fill();
+    };
+    face("hA"); face("hB");
+    {
+      const a0 = edges[0][edges[0].length - 1], a1 = edges[1][edges[1].length - 1];
+      const b0 = edges[0][0], b1 = edges[1][0];
+      const p1 = project(a0.t, a0.lane, a0.hA, W, H), p2 = project(a1.t, a1.lane, a1.hA, W, H);
+      const p3 = project(b1.t, b1.lane, b1.hB, W, H), p4 = project(b0.t, b0.lane, b0.hB, W, H);
+      cx2.beginPath(); cx2.moveTo(p1.x, p1.y); cx2.lineTo(p2.x, p2.y); cx2.lineTo(p3.x, p3.y); cx2.lineTo(p4.x, p4.y); cx2.closePath();
+      cx2.fillStyle = n.color + "1c"; cx2.fill();
+    }
     for (const edge of edges) {
       cx2.beginPath();
       edge.forEach((e, i) => {
@@ -2980,12 +3141,17 @@
     cx2.stroke();
   }
 
-  function drawWindow(n, W, H, LA) {
+  // The diagnostic window overlay rides the PROJECTED note (same keyed
+  // schedule + factor as the body it annotates) so it stays attached under
+  // Apply scroll; the window widths themselves are authored-time slider
+  // values, a product diagnostic, not recovered magnitudes.
+  function drawWindow(n, W, H, LA, depthAt) {
     const front = Math.min(winMs, n.frontLimit ?? Infinity);
     const back = winMs;
-    const tHit = (n.time - now) / LA;
-    const tEarly = (n.time - front - now) / LA;   // furthest you can hit it early
-    const tLate = (n.time + back - now) / LA;
+    const at = depthAt ? ms => depthAt(ms, n.slaKey) : ms => (ms - now) / LA;
+    const tHit = at(n.time);
+    const tEarly = at(n.time - front);   // furthest you can hit it early
+    const tLate = at(n.time + back);
     if (tLate < -0.1 || tEarly > 1) return;
     const clamp = v => Math.max(-0.08, Math.min(1, v));
     const e = clamp(tEarly), l = clamp(tLate);
@@ -3016,6 +3182,190 @@
   }
 
   // ---- density strip ------------------------------------------------------
+  // ---- bird's-eye view ---------------------------------------------------
+  // A parallel orthographic reading of the same model: lanes across, time
+  // down (future at top), covering several lookaheads instead of one. Depths
+  // are AUTHORED time — no scroll regions, no DCM — so the strip shows the
+  // chart as written while the field shows it as the cabinet warps it.
+  // Air elements are squashed into thin translucent ribbons drawn over the
+  // ground notes so a stacked crush never hides the note beneath it. Product view:
+  // it depicts recovered timing/geometry but is not a cabinet camera.
+  const eyeCv = document.getElementById("eye");
+  const ecx = eyeCv ? eyeCv.getContext("2d") : null;
+  // The strip has its own scroll speed, independent of the field's note
+  // speed. Its scale is rebased so BEV speed 1.0 == note-speed 2.5 worth of
+  // lookahead (owner preference): lookahead = 5388.9 / (2.5 * speed).
+  const EYE_SPEED_SCALE = 2.5;
+  let eyeOn = true, eyeSpeed = 1.0;
+  const eyeLookahead = () => LOOK_BASE / (EYE_SPEED_SCALE * eyeSpeed);
+  const EYE_TAIL = 0.12;               // past-line fraction of the strip height
+  // Pure orthographic: no height parallax. Airborne elements draw at their
+  // true lane and time, translucent and on top of ground notes.
+
+  function drawEye() {
+    if (!eyeOn || !ecx || !chart) return;
+    // Match the panel's height to the field's rendered height (the field's
+    // width is layout-fixed, so its height is the anchor), then size the
+    // backing store to the panel's box in device pixels for crispness.
+    const fieldBox = cv.getBoundingClientRect();
+    if (fieldBox.height > 0) {
+      const target = Math.round(fieldBox.height) + "px";
+      if (eyeCv.parentElement && eyeCv.parentElement.style.height !== target) {
+        eyeCv.parentElement.style.height = target;
+      }
+    }
+    const box = eyeCv.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) {
+      const dpr = window.devicePixelRatio || 1;
+      const bw = Math.round(box.width * dpr), bh = Math.round(box.height * dpr);
+      if (eyeCv.width !== bw || eyeCv.height !== bh) { eyeCv.width = bw; eyeCv.height = bh; }
+    }
+    const W = eyeCv.width, H = eyeCv.height;
+    ecx.clearRect(0, 0, W, H);
+    const LA = eyeLookahead();
+    const padX = Math.max(3, W * 0.02), laneW = (W - padX * 2) / 16;
+    const yLine = H * (1 - EYE_TAIL);              // judgement line
+    const pxPerLA = yLine;                         // one eye-lookahead fills the strip
+    const yOf = t => yLine - t * pxPerLA;          // t in eye-lookaheads
+    const xOf = lane => padX + lane * laneW;
+    // The strip reads AUTHORED time: no chart-region scroll transform and no
+    // DCM projection factor, regardless of the field's Apply scroll toggle.
+    // It is a chart-reading view, so gimmicks that warp the field's depths
+    // must not warp this one.
+    const depth = (ms, key) => (ms - now) / LA;
+    const tMin = -EYE_TAIL, tMax = 1;
+
+    // lane dividers + judgement line
+    ecx.strokeStyle = "rgba(150,162,200,0.10)"; ecx.lineWidth = 1;
+    for (let l = 0; l <= 16; l++) {
+      ecx.beginPath(); ecx.moveTo(xOf(l) + 0.5, 0); ecx.lineTo(xOf(l) + 0.5, H); ecx.stroke();
+    }
+    // beat grid (bars brighter), same schedule as the field
+    if (show.grid) {
+      for (const bt of chart.beats) {
+        const t = depth(bt.time, 0);
+        if (t < tMin || t > tMax) continue;
+        const y = yOf(t);
+        ecx.strokeStyle = bt.bar ? "rgba(150,162,200,0.45)" : "rgba(150,162,200,0.16)";
+        ecx.lineWidth = bt.bar ? 1.2 : 1;
+        ecx.beginPath(); ecx.moveTo(padX, y); ecx.lineTo(W - padX, y); ecx.stroke();
+        if (bt.bar) {
+          ecx.fillStyle = "rgba(150,162,200,0.7)";
+          ecx.font = "9px ui-monospace, Menlo, monospace";
+          ecx.textAlign = "left"; ecx.textBaseline = "bottom";
+          ecx.fillText(bt.t ? `${bt.m}:${String(bt.t).padStart(3, "0")}` : String(bt.m), padX + 1, y - 1);
+        }
+      }
+    }
+
+    // authored-time window: anything overlapping the strip's range is shown
+    const eligible = n => {
+      const t0 = depth(n.time), t1 = depth(n.endTime);
+      return Math.max(t0, t1) >= tMin && Math.min(t0, t1) <= tMax;
+    };
+    const rect = (lane, w, y0, y1, color, alpha, outline) => {
+      const x = xOf(lane), width = w * laneW;
+      const top = Math.min(y0, y1), h = Math.max(1.5, Math.abs(y1 - y0));
+      ecx.globalAlpha = alpha; ecx.fillStyle = color;
+      ecx.fillRect(x + 1, top, Math.max(1, width - 2), h);
+      if (outline) { ecx.strokeStyle = "rgba(255,255,255,0.55)"; ecx.lineWidth = 1; ecx.strokeRect(x + 1.5, top + 0.5, Math.max(1, width - 3), h - 1); }
+      ecx.globalAlpha = 1;
+    };
+    // squashed, slanted air ribbon between two lane/height points
+    const airRibbon = (t0, l0, w0, h0, t1, l1, w1, h1, color, alpha) => {
+      const x0a = xOf(l0) + 1, x0b = xOf(l0 + w0) - 1;
+      const x1a = xOf(l1) + 1, x1b = xOf(l1 + w1) - 1;
+      const y0 = yOf(t0), y1 = yOf(t1);
+      ecx.globalAlpha = alpha; ecx.fillStyle = color;
+      ecx.beginPath(); ecx.moveTo(x0a, y0); ecx.lineTo(x0b, y0); ecx.lineTo(x1b, y1); ecx.lineTo(x1a, y1); ecx.closePath(); ecx.fill();
+      ecx.strokeStyle = color; ecx.lineWidth = 1; ecx.globalAlpha = Math.min(1, alpha + 0.35);
+      ecx.beginPath(); ecx.moveTo(x0a, y0); ecx.lineTo(x1a, y1); ecx.moveTo(x0b, y0); ecx.lineTo(x1b, y1); ecx.stroke();
+      ecx.globalAlpha = 1;
+    };
+    // The field's block chevron, squashed: spans the whole note width, only
+    // a few pixels tall, sits just above the note it belongs to. Filled, so
+    // it reads as the fat air arrow rather than a hairline.
+    const chevron = (t, lane, w, up, color) => {
+      const y = yOf(t) - barH * 0.5 - 1;          // ride on top of the note bar
+      const L = xOf(lane) + 1, R = xOf(lane + w) - 1, mid = (L + R) / 2;
+      const hgt = Math.max(5, Math.min(9, laneW * 1.6));   // squashed height
+      const tip = up ? y - hgt : y, tail = up ? y : y - hgt;
+      const notch = hgt * 0.35, sgn = up ? 1 : -1;
+      ecx.globalAlpha = 0.9; ecx.fillStyle = color;
+      ecx.beginPath();
+      ecx.moveTo(mid, tip);                       // head apex
+      ecx.lineTo(R, tip + sgn * notch);           // right shoulder
+      ecx.lineTo(R, tail);                        // right tail corner
+      ecx.lineTo(mid, tail - sgn * notch);        // carved tail apex
+      ecx.lineTo(L, tail);                        // left tail corner
+      ecx.lineTo(L, tip + sgn * notch);           // left shoulder
+      ecx.closePath(); ecx.fill();
+      ecx.strokeStyle = "rgba(255,255,255,0.6)"; ecx.lineWidth = 0.8; ecx.stroke();
+      ecx.globalAlpha = 1;
+    };
+    const barH = Math.max(3, Math.min(6, H * 0.006));   // thin: ~3-4px at strip scale
+
+    // far-to-near so nearer overdraws farther, ground first then air on top
+    const list = chart.notes.filter(n => n.kind !== "region" && eligible(n));
+    list.sort((a, b) => b.time - a.time);
+    const groundPass = [], airPass = [];
+    for (const n of list) (AIR_KINDS.has(n.kind) && !n.heavenPresentation ? airPass : groundPass).push(n);
+
+    for (const n of groundPass) {
+      const t0 = depth(n.time, n.slaKey), t1 = depth(n.endTime, n.endSlaKey ?? n.slaKey);
+      if (Math.max(t0, t1) < tMin || Math.min(t0, t1) > tMax) continue;
+      if (n.kind === "hold" || n.kind === "slide" || n.heavenPresentation) {
+        const l0 = n.lane, w0 = n.width, l1 = n.endLane ?? n.lane, w1 = n.endWidth ?? n.width;
+        // body as a trapezoid between endpoints
+        ecx.globalAlpha = 0.35; ecx.fillStyle = n.color;
+        ecx.beginPath();
+        ecx.moveTo(xOf(l0) + 1, yOf(t0)); ecx.lineTo(xOf(l0 + w0) - 1, yOf(t0));
+        ecx.lineTo(xOf(l1 + w1) - 1, yOf(t1)); ecx.lineTo(xOf(l1) + 1, yOf(t1));
+        ecx.closePath(); ecx.fill(); ecx.globalAlpha = 1;
+        const isStart = n.kind !== "slide" || n.isRoot;
+        if (isStart) rect(l0, w0, yOf(t0) - barH / 2, yOf(t0) + barH / 2, rootColor(n), 1, true);
+        if (n.kind === "hold" || (n.kind === "slide" && (n.isFinal || n.marker)))
+          rect(l1, w1, yOf(t1) - barH / 2, yOf(t1) + barH / 2, n.kind === "slide" ? SLIDE_ENDPOINT : n.color, 1, true);
+      } else {
+        rect(n.lane, n.width, yOf(t0) - barH / 2, yOf(t0) + barH / 2, rootColor(n), 1, true);
+      }
+    }
+    for (const n of airPass) {
+      const t0 = depth(n.time, n.slaKey), t1 = depth(n.endTime, n.endSlaKey ?? n.slaKey);
+      if (Math.max(t0, t1) < tMin || Math.min(t0, t1) > tMax) continue;
+      const l0 = n.lane, w0 = n.width, l1 = n.endLane ?? n.lane, w1 = n.endWidth ?? n.width;
+      if (n.kind === "air") {
+        chevron(t0, l0, w0, n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR", n.color);
+      } else if (n.kind === "ahold") {
+        airRibbon(t0, l0, w0, 5, t1, l0, w0, 5, n.color, 0.28);
+        if (n.isAction || n.isChainFinal) rect(l0, w0, yOf(t1) - 2, yOf(t1) + 2, ACTION, 0.95, false);
+      } else if (n.kind === "aslide") {
+        airRibbon(t0, l0, w0, n.h0, t1, l1, w1, n.h1, n.color, 0.28);
+        if (n.isAction) rect(l1, w1, yOf(t1) - 2, yOf(t1) + 2, ACTION, 0.95, false);
+      } else if (n.kind === "ald") {
+        if (n.aldRuntime === "air_ladder" && n.styleCode !== 15)
+          airRibbon(t0, l0, w0, n.h0, t1, l1, w1, n.h1, n.color, 0.22);
+        for (const sample of n.generated || []) {
+          const ts = depth(sample.time, sample.slaKey);
+          if (ts < tMin || ts > tMax) continue;
+          rect(sample.lane, sample.width,
+               yOf(ts) - 1.5, yOf(ts) + 1.5, FAM.ALD.color, 0.9, false);
+        }
+      } else if (n.kind === "asolid" && show.cosmetic && n.asoStyleCode !== 15) {
+        airRibbon(t0, l0, w0, n.pA0 ?? 5, t1, l1, w1, n.pA1 ?? 5, n.color, 0.18);
+      }
+    }
+
+    // judgement line + past-line tail shade
+    ecx.fillStyle = "rgba(232,163,61,0.06)"; ecx.fillRect(0, yLine, W, H - yLine);
+    ecx.strokeStyle = "#e8a33d"; ecx.lineWidth = 2;
+    ecx.beginPath(); ecx.moveTo(0, yLine); ecx.lineTo(W, yLine); ecx.stroke();
+    // range label
+    ecx.fillStyle = "rgba(150,162,200,0.6)"; ecx.font = "9px ui-monospace, Menlo, monospace";
+    ecx.textAlign = "right"; ecx.textBaseline = "top";
+    ecx.fillText(`${eyeSpeed.toFixed(1)} · ${(LA / 1000).toFixed(1)}s`, W - 4, 3);
+  }
+
   function drawStrip() {
     const W = strip.width, H = strip.height;
     const css = getComputedStyle(document.documentElement);
@@ -3103,6 +3453,11 @@
       n.kind === "ald" && n.aldRuntime === "air_ladder" &&
       n.styleCode !== 15).length;
     if (paths) {
+      // Recovered inventory duplicated for the UI: the ordinary type-9 path
+      // has three streams; exact style NON/code 15 suppresses their resource
+      // IDs, and zero-interval NON is instead type-13 HeavenHold. Sources:
+      // claim.note.air-ladder-precalc-presentation and
+      // claim.presentation.heaven-hold-authored-mesh.
       rows += `<div class="row"><div class="sw" style="background:${ALD_STREAM_ZERO}"></div>` +
         `<span class="n">AirLadder authored path</span><span class="c">3 streams · ${paths}</span></div>`;
     }
@@ -3178,6 +3533,7 @@
         ).join("  ")
       : "";
     draw();
+    drawEye();
     drawStrip();
   }
 
@@ -3185,20 +3541,72 @@
   const fileIn = document.createElement("input");
   fileIn.type = "file";
   fileIn.accept = ".c2s,text/plain";
+  const loadFile = f => f.text().then(load).catch(error => {
+    console.error("chart load failed:", error);
+    el("unknown").textContent = "load failed: " + (error && error.message || error);
+    el("unkCard").hidden = false;
+  });
   fileIn.addEventListener("change", () => {
     const f = fileIn.files && fileIn.files[0];
-    if (f) f.text().then(load);
+    if (f) loadFile(f);
+    fileIn.value = "";   // allow re-choosing the same file
   });
   el("pick").addEventListener("click", e => { e.stopPropagation(); fileIn.click(); });
   drop.addEventListener("click", () => fileIn.click());
-  ["dragenter", "dragover"].forEach(ev =>
-    document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
-  ["dragleave", "drop"].forEach(ev =>
-    document.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
-  document.addEventListener("drop", e => {
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) f.text().then(load);
-  });
+  // Drag-and-drop, exactly the listener shape that worked before the
+  // bird's-eye restructure: plain preventDefault on the drag events (no
+  // dropEffect writes — setting dropEffect against an OS source whose
+  // effectAllowed is uninitialized makes Firefox void the drop on file://
+  // pages, delivering an empty dataTransfer), then a separate drop listener
+  // that reads the file. FileReader is the fallback when File.text is
+  // unavailable.
+  const readDropped = f => {
+    if (typeof f.text === "function") { loadFile(f); return; }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try { load(String(reader.result)); }
+      catch (error) {
+        console.error("chart load failed:", error);
+        el("unknown").textContent = "load failed: " + (error && error.message || error);
+        el("unkCard").hidden = false;
+      }
+    });
+    reader.addEventListener("error", () => console.error("chart read failed:", reader.error));
+    reader.readAsText(f);
+  };
+  const pickDroppedFile = dt => {
+    if (!dt) return null;
+    let f = dt.files && dt.files[0];
+    if (!f && dt.items) {
+      for (const item of dt.items) {
+        if (item.kind === "file") { f = item.getAsFile(); if (f) break; }
+      }
+    }
+    return f || null;
+  };
+  // Targets: the document (for drops anywhere) AND the field/viewport/drop
+  // elements directly. Firefox's protected-dataTransfer mode can expose the
+  // payload only to the element the drop actually lands on, so the
+  // element-level listeners are the ones that see it.
+  const dropTargets = [document, cv, drop, cv.parentElement].filter(Boolean);
+  for (const target of dropTargets) {
+    ["dragenter", "dragover"].forEach(ev =>
+      target.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+    target.addEventListener("dragleave", e => { e.preventDefault(); drop.classList.remove("hot"); });
+    target.addEventListener("drop", e => {
+      e.preventDefault();
+      drop.classList.remove("hot");
+      if (e.__c2sHandled) return;
+      const f = pickDroppedFile(e.dataTransfer);
+      if (f) { e.__c2sHandled = true; readDropped(f); }
+      else if (target === document) {
+        const dt = e.dataTransfer;
+        console.warn("drop received without a file (types: " + (dt ? [...dt.types].join(",") : "none") +
+                     ", files: " + (dt && dt.files ? dt.files.length : "n/a") +
+                     ", items: " + (dt && dt.items ? dt.items.length : "n/a") + ")");
+      }
+    });
+  }
 
   el("time").addEventListener("input", e => { now = +e.target.value; cancelGuides(); sync(); });
   el("speed").addEventListener("input", e => { speed = +e.target.value / 10; sync(); });
@@ -3259,6 +3667,11 @@
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
   toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
+  el("eyespeed").addEventListener("input", () => {
+    eyeSpeed = +el("eyespeed").value / 10;
+    el("eyeval").textContent = eyeSpeed.toFixed(1);
+    sync();
+  });
   el("tMirror").addEventListener("click", () => {
     mirrorOn = !mirrorOn;
     el("tMirror").setAttribute("aria-pressed", String(mirrorOn));
@@ -3328,6 +3741,8 @@
       charts: 0, parseErrors: 0, unknownRecords: 0,
       rejectedAssociations: 0, rejectedByCommand: {},
       rejectedByReference: {}, harnessErrors: 0,
+      group1Charts: 0, group1Records: 0, scheduleMismatches: 0,
+      mutationChecks: 0, mutationFailures: 0,
     };
     try {
       if (manifestUrl.origin !== location.origin || reportUrl.origin !== location.origin) {
@@ -3349,6 +3764,18 @@
           chartRequest.send();
           if (chartRequest.status !== 200) throw new Error("chart unavailable");
           const parsed = parseC2s(chartRequest.responseText);
+          const scheduleReference = window.C2sScheduleReference;
+          if (!scheduleReference) throw new Error("schedule reference unavailable");
+          const referenceSchedule = scheduleReference.build(
+            chartRequest.responseText, parsed.timeAt, parsed.R);
+          if (referenceSchedule.recordCount > 0) {
+            report.group1Charts++;
+            report.group1Records += referenceSchedule.recordCount;
+            if (scheduleReference.canonical(parsed) !==
+                scheduleReference.canonical(referenceSchedule)) {
+              report.scheduleMismatches++;
+            }
+          }
           for (const rejected of parsed.associationRejects) {
             const reference = `${rejected.cmd}:${rejected.root}`;
             report.rejectedByReference[reference] =
@@ -3367,6 +3794,51 @@
         } catch (error) {
           report.parseErrors++;
         }
+      }
+
+      // Issue-17 mutation sentinels: prove this comparison rejects the three
+      // category leaks it is designed to guard, without changing shipped
+      // behavior. A comparator that accidentally normalizes one away fails.
+      const mutationText = [
+        "BPM\t0\t0\t120",
+        "STP\t0\t0\t96",
+        "SFE\t0\t192\t96\t3",
+        "DCM\t1\t0\t96\t4",
+        "CLK\t1\t96",
+      ].join("\n");
+      const mutationParsed = parseC2s(mutationText);
+      const mutationReference = window.C2sScheduleReference.build(
+        mutationText, mutationParsed.timeAt, mutationParsed.R);
+      const mutationExpected = window.C2sScheduleReference.canonical(
+        mutationReference);
+      const mutationRecord = command =>
+        mutationParsed.regions.find(record => record.cmd === command);
+      const mutations = [];
+
+      const dcmLeak = window.C2sScheduleReference.clone(mutationParsed);
+      if (!dcmLeak.regionsByKey.has(0)) dcmLeak.regionsByKey.set(0, []);
+      const dcmRecord = mutationRecord("DCM");
+      dcmLeak.regionsByKey.get(0).push({
+        p: dcmRecord.p, start: dcmRecord.time,
+        end: dcmRecord.endTime, factor: dcmRecord.factor,
+      });
+      mutations.push(dcmLeak);
+
+      for (const command of ["SFE", "CLK"]) {
+        const leak = window.C2sScheduleReference.clone(mutationParsed);
+        if (!leak.regionsByKey.has(0)) leak.regionsByKey.set(0, []);
+        const record = mutationRecord(command);
+        leak.regionsByKey.get(0).push({
+          p: record.p, start: record.time,
+          end: record.endTime > record.time ? record.endTime : record.time + 1,
+          factor: record.factor ?? 0,
+        });
+        mutations.push(leak);
+      }
+      for (const mutation of mutations) {
+        report.mutationChecks++;
+        if (window.C2sScheduleReference.canonical(mutation) ===
+            mutationExpected) report.mutationFailures++;
       }
     } catch (error) {
       report.harnessErrors++;
@@ -3420,3 +3892,5 @@
   sync();
 })();
 </script>
+</body>
+</html>
