@@ -67,7 +67,8 @@ const harness = new Function("document", "window", "requestAnimationFrame",
   "fetch", "getComputedStyle",
   `${body}
    return { load, sync, setNow: v => { now = v; }, getChart: () => chart,
-            setMirror: v => { mirrorOn = v; } };`)(
+            setMirror: v => { mirrorOn = v; },
+            setEye: (on, speed) => { eyeOn = on; if (speed) eyeSpeed = speed; } };`)(
   documentStub, windowStub, noop,
   { userAgent: "smoke" }, { now: () => 0 },
   function XMLHttpRequestStub() { this.open = noop; this.send = noop; this.addEventListener = noop; },
@@ -104,10 +105,14 @@ for (const file of files) {
       const duration = harness.getChart().duration || 1;
       // step through the whole chart: every 250 ms plus the exact start/end
       const stepCount = Math.min(2000, Math.max(64, Math.ceil(duration / 250)));
+      // the bird's-eye strip runs alongside the field on every step, at a
+      // slow speed so far-scheduled records exercise its paths too
+      harness.setEye(true, 1.0);
       for (let i = 0; i <= stepCount; i++) {
         harness.setNow(duration * (i / stepCount));
-        harness.sync();   // sync() drives draw()
+        harness.sync();   // sync() drives draw() + drawEye()
       }
+      harness.setEye(false);
       console.log(`ok   ${id}${mirror ? " (mirrored)" : ""}`);
     } catch (error) {
       failures++;

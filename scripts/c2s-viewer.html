@@ -1,3 +1,6 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <title>c2s corridor — chart inspector</title>
 <style>
@@ -69,7 +72,10 @@
   }
 
   .wrap {
-    max-width: 1400px;
+    /* 1400 + the bird's-eye strip: the faithful field keeps its original
+       1036px column (and therefore its original height); the page widens
+       by the strip and its gap only. */
+    max-width: 1506px;
     margin: 0 auto;
     padding: 28px 24px 64px;
     display: flex;
@@ -90,11 +96,15 @@
 
   .stage {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    /* field | bird's-eye strip (~9% of the field's width) | rail. The
+       field's column is fixed at its pre-eye size so its height is
+       unchanged; the strip is scaled to that height. */
+    grid-template-columns: minmax(0, 1036px) 90px 300px;
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 90px 300px; } }
+  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } }
 
   .viewport {
     position: relative;
@@ -105,6 +115,22 @@
     box-shadow: var(--shadow);
   }
   canvas#field { display: block; width: 100%; height: auto; }
+  /* Bird's-eye panel: its own column beside the perspective field, about
+     30% of the field's width, orthographic, many lookaheads of range. */
+  .eyepanel {
+    position: relative;
+    background: #0a0c12;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    align-self: start;
+    /* height is set from the field's rendered height by script; the canvas
+       is absolutely positioned so its backing store never feeds back into
+       layout (which otherwise inflated the panel every frame). */
+    height: 583px;
+  }
+  canvas#eye { position: absolute; inset: 0; width: 100%; height: 100%; }
 
   .drop {
     position: absolute;
@@ -210,6 +236,8 @@
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header class="top">
@@ -225,6 +253,10 @@
         <span>Or click to choose one. The file stays on your machine — this page reads it locally and keeps no copy.</span>
         <button id="pick" type="button">Choose file</button>
       </div>
+    </div>
+
+    <div class="eyepanel" title="Bird's-eye: orthographic, lanes across and time down, many lookaheads of range. Air elements are squashed and slanted so stacked elements never hide the note beneath.">
+      <canvas id="eye" width="384" height="720"></canvas>
     </div>
 
     <div class="rail">
@@ -283,6 +315,10 @@
         <div class="ctl">
           <div class="lab"><span>Camera pitch</span><b id="tiltval">default</b></div>
           <input id="tilt" type="range" min="0" max="100" value="62" step="1" aria-label="Camera pitch">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>Bird's-eye speed</span><b id="eyeval">1.0</b></div>
+          <input id="eyespeed" type="range" min="4" max="30" value="10" step="1" aria-label="Bird's-eye scroll speed, same scale as note speed (tenths)">
         </div>
         <div class="ctl">
           <div class="lab"><span>Bar subdivision</span><b id="oval">off</b></div>
@@ -348,7 +384,10 @@
   // Product-choice hues applied to the three recovered asset-independent
   // ALD stream geometries. The packed VERTEX colors are recovered static
   // constants (0xffffffff for streams 0/1, 0x40ffffff for stream 2); only
-  // textures, materials, and final pixels are external.
+  // textures, materials, and final pixels are external. The canvas fill
+  // alphas (0.30/0.32/0.62) deliberately do NOT mirror those vertex alphas:
+  // the recovered alpha modulates an absent texture, so the silhouettes are
+  // ordered for legibility instead — a labeled product choice.
   const ALD_STREAM_ZERO = "#ff5ce0";
   const ALD_STREAM_TWO = "#a35cff";
   const ALD_STREAM_ONE = "#58275f";
@@ -898,9 +937,10 @@
       if (root.secondaryType !== null) root.note.airAttachedSecondary = true;
     }
 
-    // The air-hold anchor chain forces its FINAL saved endpoint as a judged
-    // checkpoint whether the last command is AHD or AHX
-    // (spec/notes/air_hold.md) — every air hold ends with an air action.
+    // The final saved endpoint is flagged for the DISPLAYED end action —
+    // owner footage (2194_03 m9) shows it on plain-AHD finals too. Judged
+    // action checkers exist only for authored AHX endpoints
+    // (spec/notes/air_hold.md); this flag drives display, not judgement.
     for (const chain of airHoldChains) {
       const last = chain.segments[chain.segments.length - 1];
       if (last) last.isChainFinal = true;
@@ -1184,11 +1224,19 @@
         gridHaltedAt = e.p;
         break;
       }
-      const beatStep = Math.trunc(R / unit);
-      const barStep = Math.trunc((count * R) / unit);
-      // The executable's malformed signed/unsigned division domain can yield
-      // zero and nonprogress. Refuse to invent a finite grid for that domain.
-      if (beatStep <= 0 || barStep <= 0) { gridHaltedAt = e.p; break; }
+      // Recovered arithmetic (spec/timing.md; c2s_meter_grid_steps): low-32-bit
+      // multiplication and UNSIGNED division. Negative/extreme authored
+      // components therefore yield huge (anchor-only) steps rather than
+      // negative ones; a resulting zero step is the source nonprogress domain
+      // and must not be replaced with a guessed grid.
+      const beatStep = Math.floor((R >>> 0) / (unit >>> 0));
+      const barStep = Math.floor((Math.imul(count, R) >>> 0) / (unit >>> 0));
+      if (beatStep === 0 || barStep === 0) {
+        beats.push({ p: e.p, time: timeAt(e.p), bar: true,
+                     m: Math.floor(e.p / R), b: 1, terminalMeterAnchor: true });
+        gridHaltedAt = e.p;
+        break;
+      }
       const bars = new Set();
       const beatPositions = new Set();
       for (let p = e.p; p < end; p += barStep) bars.add(p);
@@ -1464,13 +1512,16 @@
         lane: segment.endLane, width: segment.endWidth,
         vertical: segment.h1, segment,
       };
+      // Continuation compares the root's saved interval and parsed STYLE
+      // CODE (spec/notes/air_ladder.md; missing/unknown tokens share code 0).
       let chain = chains.find(candidate =>
         candidate.interval === segment.interval &&
-        candidate.style === segment.style && samePoint(candidate.last, start));
+        candidate.styleCode === segment.styleCode && samePoint(candidate.last, start));
       if (!chain) {
         chain = {
           interval: segment.interval,
           style: segment.style,
+          styleCode: segment.styleCode,
           root: start,
           controls: [],
           generated: [],
@@ -2283,12 +2334,15 @@
       if (n.kind === "asolid" && !show.cosmetic) continue;
 
       if (n.heavenPresentation) {
-        // The zero/NON ALD origin selects the missing-resource sentinel and
-        // is invisible on the cabinet: owner footage at 2194_03 m87
-        // (2026-08-11) shows only the co-located EXTAP pair, the air-ups,
-        // and the crush above — no element for the heaven records. Its
-        // judgement still exists, so the recovered shape stays inspectable
-        // under the Shape pts debug toggle.
+        // The zero/NON ALD origin is invisible on the cabinet (owner footage
+        // 2194_03 m87, 2026-08-11: only the co-located EXTAP pair, air-ups,
+        // and the crush above). Code-side basis: its deliberately empty
+        // generated path reaches body phase 4 at the first eligible path
+        // update (claim.presentation.heaven-hold-authored-mesh) — there is
+        // NO NON null-resource selector; the absent START image remains an
+        // external-resource / footage boundary. Its judgement still exists,
+        // so the recovered shape stays inspectable under Shape pts, labeled
+        // a viewer extrapolation.
         if (n.kind !== "ald" || show.bars) {
           drawHeavenHold(n.heavenPresentation, W, H, depthAt);
         }
@@ -2357,7 +2411,7 @@
         if (n.cmd === "MNE" || n.kind === "asolid") continue;
         if (n.kind === "air" || n.kind === "aslide" || n.kind === "ahold" ||
             (n.kind === "ald" && !n.heavenPresentation)) continue;
-        drawWindow(n, W, H, LA);
+        drawWindow(n, W, H, LA, depthAt);
       }
     }
     clipNote = null;
@@ -2904,6 +2958,25 @@
       edges[1].push({ t, lane: lane + w, hA, hB });
     }
     const near = project(s0, 0, 0, W, H);
+    // Recovered shell (claim.note.air-solid-presentation): a face at height A
+    // and a face at height B, each spanning left edge to right edge along the
+    // segment, plus the end-A to start-B diagonal bridge — so an A==B segment
+    // still shows a filled surface rather than collapsing to a line.
+    const face = key => {
+      cx2.beginPath();
+      edges[0].forEach((e, i) => { const p = project(e.t, e.lane, e[key], W, H); i === 0 ? cx2.moveTo(p.x, p.y) : cx2.lineTo(p.x, p.y); });
+      for (let i = edges[1].length - 1; i >= 0; i--) { const e = edges[1][i]; const p = project(e.t, e.lane, e[key], W, H); cx2.lineTo(p.x, p.y); }
+      cx2.closePath(); cx2.fillStyle = n.color + "24"; cx2.fill();
+    };
+    face("hA"); face("hB");
+    {
+      const a0 = edges[0][edges[0].length - 1], a1 = edges[1][edges[1].length - 1];
+      const b0 = edges[0][0], b1 = edges[1][0];
+      const p1 = project(a0.t, a0.lane, a0.hA, W, H), p2 = project(a1.t, a1.lane, a1.hA, W, H);
+      const p3 = project(b1.t, b1.lane, b1.hB, W, H), p4 = project(b0.t, b0.lane, b0.hB, W, H);
+      cx2.beginPath(); cx2.moveTo(p1.x, p1.y); cx2.lineTo(p2.x, p2.y); cx2.lineTo(p3.x, p3.y); cx2.lineTo(p4.x, p4.y); cx2.closePath();
+      cx2.fillStyle = n.color + "1c"; cx2.fill();
+    }
     for (const edge of edges) {
       cx2.beginPath();
       edge.forEach((e, i) => {
@@ -3068,12 +3141,17 @@
     cx2.stroke();
   }
 
-  function drawWindow(n, W, H, LA) {
+  // The diagnostic window overlay rides the PROJECTED note (same keyed
+  // schedule + factor as the body it annotates) so it stays attached under
+  // Apply scroll; the window widths themselves are authored-time slider
+  // values, a product diagnostic, not recovered magnitudes.
+  function drawWindow(n, W, H, LA, depthAt) {
     const front = Math.min(winMs, n.frontLimit ?? Infinity);
     const back = winMs;
-    const tHit = (n.time - now) / LA;
-    const tEarly = (n.time - front - now) / LA;   // furthest you can hit it early
-    const tLate = (n.time + back - now) / LA;
+    const at = depthAt ? ms => depthAt(ms, n.slaKey) : ms => (ms - now) / LA;
+    const tHit = at(n.time);
+    const tEarly = at(n.time - front);   // furthest you can hit it early
+    const tLate = at(n.time + back);
     if (tLate < -0.1 || tEarly > 1) return;
     const clamp = v => Math.max(-0.08, Math.min(1, v));
     const e = clamp(tEarly), l = clamp(tLate);
@@ -3104,6 +3182,190 @@
   }
 
   // ---- density strip ------------------------------------------------------
+  // ---- bird's-eye view ---------------------------------------------------
+  // A parallel orthographic reading of the same model: lanes across, time
+  // down (future at top), covering several lookaheads instead of one. Depths
+  // are AUTHORED time — no scroll regions, no DCM — so the strip shows the
+  // chart as written while the field shows it as the cabinet warps it.
+  // Air elements are squashed into thin translucent ribbons drawn over the
+  // ground notes so a stacked crush never hides the note beneath it. Product view:
+  // it depicts recovered timing/geometry but is not a cabinet camera.
+  const eyeCv = document.getElementById("eye");
+  const ecx = eyeCv ? eyeCv.getContext("2d") : null;
+  // The strip has its own scroll speed, independent of the field's note
+  // speed. Its scale is rebased so BEV speed 1.0 == note-speed 2.5 worth of
+  // lookahead (owner preference): lookahead = 5388.9 / (2.5 * speed).
+  const EYE_SPEED_SCALE = 2.5;
+  let eyeOn = true, eyeSpeed = 1.0;
+  const eyeLookahead = () => LOOK_BASE / (EYE_SPEED_SCALE * eyeSpeed);
+  const EYE_TAIL = 0.12;               // past-line fraction of the strip height
+  // Pure orthographic: no height parallax. Airborne elements draw at their
+  // true lane and time, translucent and on top of ground notes.
+
+  function drawEye() {
+    if (!eyeOn || !ecx || !chart) return;
+    // Match the panel's height to the field's rendered height (the field's
+    // width is layout-fixed, so its height is the anchor), then size the
+    // backing store to the panel's box in device pixels for crispness.
+    const fieldBox = cv.getBoundingClientRect();
+    if (fieldBox.height > 0) {
+      const target = Math.round(fieldBox.height) + "px";
+      if (eyeCv.parentElement && eyeCv.parentElement.style.height !== target) {
+        eyeCv.parentElement.style.height = target;
+      }
+    }
+    const box = eyeCv.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0) {
+      const dpr = window.devicePixelRatio || 1;
+      const bw = Math.round(box.width * dpr), bh = Math.round(box.height * dpr);
+      if (eyeCv.width !== bw || eyeCv.height !== bh) { eyeCv.width = bw; eyeCv.height = bh; }
+    }
+    const W = eyeCv.width, H = eyeCv.height;
+    ecx.clearRect(0, 0, W, H);
+    const LA = eyeLookahead();
+    const padX = Math.max(3, W * 0.02), laneW = (W - padX * 2) / 16;
+    const yLine = H * (1 - EYE_TAIL);              // judgement line
+    const pxPerLA = yLine;                         // one eye-lookahead fills the strip
+    const yOf = t => yLine - t * pxPerLA;          // t in eye-lookaheads
+    const xOf = lane => padX + lane * laneW;
+    // The strip reads AUTHORED time: no chart-region scroll transform and no
+    // DCM projection factor, regardless of the field's Apply scroll toggle.
+    // It is a chart-reading view, so gimmicks that warp the field's depths
+    // must not warp this one.
+    const depth = (ms, key) => (ms - now) / LA;
+    const tMin = -EYE_TAIL, tMax = 1;
+
+    // lane dividers + judgement line
+    ecx.strokeStyle = "rgba(150,162,200,0.10)"; ecx.lineWidth = 1;
+    for (let l = 0; l <= 16; l++) {
+      ecx.beginPath(); ecx.moveTo(xOf(l) + 0.5, 0); ecx.lineTo(xOf(l) + 0.5, H); ecx.stroke();
+    }
+    // beat grid (bars brighter), same schedule as the field
+    if (show.grid) {
+      for (const bt of chart.beats) {
+        const t = depth(bt.time, 0);
+        if (t < tMin || t > tMax) continue;
+        const y = yOf(t);
+        ecx.strokeStyle = bt.bar ? "rgba(150,162,200,0.45)" : "rgba(150,162,200,0.16)";
+        ecx.lineWidth = bt.bar ? 1.2 : 1;
+        ecx.beginPath(); ecx.moveTo(padX, y); ecx.lineTo(W - padX, y); ecx.stroke();
+        if (bt.bar) {
+          ecx.fillStyle = "rgba(150,162,200,0.7)";
+          ecx.font = "9px ui-monospace, Menlo, monospace";
+          ecx.textAlign = "left"; ecx.textBaseline = "bottom";
+          ecx.fillText(bt.t ? `${bt.m}:${String(bt.t).padStart(3, "0")}` : String(bt.m), padX + 1, y - 1);
+        }
+      }
+    }
+
+    // authored-time window: anything overlapping the strip's range is shown
+    const eligible = n => {
+      const t0 = depth(n.time), t1 = depth(n.endTime);
+      return Math.max(t0, t1) >= tMin && Math.min(t0, t1) <= tMax;
+    };
+    const rect = (lane, w, y0, y1, color, alpha, outline) => {
+      const x = xOf(lane), width = w * laneW;
+      const top = Math.min(y0, y1), h = Math.max(1.5, Math.abs(y1 - y0));
+      ecx.globalAlpha = alpha; ecx.fillStyle = color;
+      ecx.fillRect(x + 1, top, Math.max(1, width - 2), h);
+      if (outline) { ecx.strokeStyle = "rgba(255,255,255,0.55)"; ecx.lineWidth = 1; ecx.strokeRect(x + 1.5, top + 0.5, Math.max(1, width - 3), h - 1); }
+      ecx.globalAlpha = 1;
+    };
+    // squashed, slanted air ribbon between two lane/height points
+    const airRibbon = (t0, l0, w0, h0, t1, l1, w1, h1, color, alpha) => {
+      const x0a = xOf(l0) + 1, x0b = xOf(l0 + w0) - 1;
+      const x1a = xOf(l1) + 1, x1b = xOf(l1 + w1) - 1;
+      const y0 = yOf(t0), y1 = yOf(t1);
+      ecx.globalAlpha = alpha; ecx.fillStyle = color;
+      ecx.beginPath(); ecx.moveTo(x0a, y0); ecx.lineTo(x0b, y0); ecx.lineTo(x1b, y1); ecx.lineTo(x1a, y1); ecx.closePath(); ecx.fill();
+      ecx.strokeStyle = color; ecx.lineWidth = 1; ecx.globalAlpha = Math.min(1, alpha + 0.35);
+      ecx.beginPath(); ecx.moveTo(x0a, y0); ecx.lineTo(x1a, y1); ecx.moveTo(x0b, y0); ecx.lineTo(x1b, y1); ecx.stroke();
+      ecx.globalAlpha = 1;
+    };
+    // The field's block chevron, squashed: spans the whole note width, only
+    // a few pixels tall, sits just above the note it belongs to. Filled, so
+    // it reads as the fat air arrow rather than a hairline.
+    const chevron = (t, lane, w, up, color) => {
+      const y = yOf(t) - barH * 0.5 - 1;          // ride on top of the note bar
+      const L = xOf(lane) + 1, R = xOf(lane + w) - 1, mid = (L + R) / 2;
+      const hgt = Math.max(5, Math.min(9, laneW * 1.6));   // squashed height
+      const tip = up ? y - hgt : y, tail = up ? y : y - hgt;
+      const notch = hgt * 0.35, sgn = up ? 1 : -1;
+      ecx.globalAlpha = 0.9; ecx.fillStyle = color;
+      ecx.beginPath();
+      ecx.moveTo(mid, tip);                       // head apex
+      ecx.lineTo(R, tip + sgn * notch);           // right shoulder
+      ecx.lineTo(R, tail);                        // right tail corner
+      ecx.lineTo(mid, tail - sgn * notch);        // carved tail apex
+      ecx.lineTo(L, tail);                        // left tail corner
+      ecx.lineTo(L, tip + sgn * notch);           // left shoulder
+      ecx.closePath(); ecx.fill();
+      ecx.strokeStyle = "rgba(255,255,255,0.6)"; ecx.lineWidth = 0.8; ecx.stroke();
+      ecx.globalAlpha = 1;
+    };
+    const barH = Math.max(3, Math.min(6, H * 0.006));   // thin: ~3-4px at strip scale
+
+    // far-to-near so nearer overdraws farther, ground first then air on top
+    const list = chart.notes.filter(n => n.kind !== "region" && eligible(n));
+    list.sort((a, b) => b.time - a.time);
+    const groundPass = [], airPass = [];
+    for (const n of list) (AIR_KINDS.has(n.kind) && !n.heavenPresentation ? airPass : groundPass).push(n);
+
+    for (const n of groundPass) {
+      const t0 = depth(n.time, n.slaKey), t1 = depth(n.endTime, n.endSlaKey ?? n.slaKey);
+      if (Math.max(t0, t1) < tMin || Math.min(t0, t1) > tMax) continue;
+      if (n.kind === "hold" || n.kind === "slide" || n.heavenPresentation) {
+        const l0 = n.lane, w0 = n.width, l1 = n.endLane ?? n.lane, w1 = n.endWidth ?? n.width;
+        // body as a trapezoid between endpoints
+        ecx.globalAlpha = 0.35; ecx.fillStyle = n.color;
+        ecx.beginPath();
+        ecx.moveTo(xOf(l0) + 1, yOf(t0)); ecx.lineTo(xOf(l0 + w0) - 1, yOf(t0));
+        ecx.lineTo(xOf(l1 + w1) - 1, yOf(t1)); ecx.lineTo(xOf(l1) + 1, yOf(t1));
+        ecx.closePath(); ecx.fill(); ecx.globalAlpha = 1;
+        const isStart = n.kind !== "slide" || n.isRoot;
+        if (isStart) rect(l0, w0, yOf(t0) - barH / 2, yOf(t0) + barH / 2, rootColor(n), 1, true);
+        if (n.kind === "hold" || (n.kind === "slide" && (n.isFinal || n.marker)))
+          rect(l1, w1, yOf(t1) - barH / 2, yOf(t1) + barH / 2, n.kind === "slide" ? SLIDE_ENDPOINT : n.color, 1, true);
+      } else {
+        rect(n.lane, n.width, yOf(t0) - barH / 2, yOf(t0) + barH / 2, rootColor(n), 1, true);
+      }
+    }
+    for (const n of airPass) {
+      const t0 = depth(n.time, n.slaKey), t1 = depth(n.endTime, n.endSlaKey ?? n.slaKey);
+      if (Math.max(t0, t1) < tMin || Math.min(t0, t1) > tMax) continue;
+      const l0 = n.lane, w0 = n.width, l1 = n.endLane ?? n.lane, w1 = n.endWidth ?? n.width;
+      if (n.kind === "air") {
+        chevron(t0, l0, w0, n.cmd === "AIR" || n.cmd === "AUL" || n.cmd === "AUR", n.color);
+      } else if (n.kind === "ahold") {
+        airRibbon(t0, l0, w0, 5, t1, l0, w0, 5, n.color, 0.28);
+        if (n.isAction || n.isChainFinal) rect(l0, w0, yOf(t1) - 2, yOf(t1) + 2, ACTION, 0.95, false);
+      } else if (n.kind === "aslide") {
+        airRibbon(t0, l0, w0, n.h0, t1, l1, w1, n.h1, n.color, 0.28);
+        if (n.isAction) rect(l1, w1, yOf(t1) - 2, yOf(t1) + 2, ACTION, 0.95, false);
+      } else if (n.kind === "ald") {
+        if (n.aldRuntime === "air_ladder" && n.styleCode !== 15)
+          airRibbon(t0, l0, w0, n.h0, t1, l1, w1, n.h1, n.color, 0.22);
+        for (const sample of n.generated || []) {
+          const ts = depth(sample.time, sample.slaKey);
+          if (ts < tMin || ts > tMax) continue;
+          rect(sample.lane, sample.width,
+               yOf(ts) - 1.5, yOf(ts) + 1.5, FAM.ALD.color, 0.9, false);
+        }
+      } else if (n.kind === "asolid" && show.cosmetic && n.asoStyleCode !== 15) {
+        airRibbon(t0, l0, w0, n.pA0 ?? 5, t1, l1, w1, n.pA1 ?? 5, n.color, 0.18);
+      }
+    }
+
+    // judgement line + past-line tail shade
+    ecx.fillStyle = "rgba(232,163,61,0.06)"; ecx.fillRect(0, yLine, W, H - yLine);
+    ecx.strokeStyle = "#e8a33d"; ecx.lineWidth = 2;
+    ecx.beginPath(); ecx.moveTo(0, yLine); ecx.lineTo(W, yLine); ecx.stroke();
+    // range label
+    ecx.fillStyle = "rgba(150,162,200,0.6)"; ecx.font = "9px ui-monospace, Menlo, monospace";
+    ecx.textAlign = "right"; ecx.textBaseline = "top";
+    ecx.fillText(`${eyeSpeed.toFixed(1)} · ${(LA / 1000).toFixed(1)}s`, W - 4, 3);
+  }
+
   function drawStrip() {
     const W = strip.width, H = strip.height;
     const css = getComputedStyle(document.documentElement);
@@ -3271,6 +3533,7 @@
         ).join("  ")
       : "";
     draw();
+    drawEye();
     drawStrip();
   }
 
@@ -3278,20 +3541,72 @@
   const fileIn = document.createElement("input");
   fileIn.type = "file";
   fileIn.accept = ".c2s,text/plain";
+  const loadFile = f => f.text().then(load).catch(error => {
+    console.error("chart load failed:", error);
+    el("unknown").textContent = "load failed: " + (error && error.message || error);
+    el("unkCard").hidden = false;
+  });
   fileIn.addEventListener("change", () => {
     const f = fileIn.files && fileIn.files[0];
-    if (f) f.text().then(load);
+    if (f) loadFile(f);
+    fileIn.value = "";   // allow re-choosing the same file
   });
   el("pick").addEventListener("click", e => { e.stopPropagation(); fileIn.click(); });
   drop.addEventListener("click", () => fileIn.click());
-  ["dragenter", "dragover"].forEach(ev =>
-    document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
-  ["dragleave", "drop"].forEach(ev =>
-    document.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
-  document.addEventListener("drop", e => {
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) f.text().then(load);
-  });
+  // Drag-and-drop, exactly the listener shape that worked before the
+  // bird's-eye restructure: plain preventDefault on the drag events (no
+  // dropEffect writes — setting dropEffect against an OS source whose
+  // effectAllowed is uninitialized makes Firefox void the drop on file://
+  // pages, delivering an empty dataTransfer), then a separate drop listener
+  // that reads the file. FileReader is the fallback when File.text is
+  // unavailable.
+  const readDropped = f => {
+    if (typeof f.text === "function") { loadFile(f); return; }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try { load(String(reader.result)); }
+      catch (error) {
+        console.error("chart load failed:", error);
+        el("unknown").textContent = "load failed: " + (error && error.message || error);
+        el("unkCard").hidden = false;
+      }
+    });
+    reader.addEventListener("error", () => console.error("chart read failed:", reader.error));
+    reader.readAsText(f);
+  };
+  const pickDroppedFile = dt => {
+    if (!dt) return null;
+    let f = dt.files && dt.files[0];
+    if (!f && dt.items) {
+      for (const item of dt.items) {
+        if (item.kind === "file") { f = item.getAsFile(); if (f) break; }
+      }
+    }
+    return f || null;
+  };
+  // Targets: the document (for drops anywhere) AND the field/viewport/drop
+  // elements directly. Firefox's protected-dataTransfer mode can expose the
+  // payload only to the element the drop actually lands on, so the
+  // element-level listeners are the ones that see it.
+  const dropTargets = [document, cv, drop, cv.parentElement].filter(Boolean);
+  for (const target of dropTargets) {
+    ["dragenter", "dragover"].forEach(ev =>
+      target.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+    target.addEventListener("dragleave", e => { e.preventDefault(); drop.classList.remove("hot"); });
+    target.addEventListener("drop", e => {
+      e.preventDefault();
+      drop.classList.remove("hot");
+      if (e.__c2sHandled) return;
+      const f = pickDroppedFile(e.dataTransfer);
+      if (f) { e.__c2sHandled = true; readDropped(f); }
+      else if (target === document) {
+        const dt = e.dataTransfer;
+        console.warn("drop received without a file (types: " + (dt ? [...dt.types].join(",") : "none") +
+                     ", files: " + (dt && dt.files ? dt.files.length : "n/a") +
+                     ", items: " + (dt && dt.items ? dt.items.length : "n/a") + ")");
+      }
+    });
+  }
 
   el("time").addEventListener("input", e => { now = +e.target.value; cancelGuides(); sync(); });
   el("speed").addEventListener("input", e => { speed = +e.target.value / 10; sync(); });
@@ -3352,6 +3667,11 @@
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
   toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
+  el("eyespeed").addEventListener("input", () => {
+    eyeSpeed = +el("eyespeed").value / 10;
+    el("eyeval").textContent = eyeSpeed.toFixed(1);
+    sync();
+  });
   el("tMirror").addEventListener("click", () => {
     mirrorOn = !mirrorOn;
     el("tMirror").setAttribute("aria-pressed", String(mirrorOn));
@@ -3572,3 +3892,5 @@
   sync();
 })();
 </script>
+</body>
+</html>
