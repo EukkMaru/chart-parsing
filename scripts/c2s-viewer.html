@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>c2s corridor — chart inspector</title>
+<title>cmr corridor — chart inspector</title>
 <style>
   :root {
     --ground: #f2f3f7;
@@ -99,12 +99,19 @@
     /* field | bird's-eye strip (~9% of the field's width) | rail. The
        field's column is fixed at its pre-eye size so its height is
        unchanged; the strip is scaled to that height. */
-    grid-template-columns: minmax(0, 1036px) 90px 300px;
+    grid-template-columns: minmax(0, 1142px) 300px;
     gap: 16px;
     align-items: start;
   }
-  @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 90px 300px; } }
-  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } }
+  .stageleft {
+    display: grid;
+    grid-template-columns: minmax(0, 1036px) 90px;
+    gap: 16px;
+    align-items: start;
+    min-width: 0;
+  }
+  @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 300px; } .stageleft { grid-template-columns: minmax(0, 1fr) 90px; } }
+  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .stageleft { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } .codepanes { grid-column: 1; } .cp-body { height: 220px; } }
 
   .viewport {
     position: relative;
@@ -222,6 +229,29 @@
   .flag code { color: var(--ink); }
 
   .timeline { position: relative; }
+  /* The rail runs much taller than the field, so the source panes sit in
+     the leftover space: columns 1-2 (field + bird's-eye width), row 2,
+     stretching down to the rail's bottom edge. */
+  .codepanes { grid-column: 1 / span 2; margin-top: 0;
+               display: flex; flex-direction: column; min-height: 0; }
+  .cp-bar { display: flex; justify-content: space-between; align-items: center;
+            font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+  .cp-follow { display: flex; gap: 6px; align-items: center; cursor: pointer;
+               user-select: none; }
+  .cp-cols { display: flex; gap: 12px; flex: 1; min-height: 0; }
+  .cp { flex: 1; min-width: 0; background: var(--panel);
+        border: 1px solid var(--line); border-radius: 10px;
+        box-shadow: var(--shadow); overflow: hidden;
+        display: flex; flex-direction: column; }
+  .cp-title { font: 600 11px/1 ui-monospace, "Cascadia Mono", Menlo, monospace;
+              color: var(--ink-3); padding: 8px 10px;
+              border-bottom: 1px solid var(--line); }
+  .cp-body { height: 300px; overflow: auto; position: relative;
+             font: 11px/1.55 ui-monospace, "Cascadia Mono", Menlo, monospace;
+             white-space: pre-wrap; overflow-wrap: anywhere;
+             color: var(--ink-2); }
+  .cp-body .cl { padding: 0 10px; min-height: 1.55em; }
+  .cp-body .hl { border-radius: 3px; }
   canvas#strip { display: block; width: 100%; height: 54px; cursor: crosshair; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); }
 
   footer.note {
@@ -241,11 +271,12 @@
 
 <div class="wrap">
   <header class="top">
-    <h1>c2s corridor</h1>
+    <h1>cmr corridor</h1>
     <p class="sub">Chart inspector for <b>.c2s</b> files. Renders the playfield as the cabinet presents it — sixteen lanes tapering toward the far end, judgement line across the bottom, air notes floating above at their authored height. Nothing is uploaded; the file is parsed in this page.</p>
   </header>
 
   <div class="stage">
+    <div class="stageleft">
     <div class="viewport">
       <canvas id="field" width="1280" height="720"></canvas>
       <div class="drop" id="drop">
@@ -259,6 +290,19 @@
       <canvas id="eye" width="384" height="720"></canvas>
     </div>
 
+  <div class="codepanes" id="codepanes" hidden>
+      <div class="cp-bar">
+        <b>chart source &mdash; the cmr corridor</b>
+        <label class="cp-follow" title="Highlight notes in family colors as they play and keep both panes scrolled to the active note.">
+          <input type="checkbox" id="followCur"> follow cursor
+        </label>
+      </div>
+      <div class="cp-cols">
+        <div class="cp"><div class="cp-title">cmr</div><div class="cp-body" id="cmrPane"></div></div>
+        <div class="cp"><div class="cp-title">ilcmr</div><div class="cp-body" id="ilPane"></div></div>
+      </div>
+    </div>
+    </div>
     <div class="rail">
       <div class="card">
         <h2>Transport</h2>
@@ -289,7 +333,7 @@
           <input id="rate" type="range" min="10" max="200" value="100" step="5" aria-label="Playback rate">
         </div>
         <div class="ctl">
-          <div class="lab"><span><button id="tGuide" type="button" aria-pressed="true" title="Synthesized guide clicks at owner-specified cue instants. The judgement line pulses at each click for silent environments.">Guide</button> <button id="tMetro" type="button" aria-pressed="false" title="Woodblock metronome on the meter-aware beat grid, downbeat accented.">Metro</button></span><b id="gmval">0 ms</b></div>
+          <div class="lab"><span><button id="tGuide" type="button" aria-pressed="true" title="Guide clicks (owner-provided wood click sample, attack-sharpened) at owner-specified cue instants. The judgement line pulses at each click for silent environments.">Guide</button> <button id="tMetro" type="button" aria-pressed="false" title="Woodblock metronome on the meter-aware beat grid, downbeat accented.">Metro</button></span><b id="gmval">0 ms</b></div>
           <input id="gmerge" type="range" min="-200" max="200" value="0" step="5" aria-label="Sound delay">
         </div>
       </div>
@@ -306,6 +350,7 @@
           <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
           <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
           <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
+          <button id="tAnmitsu" type="button" aria-pressed="false" title="Highlight rubbable note pairs: overlapping lanes with a gap inside the judgement window, so one continuous contact catches both. Magenta: both land Justice Critical (gap ≤ 33.33 ms; ≤ 83.33 ms when both are EX — EX judges JC across its whole window). White: Justice-range (gap ≤ 66.67 ms). The band marks the shared lanes to rub.">Anmitsu</button>
           <button id="tSlp" type="button" aria-pressed="true" title="Apply the recovered chart-region transforms: STP/SFL/SLP shift a note along the track, keyed per note by its containing SLA region; DCM scales its projected distance.">Apply scroll</button>
         </div>
         <div class="ctl">
@@ -356,6 +401,7 @@
     <canvas id="strip" width="2240" height="108"></canvas>
   </div>
 
+
   <footer class="note">
     <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> schedule on this snapshot's fixed 384-tick grid; authored <code>RESOLUTION</code> is recognized but rejected. The perspective projection/view/viewport algorithm is recovered and normative; only the resource-selected camera pose — represented here by owner-calibrated fitted parameters — and the framebuffer dimensions remain external inputs. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
     <br><br>
@@ -367,6 +413,1759 @@
 <script>
 (() => {
   "use strict";
+
+  // ==== CMR CORRIDOR (generated from cmr/tools + ilcmr/tools by
+  // scripts/embed_corridor.mjs — DO NOT EDIT BY HAND; edit the tools and
+  // re-run the generator; the corpus gates certify the tools) ====
+  const CMR = (() => {
+  // ---- from cmr/tools/lib/ast.mjs ----
+// cmr AST <-> cmr text. The AST is the shared shape between c2cmr's
+// association pass (assoc.mjs) and the emitters. This module is
+// deployment-safe: it knows only cmr.
+const R = 384;
+
+const FX_WORD = new Map([
+  ["UP","up"],["DW","down"],["CE","center"],["RC","right-center"],
+  ["LC","left-center"],["RS","right-side"],["LS","left-side"],["BS","both-sides"],
+]);
+const FX_TOKEN = new Map([...FX_WORD].map(([t, w]) => [w, t]));
+
+const META_KEY = new Map([
+  ["VERSION","version"],["MUSIC","music"],["SEQUENCEID","sequence"],
+  ["DIFFICULT","difficulty"],["LEVEL","level"],["CREATOR","creator"],
+  ["BPM_DEF","bpm-default"],["MET_DEF","meter-default"],
+  ["RESOLUTION","resolution"],["CLK_DEF","clock"],
+  ["PROGJUDGE_BPM","progjudge-bpm"],["PROGJUDGE_AER","progjudge-aer"],
+  ["TUTORIAL","tutorial"],
+]);
+const META_CMD = new Map([...META_KEY].map(([c, k]) => [k, c]));
+const STRING_META = new Set(["difficulty", "creator", "version"]);
+
+const fmt = v => {
+  if (typeof v !== "number") return String(v);
+  // minimal spelling; guard float artifacts from tenths arithmetic
+  const r = Math.round(v * 1e6) / 1e6;
+  return String(r);
+};
+const mt = p => {
+  const m = Math.floor(p / R), t = p - m * R;
+  return `${m}:${String(t).padStart(3, "0")}`;
+};
+const fxOut = tok => FX_WORD.get(tok) ?? tok;
+
+// clause helper: emit `word tok` per the presence/inheritance rule
+const clause = (word, stepTok, headTok) => {
+  if (stepTok === undefined) return headTok === undefined ? "" : ` ${word} none`;
+  if (stepTok === headTok) return "";
+  return ` ${word} ${word === "fx" ? fxOut(stepTok) : stepTok}`;
+};
+const airOut = airs => (airs || []).map(a =>
+  ` +air:${a.dir}${a.style !== undefined ? ` style ${a.style}` : ""}`).join("");
+
+function emitCmr(ast) {
+  const out = ["cmr 1", "", "[meta]"];
+  for (const { key, value } of ast.meta) out.push(`${key}: ${value}`);
+  out.push("stats: derived");
+  if (ast.statsOverrides.length) {
+    out.push("stats.overrides:");
+    for (const [name, value] of ast.statsOverrides) out.push(`  ${name}: ${value}`);
+  }
+  out.push("", "[events]");
+  for (const e of ast.events) {
+    switch (e.cmd) {
+      case "BPM": out.push(`BPM ${mt(e.p)} ${fmt(e.bpm)}`); break;
+      case "MET": out.push(`METER ${mt(e.p)} ${fmt(e.count)}/${fmt(e.unit)}`); break;
+      case "SFL": out.push(`SCROLL ${mt(e.p)} x${fmt(e.factor)} until ${mt(e.p + e.dur)}`); break;
+      case "SLP": out.push(`SCROLL ${mt(e.p)} x${fmt(e.factor)} until ${mt(e.p + e.dur)} key ${fmt(e.key)}`); break;
+      case "STP": out.push(`STOP ${mt(e.p)} until ${mt(e.p + e.dur)}`); break;
+      case "DCM": out.push(`DEPTH ${mt(e.p)} x${fmt(e.factor)} until ${mt(e.p + e.dur)}`); break;
+      case "SFE": out.push(`SCROLL-DEAD ${mt(e.p)} x${fmt(e.factor)} until ${mt(e.p + e.dur)}`); break;
+      case "CLK": out.push(`CLICK ${mt(e.p)}`); break;
+    }
+  }
+  out.push("", "[notes]");
+  let blockM = null;
+  const tick = p => {
+    const m = Math.floor(p / R);
+    if (blockM === null || m > blockM) { out.push(`@${m}`); blockM = m; }
+    return m === blockM ? String(p - m * R).padStart(3, "0") : mt(p);
+  };
+  for (const it of ast.items) {
+    switch (it.k) {
+      case "note": {
+        out.push(`${it.family} ${tick(it.p)} L${it.lane} w${it.width}` +
+          (it.note !== undefined ? ` note ${it.note}` : "") + airOut(it.airs));
+        break;
+      }
+      case "hold": {
+        out.push(`${it.family} ${tick(it.p)} L${it.lane} w${it.width} until ${mt(it.endP)}` +
+          (it.fx !== undefined ? ` fx ${fxOut(it.fx)}` : "") + airOut(it.airs));
+        break;
+      }
+      case "slide": {
+        out.push(`${it.family} ${tick(it.p)} L${it.lane} w${it.width}` +
+          (it.headStyle !== undefined ? ` style ${it.headStyle}` : "") +
+          (it.headFx !== undefined ? ` fx ${fxOut(it.headFx)}` : ""));
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          let line = `  ${s.marked ? "->" : "~>"} ${mt(s.p)} L${s.lane}`;
+          if (s.sevenField) {
+            line += ` w${s.width}`;
+            line += clause("style", s.style, it.headStyle);
+            if (s.ex) line += clause("fx", s.fx, it.headEx ? it.headFx : undefined);
+          }
+          if (s.ex !== it.headEx) line += s.ex ? " ex" : " plain";
+          if (last) line += " end";
+          line += airOut(s.airs);
+          out.push(line);
+        });
+        break;
+      }
+      case "ahold": {
+        out.push(`AIRHOLD ${tick(it.p)} L${it.lane} w${it.width} on ${it.on}` +
+          (it.note !== undefined ? ` note ${it.note}` : ""));
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          out.push(`  ${s.action ? "->" : "~>"} ${mt(s.p)}` +
+            (s.note !== undefined ? ` note ${s.note}` : "") + (last ? " end" : ""));
+        });
+        break;
+      }
+      case "aslide": {
+        out.push(`AIRSLIDE ${tick(it.p)} L${it.lane} w${it.width} h${fmt(it.h0)} on ${it.on}` +
+          (it.headStyle !== undefined ? ` style ${it.headStyle}` : ""));
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          let line = `  ${s.action ? "->" : "~>"} ${mt(s.p)} L${s.lane} w${s.width} h${fmt(s.h1)}`;
+          if (s.from !== undefined) line += ` from h${fmt(s.from)}`;
+          line += clause("style", s.style, it.headStyle);
+          if (last) line += " end";
+          out.push(line);
+        });
+        break;
+      }
+      case "crush": {
+        if (it.single) {
+          const s = it.steps[0];
+          out.push(`CRUSH ${tick(it.p)} L${it.lane} w${it.width} h${fmt(it.h0)} ` +
+            `every ${it.interval} until ${mt(s.p)} L${s.lane} w${s.width} h${fmt(s.h1)}` +
+            (it.headStyle !== undefined ? ` style ${it.headStyle}` : "") + airOut(s.airs));
+          break;
+        }
+        out.push(`CRUSH ${tick(it.p)} L${it.lane} w${it.width} h${fmt(it.h0)} every ${it.interval}` +
+          (it.headStyle !== undefined ? ` style ${it.headStyle}` : ""));
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          out.push(`  ~> ${mt(s.p)} L${s.lane} w${s.width} h${fmt(s.h1)}` +
+            clause("style", s.style, it.headStyle) + (last ? " end" : "") + airOut(s.airs));
+        });
+        break;
+      }
+      case "trace": {
+        if (it.single) {
+          const s = it.steps[0];
+          out.push(`TRACE ${tick(it.p)} L${it.lane} w${it.width} hA ${fmt(it.pA0)} hB ${fmt(it.pB0)} ` +
+            `until ${mt(s.p)} L${s.lane} w${s.width} hA ${fmt(s.pA1)} hB ${fmt(s.pB1)}` +
+            (it.headStyle !== undefined ? ` style ${it.headStyle}` : "") + airOut(s.airs));
+          break;
+        }
+        out.push(`TRACE ${tick(it.p)} L${it.lane} w${it.width} hA ${fmt(it.pA0)} hB ${fmt(it.pB0)}` +
+          (it.headStyle !== undefined ? ` style ${it.headStyle}` : ""));
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          out.push(`  ~> ${mt(s.p)} L${s.lane} w${s.width} hA ${fmt(s.pA1)} hB ${fmt(s.pB1)}` +
+            clause("style", s.style, it.headStyle) + (last ? " end" : "") + airOut(s.airs));
+        });
+        break;
+      }
+      case "heaven": {
+        const fx = it.fx !== undefined ? ` fx ${fxOut(it.fx)}` : "";
+        if (it.single) {
+          const s = it.steps[0];
+          out.push(`${it.family} ${tick(it.p)} L${it.lane} w${it.width} h${fmt(it.h0)} ` +
+            `disc ${it.disc}${fx} until ${mt(s.p)} L${s.lane} w${s.width} h${fmt(s.h1)}` +
+            airOut(s.airs));
+          break;
+        }
+        out.push(`${it.family} ${tick(it.p)} L${it.lane} w${it.width} h${fmt(it.h0)} disc ${it.disc}${fx}`);
+        it.steps.forEach((s, i) => {
+          const last = i === it.steps.length - 1;
+          out.push(`  ~> ${mt(s.p)} L${s.lane} w${s.width} h${fmt(s.h1)}` +
+            (last ? " end" : "") + airOut(s.airs));
+        });
+        break;
+      }
+      case "keyzone": {
+        out.push(`KEYZONE ${tick(it.p)} L${it.lane} w${it.width} until ${mt(it.endP)} key ${it.key}`);
+        break;
+      }
+      case "orphanAir": {
+        out.push(`AIR:${it.dir} ${tick(it.p)} L${it.lane} w${it.width} on ${it.rootRaw}` +
+          (it.style !== undefined ? ` style ${it.style}` : "") + " orphan");
+        break;
+      }
+    }
+  }
+  out.push("");
+  return out.join("\n");
+}
+
+  // ---- from cmr/tools/lib/c2s_read.mjs ----
+// Raw c2s record reader for conversion. DEV-SIDE ONLY (touches c2s).
+// Numeric rules per cmr SPEC §2 (recovered fallback): missing field = zero
+// default; numeric prefix with trailing text converts WITH WARNING;
+// no-conversion is a HARD ERROR. Width clamps to [1,16] with a warning.
+// The reader keeps raw tokens so binary-ignored extras and AIRSLIDE raw
+// float heights survive verbatim.
+
+
+const GROUP2 = new Set([
+  "TAP","CHR","FLK","MNE","HLD","HXD","SLD","SXD","SLC","SXC",
+  "AIR","AUL","AUR","ADW","ADL","ADR","AHD","AHX","ASC","ASD",
+  "ALD","ASO","HHD","HHX","SLA",
+]);
+const EVENTS = new Set(["BPM","MET","STP","SFL","SLP","DCM","SFE","CLK"]);
+const HEADER = ["VERSION","MUSIC","SEQUENCEID","DIFFICULT","LEVEL",
+  "CREATOR","BPM_DEF","MET_DEF","RESOLUTION","CLK_DEF","PROGJUDGE_BPM",
+  "PROGJUDGE_AER","TUTORIAL"];
+const PARSED_TYPE = {
+  TAP: 0, HLD: 1, HXD: 1, SLD: 2, SXD: 2, SLC: 2, SXC: 2,
+  AIR: 3, AUR: 3, AUL: 3, ADW: 3, ADR: 3, ADL: 3,
+  CHR: 4, AHD: 5, AHX: 5, FLK: 6, ASD: 8, ASC: 8,
+  ALD: 9, ASO: 10, MNE: 11, SLA: 12, HHD: 13, HHX: 13,
+};
+const C2S_STYLE = [
+  "DEF","RED","ORN","YEL","LIM","GRN","AQA","CYN",
+  "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
+];
+const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
+const SLIDE_FEEDBACK = ["UP","DW","CE","RC","LC","RS","LS","BS"];
+const AIR_PATH_ROOT_TYPES = new Set([0, 1, 2, 4, 6, 11]);
+const DERIVED_CMDS = new Set([
+  "T_REC_TAP","T_REC_CHR","T_REC_FLK","T_REC_MNE","T_REC_HLD","T_REC_SLD","T_REC_AIR","T_REC_AHD","T_REC_ALL",
+  "T_NOTE_TAP","T_NOTE_CHR","T_NOTE_FLK","T_NOTE_MNE","T_NOTE_HLD","T_NOTE_SLD","T_NOTE_AIR","T_NOTE_AHD","T_NOTE_ALL",
+  "T_NUM_TAP","T_NUM_CHR","T_NUM_FLK","T_NUM_MNE","T_NUM_HLD","T_NUM_SLD","T_NUM_AIR","T_NUM_AHD","T_NUM_AAC",
+  "T_CHRTYPE_UP","T_CHRTYPE_DW","T_CHRTYPE_CE","T_CHRTYPE_RC","T_CHRTYPE_LC","T_CHRTYPE_RS","T_CHRTYPE_LS","T_CHRTYPE_BS",
+  "T_LEN_HLD","T_LEN_SLD","T_LEN_AHD","T_LEN_ALL",
+  "T_JUDGE_TAP","T_JUDGE_HLD","T_JUDGE_SLD","T_JUDGE_AIR","T_JUDGE_FLK","T_JUDGE_ALL",
+]);
+const LEGACY_CMDS = new Set([
+  "T_FIRST_MSEC","T_FIRST_RES","T_FINAL_MSEC","T_FINAL_RES",
+  ...["00","05","10","15","20","25","30","35","40","45",
+      "50","55","60","65","70","75","80","85","90","95"].map(s => "T_PROG_" + s),
+]);
+
+const exactIndexOrZero = (table, value) => {
+  const index = table.indexOf(value || "");
+  return index < 0 ? 0 : index;
+};
+const tenths = v => Math.trunc(v * 10 + 0.5) * 0.1;
+
+function makeReader(diag) {
+  const int = (tok, where) => {
+    if (tok === undefined || tok === "") return 0;
+    const v = Number.parseInt(tok, 10);
+    if (Number.isNaN(v)) throw new Error(`no-conversion integer "${tok}" at ${where}`);
+    if (!/^[+-]?\d+$/.test(tok)) diag.warn(`numeric prefix "${tok}" at ${where}`);
+    return v;
+  };
+  const float = (tok, where) => {
+    if (tok === undefined || tok === "") return 0;
+    const v = Number.parseFloat(tok);
+    if (Number.isNaN(v)) throw new Error(`no-conversion float "${tok}" at ${where}`);
+    return v;
+  };
+  const width = (tok, where) => {
+    const v = int(tok, where);
+    if (v < 1 || v > 16) diag.warn(`width ${v} clamped at ${where}`);
+    return Math.max(1, Math.min(16, v));
+  };
+  return { int, float, width };
+}
+
+// Parse a full c2s text into { meta, statLines, events, records, unknown }.
+// meta: ordered [key, rawValue]; statLines: ordered [name, rawValue] for
+// registered T_* and legacy names; events/records keep source order.
+function readC2s(text, diag) {
+  const rd = makeReader(diag);
+  const meta = [], statLines = [], events = [], records = [];
+  const unknown = new Map();
+  let lineNo = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    lineNo++;
+    if (!raw.trim()) continue;
+    const t = raw.split(/[\t ]+/).filter(s => s.length);
+    const cmd = t[0], f = t.slice(1);
+    const at = `line ${lineNo} (${cmd})`;
+    if (HEADER.includes(cmd)) {
+      // raw value: everything after the command token, tabs collapsed
+      const rest = raw.slice(raw.indexOf(cmd) + cmd.length).replace(/^[\t ]+/, "")
+        .replace(/[\t ]+$/, "");
+      meta.push([cmd, rest]);
+      continue;
+    }
+    if (DERIVED_CMDS.has(cmd) || LEGACY_CMDS.has(cmd)) {
+      statLines.push([cmd, f.join(" ")]);
+      continue;
+    }
+    if (EVENTS.has(cmd)) {
+      const e = { cmd, m: rd.int(f[0], at), t: rd.int(f[1], at) };
+      if (cmd === "BPM") e.bpm = rd.float(f[2], at);
+      else if (cmd === "MET") { e.unit = rd.int(f[2], at); e.count = rd.int(f[3], at); }
+      else if (cmd === "CLK") { /* point */ }
+      else {
+        e.dur = rd.int(f[2], at);
+        if (cmd !== "STP") e.factor = rd.float(f[3], at);
+        if (cmd === "SLP") e.key = rd.int(f[4], at);
+      }
+      events.push(e);
+      continue;
+    }
+    if (GROUP2.has(cmd)) {
+      const n = {
+        cmd, at, sourceIndex: records.length,
+        m: rd.int(f[0], at), t: rd.int(f[1], at),
+        lane: rd.int(f[2], at), width: rd.width(f[3], at),
+      };
+      n.p = n.m * R + n.t;
+      switch (cmd) {
+        case "TAP": case "MNE": break;
+        case "CHR": case "FLK":
+          n.note = f[4];                       // binary-ignored extra, verbatim
+          break;
+        case "HLD": case "HXD":
+          n.dur = rd.int(f[4], at);
+          n.fx = f[5];                          // only HXD carries it in corpus
+          break;
+        case "SLD": case "SXD": case "SLC": case "SXC":
+          n.dur = rd.int(f[4], at); n.endLane = rd.int(f[5], at);
+          n.sevenField = f.length > 6;
+          n.endWidth = n.sevenField ? rd.width(f[6], at) : n.width;
+          n.style = f[7];
+          n.styleCode = exactIndexOrZero(SLIDE_STYLE, n.style);
+          n.ex = cmd === "SXD" || cmd === "SXC";
+          n.fx = n.ex ? f[8] : undefined;
+          n.marked = cmd === "SLD" || cmd === "SXD";
+          break;
+        case "AIR": case "AUL": case "AUR": case "ADW": case "ADL": case "ADR":
+          n.root = f[4] || ""; n.style = f[5];
+          break;
+        case "AHD": case "AHX":
+          n.root = f[4] || ""; n.dur = rd.int(f[5], at);
+          n.note = f[6];                        // ignored trailing label
+          n.isAction = cmd === "AHX";
+          break;
+        case "ASC": case "ASD":
+          n.root = f[4] || "";
+          n.h0raw = f[5] ?? "0"; n.h0 = rd.float(f[5], at);
+          n.dur = rd.int(f[6], at);
+          n.endLane = rd.int(f[7], at); n.endWidth = rd.width(f[8], at);
+          n.h1raw = f[9] ?? "0"; n.h1 = rd.float(f[9], at);
+          n.style = f[10];
+          n.styleCode = exactIndexOrZero(C2S_STYLE, n.style);
+          n.isAction = cmd === "ASD";
+          break;
+        case "ALD":
+          n.interval = rd.int(f[4], at);
+          n.h0 = tenths(rd.float(f[5], at));
+          n.dur = rd.int(f[6], at);
+          n.endLane = rd.int(f[7], at); n.endWidth = rd.width(f[8], at);
+          n.h1 = tenths(rd.float(f[9], at));
+          n.style = f[10];
+          n.styleCode = exactIndexOrZero(C2S_STYLE, n.style);
+          break;
+        case "ASO":
+          n.pA0 = tenths(rd.float(f[4], at)); n.pB0 = tenths(rd.float(f[5], at));
+          n.dur = rd.int(f[6], at);
+          n.endLane = rd.int(f[7], at); n.endWidth = rd.width(f[8], at);
+          n.pA1 = tenths(rd.float(f[9], at)); n.pB1 = tenths(rd.float(f[10], at));
+          n.style = f[11];
+          n.styleCode = exactIndexOrZero(C2S_STYLE, n.style);
+          break;
+        case "HHD": case "HHX":
+          n.h0 = tenths(rd.float(f[4], at));
+          n.dur = rd.int(f[5], at);
+          n.endLane = rd.int(f[6], at); n.endWidth = rd.width(f[7], at);
+          n.h1 = tenths(rd.float(f[8], at));
+          n.disc = rd.int(f[9], at);
+          n.ex = cmd === "HHX";
+          n.fx = n.ex ? f[10] : undefined;
+          n.fbCode = n.ex ? exactIndexOrZero(SLIDE_FEEDBACK, n.fx) : 0;
+          break;
+        case "SLA":
+          n.dur = rd.int(f[4], at); n.tag = rd.int(f[5], at);
+          break;
+      }
+      records.push(n);
+      continue;
+    }
+    unknown.set(cmd, (unknown.get(cmd) || 0) + 1);
+  }
+  return { meta, statLines, events, records, unknown };
+}
+
+  // ---- from cmr/tools/lib/assoc.mjs ----
+// Source-order association over raw c2s records -> cmr AST [notes] items.
+// Mirrors the viewer's normalizeEventAssociations (the reference pass):
+// sequential first-match continuation, first-compatible-root attachment
+// with slot consumption, ALD block grouping per buildAirLadderChains.
+
+const AIR_DIR = { AIR: "U", AUL: "UL", AUR: "UR", ADW: "D", ADL: "DL", ADR: "DR" };
+const TYPE_WORD = {
+  0: "TAP", 4: "EXTAP", 6: "FLICK", 11: "DAMAGE", 1: "HOLD",
+  2: "SLIDE", 9: "CRUSH", 10: "TRACE", 13: "HEAVEN",
+};
+
+const sameStart = (a, b) =>
+  a.p === b.p && a.lane === b.lane && a.width === b.width;
+
+// Build the cmr [notes] AST from raw group-2 records (source order).
+// Returns { items, warnings, errors } — errors are §7.4 non-reproducible
+// orderings and abort conversion upstream.
+function associate(records) {
+  const items = [], warnings = [], errors = [];
+  const roots = [];                   // viewer parity: source-order root list
+  const slideChains = [], heavenChains = [], asoChains = [], aldChains = [];
+  const airHoldChains = [], airSlideChains = [];
+
+  const endpointOf = n => ({
+    p: n.p + (n.dur ?? 0),
+    lane: n.endLane ?? n.lane,
+    width: n.endWidth ?? n.width,
+  });
+  const rootAttachmentPoint = root => {
+    if (root.chain) {          // types 2/10/13 chains: current final control
+      return { ...root.chain.last };
+    }
+    if (root.type === 1 || root.type === 9) {
+      return endpointOf(root.note);
+    }
+    return { p: root.note.p, lane: root.note.lane, width: root.note.width };
+  };
+  const compatibleRoot = (requestedType, n) =>
+    roots.find(root =>
+      root.type === requestedType && root.secondaryType === null &&
+      sameStart(rootAttachmentPoint(root), n));
+
+  for (const n of records) {
+    switch (n.cmd) {
+      case "TAP": case "CHR": case "FLK": case "MNE": {
+        const family = { TAP: "TAP", CHR: "EXTAP", FLK: "FLICK", MNE: "DAMAGE" }[n.cmd];
+        const item = { k: "note", family, p: n.p, lane: n.lane, width: n.width,
+                       note: n.note, airs: [] };
+        items.push(item);
+        roots.push({ type: PARSED_TYPE[n.cmd], note: n, secondaryType: null,
+                     chain: null, item, airHost: item });
+        break;
+      }
+      case "HLD": case "HXD": {
+        const item = { k: "hold", family: n.cmd === "HXD" ? "EXHOLD" : "HOLD",
+                       p: n.p, lane: n.lane, width: n.width,
+                       endP: n.p + n.dur, fx: n.fx, airs: [] };
+        items.push(item);
+        roots.push({ type: 1, note: n, secondaryType: null, chain: null,
+                     item, airHost: item });
+        break;
+      }
+      case "SLD": case "SXD": case "SLC": case "SXC": {
+        let chain = slideChains.find(c =>
+          c.styleCode === n.styleCode && sameStart(c.last, n));
+        if (!chain) {
+          const item = { k: "slide", family: n.ex ? "EXSLIDE" : "SLIDE",
+                         p: n.p, lane: n.lane, width: n.width,
+                         headStyle: n.style, headFx: n.fx, headEx: n.ex,
+                         steps: [] };
+          items.push(item);
+          chain = { styleCode: n.styleCode, item, last: null, root: n };
+          slideChains.push(chain);
+          roots.push({ type: 2, note: n, secondaryType: null, chain, item });
+        }
+        const step = { p: n.p + n.dur, lane: n.endLane,
+                       width: n.sevenField ? n.endWidth : null,
+                       sevenField: n.sevenField,
+                       marked: n.marked, ex: n.ex,
+                       style: n.style, fx: n.fx, airs: [] };
+        chain.item.steps.push(step);
+        chain.last = endpointOf(n);
+        chain.lastStep = step;
+        break;
+      }
+      case "HHD": case "HHX": {
+        let chain = heavenChains.find(c =>
+          c.ex === n.ex && c.fbCode === n.fbCode && c.disc === n.disc &&
+          sameStart(c.last, n) && c.last.vertical === n.h0);
+        if (!chain) {
+          const item = { k: "heaven", family: n.ex ? "EXHEAVEN" : "HEAVEN",
+                         p: n.p, lane: n.lane, width: n.width, h0: n.h0,
+                         disc: n.disc, fx: n.fx, steps: [] };
+          items.push(item);
+          chain = { ex: n.ex, fbCode: n.fbCode, disc: n.disc, item,
+                    last: null, root: n };
+          heavenChains.push(chain);
+          roots.push({ type: 13, note: n, secondaryType: null, chain, item });
+        }
+        const step = { p: n.p + n.dur, lane: n.endLane, width: n.endWidth,
+                       h1: n.h1, airs: [] };
+        chain.item.steps.push(step);
+        chain.last = { ...endpointOf(n), vertical: n.h1 };
+        chain.lastStep = step;
+        break;
+      }
+      case "ASO": {
+        let chain = asoChains.find(c =>
+          c.styleCode === n.styleCode && sameStart(c.last, n) &&
+          c.last.pA === n.pA0 && c.last.pB === n.pB0);
+        if (!chain) {
+          const item = { k: "trace", p: n.p, lane: n.lane, width: n.width,
+                         pA0: n.pA0, pB0: n.pB0, headStyle: n.style, steps: [] };
+          items.push(item);
+          chain = { styleCode: n.styleCode, item, last: null, root: n };
+          asoChains.push(chain);
+          roots.push({ type: 10, note: n, secondaryType: null, chain, item });
+        }
+        const step = { p: n.p + n.dur, lane: n.endLane, width: n.endWidth,
+                       pA1: n.pA1, pB1: n.pB1, style: n.style, airs: [] };
+        chain.item.steps.push(step);
+        chain.last = { ...endpointOf(n), pA: n.pA1, pB: n.pB1 };
+        chain.lastStep = step;
+        break;
+      }
+      case "ALD": {
+        // Association: each ALD record is its own type-9 root; block
+        // grouping follows buildAirLadderChains (interval + style code +
+        // matching point incl. vertical).
+        let chain = aldChains.find(c =>
+          c.interval === n.interval && c.styleCode === n.styleCode &&
+          sameStart(c.last, n) && c.last.vertical === n.h0);
+        let step;
+        if (!chain) {
+          const item = { k: "crush", p: n.p, lane: n.lane, width: n.width,
+                         h0: n.h0, interval: n.interval, headStyle: n.style,
+                         steps: [] };
+          items.push(item);
+          chain = { interval: n.interval, styleCode: n.styleCode, item,
+                    last: null };
+          aldChains.push(chain);
+        }
+        step = { p: n.p + n.dur, lane: n.endLane, width: n.endWidth,
+                 h1: n.h1, style: n.style, airs: [] };
+        chain.item.steps.push(step);
+        chain.last = { ...endpointOf(n), vertical: n.h1 };
+        roots.push({ type: 9, note: n, secondaryType: null, chain: null,
+                     item: chain.item, airHost: step });
+        break;
+      }
+      case "AIR": case "AUL": case "AUR": case "ADW": case "ADL": case "ADR": {
+        const requestedType = PARSED_TYPE[n.root];
+        const root = requestedType === undefined ? undefined
+          : compatibleRoot(requestedType, n);
+        if (!root) {
+          warnings.push(`orphan ${n.cmd} at ${n.at}`);
+          items.push({ k: "orphanAir", dir: AIR_DIR[n.cmd], p: n.p,
+                       lane: n.lane, width: n.width, rootRaw: n.root,
+                       style: n.style });
+          break;
+        }
+        root.secondaryType = 3;
+        const air = { dir: AIR_DIR[n.cmd], style: n.style };
+        if (root.airHost) {
+          root.airHost.airs.push(air);
+        } else {
+          // chain root (slide/trace/heaven): the suffix must ride the end
+          // step; a mid-chain attachment is a non-reproducible ordering.
+          root.airChain = { chain: root.chain, air,
+                           attachedAt: { ...rootAttachmentPoint(root) },
+                           at: n.at };
+          root.chain.pendingAirs = root.chain.pendingAirs || [];
+          root.chain.pendingAirs.push(root.airChain);
+        }
+        break;
+      }
+      case "AHD": case "AHX": {
+        const requestedType = PARSED_TYPE[n.root];
+        let chain = null;
+        if (requestedType === 5) {
+          chain = airHoldChains.find(c => sameStart(c.last, n));
+        } else if (AIR_PATH_ROOT_TYPES.has(requestedType)) {
+          const root = compatibleRoot(requestedType, n);
+          if (root) {
+            root.secondaryType = 5;
+            const item = { k: "ahold", p: n.p, lane: n.lane, width: n.width,
+                           on: TYPE_WORD[requestedType], onRaw: n.root, note: n.note,
+                           steps: [], ownerItem: root.item };
+            items.push(item);
+            chain = { item, last: null };
+            airHoldChains.push(chain);
+          }
+        }
+        if (!chain) {
+          warnings.push(`dropped orphan ${n.cmd} at ${n.at}`);
+          break;
+        }
+        const step = { p: n.p + n.dur, action: n.isAction,
+                       note: chain.item.steps.length ? n.note : undefined };
+        if (!chain.item.steps.length && n.note !== undefined) chain.item.note = n.note;
+        chain.item.steps.push(step);
+        chain.last = { p: n.p + n.dur, lane: n.lane, width: n.width };
+        break;
+      }
+      case "ASC": case "ASD": {
+        const requestedType = PARSED_TYPE[n.root];
+        let chain = null;
+        if (requestedType === 8) {
+          const referencedAction = n.root === "ASD";
+          chain = airSlideChains.find(c =>
+            sameStart(c.last, n) && c.lastAction === referencedAction);
+        } else if (AIR_PATH_ROOT_TYPES.has(requestedType)) {
+          const root = compatibleRoot(requestedType, n);
+          if (root) {
+            root.secondaryType = 8;
+            const item = { k: "aslide", p: n.p, lane: n.lane, width: n.width,
+                           h0: n.h0, on: TYPE_WORD[requestedType], onRaw: n.root,
+                           headStyle: n.style, steps: [], ownerItem: root.item };
+            items.push(item);
+            chain = { item, last: null };
+            airSlideChains.push(chain);
+          }
+        }
+        if (!chain) {
+          warnings.push(`dropped orphan ${n.cmd} at ${n.at}`);
+          break;
+        }
+        const prevEnd = chain.lastH1;
+        const step = { p: n.p + n.dur, lane: n.endLane, width: n.endWidth,
+                       h1: n.h1, action: n.isAction, style: n.style,
+                       from: prevEnd !== undefined && prevEnd !== n.h0
+                         ? n.h0 : undefined };
+        chain.item.steps.push(step);
+        chain.last = { p: n.p + n.dur, lane: n.endLane, width: n.endWidth };
+        chain.lastAction = n.isAction;
+        chain.lastH1 = n.h1;
+        break;
+      }
+      case "SLA": {
+        items.push({ k: "keyzone", p: n.p, lane: n.lane, width: n.width,
+                     endP: n.p + n.dur, key: n.tag });
+        break;
+      }
+    }
+  }
+
+  // Resolve chain air suffixes: legal only at the chain's true final point.
+  for (const chains of [slideChains, heavenChains, asoChains]) {
+    for (const chain of chains) {
+      for (const pending of chain.pendingAirs || []) {
+        if (sameStart(pending.attachedAt, chain.last)) {
+          chain.lastStep.airs.push(pending.air);
+        } else {
+          errors.push(`AIR attached at a mid-chain endpoint (${pending.at}) — ` +
+            `non-reproducible ordering (SPEC §7.4)`);
+        }
+      }
+    }
+  }
+
+  // Single-record CRUSH/TRACE/HEAVEN use the inline `until` form.
+  for (const item of items) {
+    if ((item.k === "crush" || item.k === "trace" || item.k === "heaven") &&
+        item.steps.length === 1) {
+      item.single = true;
+    }
+  }
+  return { items, warnings, errors };
+}
+
+  // ---- from cmr/tools/lib/parse_cmr.mjs ----
+// Strict cmr text parser -> AST (the same shape assoc.mjs builds).
+// Deployment-safe: this is the parser the viewer port will grow from.
+// SPEC §1: unknown keyword, malformed field, or out-of-place line is a
+// hard error with file/line context.
+
+const NOTE_WORDS = new Set(["TAP","EXTAP","FLICK","DAMAGE"]);
+const HOLD_WORDS = new Set(["HOLD","EXHOLD"]);
+const CHAIN_WORDS = new Set(["SLIDE","EXSLIDE","AIRHOLD","AIRSLIDE","CRUSH","TRACE","HEAVEN","EXHEAVEN"]);
+const EVENT_WORDS = new Set(["BPM","METER","SCROLL","STOP","KEYZONE","DEPTH","SCROLL-DEAD","CLICK"]);
+
+function parseCmr(text) {
+  const lines = text.split(/\r?\n/);
+  const ast = { meta: [], statsOverrides: [], events: [], items: [],
+                lineTicks: new Map(), lineInfo: new Map() };
+  const CHAIN_KIND = { slide: "slide", ahold: "air", aslide: "air",
+                       crush: "air", trace: "trace", heaven: "heaven" };
+  let section = null, lineNo = 0, sawPragma = false;
+  let blockM = 0, currentChain = null, inOverrides = false;
+  const err = msg => { throw new Error(`cmr line ${lineNo}: ${msg}`); };
+
+  const parseMt = tok => {
+    if (tok === undefined) err("missing position");
+    if (tok.includes(":")) {
+      const [m, t] = tok.split(":");
+      if (!/^-?\d+$/.test(m) || !/^\d+$/.test(t)) err(`bad position "${tok}"`);
+      return Number(m) * R + Number(t);
+    }
+    if (!/^\d+$/.test(tok)) err(`bad tick "${tok}"`);
+    return blockM * R + Number(tok);
+  };
+  const num = tok => {
+    const v = Number.parseFloat(tok);
+    if (Number.isNaN(v)) err(`bad number "${tok}"`);
+    return v;
+  };
+  const int = tok => {
+    if (!/^[+-]?\d+$/.test(tok ?? "")) err(`bad integer "${tok}"`);
+    return Number(tok);
+  };
+  const hVal = tok => {
+    if (!tok?.startsWith("h")) err(`expected h<value>, got "${tok}"`);
+    return num(tok.slice(1));
+  };
+  // trailing clause scan: [note T] [style S] [fx W] [from hV] [plain|ex]
+  // [every N] [disc N] [on F] [key N] [until P] [end] [+air:D [style S]]
+  const clauses = (toks, start) => {
+    const c = { airs: [], Ls: [], ws: [], hs: [], hAs: [], hBs: [] };
+    let i = start;
+    while (i < toks.length) {
+      const w = toks[i];
+      if (w === "note") { c.note = toks[++i]; i++; }
+      else if (w === "style") { c.style = toks[++i]; i++; }
+      else if (w === "fx") { const t = toks[++i]; c.fx = t === "none" ? "none" : (FX_TOKEN.get(t) ?? t); i++; }
+      else if (w === "from") { c.from = hVal(toks[++i]); i++; }
+      else if (w === "until") { c.until = parseMt(toks[++i]); i++; }
+      else if (w === "every") { c.every = int(toks[++i]); i++; }
+      else if (w === "disc") { c.disc = int(toks[++i]); i++; }
+      else if (w === "on") { c.on = toks[++i]; i++; }
+      else if (w === "key") { c.key = int(toks[++i]); i++; }
+      else if (w === "hA") { c.hAs.push(num(toks[++i])); i++; }
+      else if (w === "hB") { c.hBs.push(num(toks[++i])); i++; }
+      else if (w === "plain") { c.exFlag = false; i++; }
+      else if (w === "ex") { c.exFlag = true; i++; }
+      else if (w === "end") { c.end = true; i++; }
+      else if (w === "orphan") { c.orphan = true; i++; }
+      else if (w.startsWith("+air:")) {
+        const air = { dir: w.slice(5) };
+        if (toks[i + 1] === "style") { air.style = toks[i + 2]; i += 2; }
+        c.airs.push(air); i++;
+      }
+      else if (/^L-?\d/.test(w)) { c.Ls.push(int(w.slice(1))); i++; }
+      else if (/^w-?\d/.test(w)) { c.ws.push(int(w.slice(1))); i++; }
+      else if (/^h-?[\d.]/.test(w)) { c.hs.push(num(w.slice(1))); i++; }
+      else err(`unexpected token "${w}"`);
+    }
+    return c;
+  };
+  const one = (arr, what) => {
+    if (!arr.length) err(`missing ${what}`);
+    return arr[0];
+  };
+  // resolve step clause against header token (text -> resolved AST tokens)
+  const inherit = (tok, headTok) =>
+    tok === undefined ? headTok : (tok === "none" ? undefined : tok);
+
+  for (let raw of lines) {
+    lineNo++;
+    const isStep = /^[ \t]+(~>|->)/.test(raw);
+    let line = raw;
+    const stringMeta = section === "meta" && /^(creator|difficulty|version):/.test(raw.trim());
+    if (!stringMeta) {
+      const c = line.indexOf("//");
+      if (c >= 0) line = line.slice(0, c);
+    }
+    if (!line.trim()) continue;
+    const trimmed = line.trim();
+
+    if (!sawPragma) {
+      if (trimmed !== "cmr 1") err(`missing or unknown version pragma (got "${trimmed}")`);
+      sawPragma = true; continue;
+    }
+    if (trimmed === "[meta]" || trimmed === "[events]" || trimmed === "[notes]") {
+      section = trimmed.slice(1, -1); inOverrides = false; continue;
+    }
+    if (!section) err(`content before any section: "${trimmed}"`);
+
+    if (section === "meta") {
+      if (trimmed === "stats: derived") { inOverrides = false; continue; }
+      if (trimmed === "stats.overrides:") { inOverrides = true; continue; }
+      if (inOverrides && /^[ \t]/.test(line)) {
+        const m = trimmed.match(/^(\S+):\s*(.*)$/);
+        if (!m) err(`bad override line "${trimmed}"`);
+        ast.statsOverrides.push([m[1], m[2]]);
+        continue;
+      }
+      inOverrides = false;
+      const m = line.match(/^([a-z-]+(?:\.[a-z-]+)?):\s?(.*)$/);
+      if (!m) err(`bad meta line "${trimmed}"`);
+      if (!META_CMD.has(m[1])) err(`unknown meta key "${m[1]}"`);
+      ast.meta.push({ key: m[1], value: m[2] });
+      continue;
+    }
+
+    if (section === "events") {
+      const toks = trimmed.split(/[ \t]+/);
+      const word = toks[0];
+      if (!EVENT_WORDS.has(word)) err(`unknown event keyword "${word}"`);
+      const p = parseMt(toks[1]);
+      ast.lineTicks.set(lineNo, p);
+      if (word === "BPM") ast.events.push({ cmd: "BPM", p, bpm: num(toks[2]) });
+      else if (word === "METER") {
+        const m2 = toks[2]?.match(/^(-?\d+)\/(-?\d+)$/);
+        if (!m2) err(`bad meter fraction "${toks[2]}"`);
+        ast.events.push({ cmd: "MET", p, count: Number(m2[1]), unit: Number(m2[2]) });
+      }
+      else if (word === "CLICK") ast.events.push({ cmd: "CLK", p });
+      else if (word === "STOP") {
+        const c = clauses(toks, 2);
+        if (c.until === undefined) err("STOP needs until");
+        ast.events.push({ cmd: "STP", p, dur: c.until - p });
+      }
+      else if (word === "KEYZONE") {
+        const [lane, width] = lw(toks, 2);
+        const c = clauses(toks, 4);
+        if (c.until === undefined || c.key === undefined) err("KEYZONE needs until and key");
+        // grammar-accepted in [events]; canonical home is [notes]
+        ast.items.push({ k: "keyzone", p, lane, width, endP: c.until, key: c.key });
+      }
+      else {
+        if (!toks[2]?.startsWith("x")) err(`expected x<factor>, got "${toks[2]}"`);
+        const factor = num(toks[2].slice(1));
+        const c = clauses(toks, 3);
+        if (c.until === undefined) err(`${word} needs until`);
+        const cmd = word === "DEPTH" ? "DCM" : word === "SCROLL-DEAD" ? "SFE"
+          : (c.key !== undefined ? "SLP" : "SFL");
+        const e = { cmd, p, dur: c.until - p, factor };
+        if (cmd === "SLP") e.key = c.key;
+        ast.events.push(e);
+      }
+      continue;
+    }
+
+    // [notes]
+    if (trimmed.startsWith("@")) {
+      if (!/^@\d+$/.test(trimmed)) err(`bad measure header "${trimmed}"`);
+      blockM = Number(trimmed.slice(1));
+      currentChain = null;
+      continue;
+    }
+    const toks = trimmed.split(/[ \t]+/);
+    if (isStep || toks[0] === "~>" || toks[0] === "->") {
+      if (!currentChain) err("step line outside a chain block");
+      const arrow = toks[0];
+      if (arrow !== "~>" && arrow !== "->") err(`bad arrow "${arrow}"`);
+      const p = parseMt(toks[1]);
+      ast.lineTicks.set(lineNo, p);
+      const it = currentChain;
+      const prevP = it.steps.length ? it.steps[it.steps.length - 1].p : it.p;
+      // step: checkpoint lines highlight but never steer the follow-scroll
+      ast.lineInfo.set(lineNo, { kind: CHAIN_KIND[it.k], p0: prevP, p1: p, step: true });
+      const c = clauses(toks, 2);
+      if (it.k === "slide") {
+        const sevenField = c.ws.length > 0;
+        if (!sevenField && (c.style !== undefined || c.fx !== undefined || c.note !== undefined)) {
+          err("a step without w cannot carry style/fx/note (six-field form)");
+        }
+        const ex = c.exFlag ?? it.headEx;
+        it.steps.push({
+          p, lane: one(c.Ls, "L<lane>"), width: sevenField ? c.ws[0] : null,
+          sevenField, marked: arrow === "->", ex,
+          style: sevenField ? inherit(c.style, it.headStyle) : undefined,
+          fx: sevenField && ex ? inherit(c.fx, it.headEx ? it.headFx : undefined) : undefined,
+          end: c.end, airs: c.airs,
+        });
+      } else if (it.k === "ahold") {
+        it.steps.push({ p, action: arrow === "->", note: c.note, end: c.end });
+      } else if (it.k === "aslide") {
+        it.steps.push({
+          p, lane: one(c.Ls, "L"), width: one(c.ws, "w"), h1: one(c.hs, "h"),
+          from: c.from, action: arrow === "->",
+          style: inherit(c.style, it.headStyle), end: c.end, airs: c.airs,
+        });
+      } else if (it.k === "crush") {
+        it.steps.push({ p, lane: one(c.Ls, "L"), width: one(c.ws, "w"), h1: one(c.hs, "h"),
+          style: inherit(c.style, it.headStyle), end: c.end, airs: c.airs });
+      } else if (it.k === "trace") {
+        it.steps.push({ p, lane: one(c.Ls, "L"), width: one(c.ws, "w"),
+          pA1: one(c.hAs, "hA"), pB1: one(c.hBs, "hB"),
+          style: inherit(c.style, it.headStyle), end: c.end, airs: c.airs });
+      } else if (it.k === "heaven") {
+        it.steps.push({ p, lane: one(c.Ls, "L"), width: one(c.ws, "w"), h1: one(c.hs, "h"),
+          end: c.end, airs: c.airs });
+      } else err(`steps not allowed under ${it.k}`);
+      if (c.end) currentChain = null;
+      continue;
+    }
+
+    const word = toks[0];
+    currentChain = null;
+    if (toks[1] !== undefined && /^\d|^-|:/.test(toks[1])) {
+      try { ast.lineTicks.set(lineNo, parseMt(toks[1])); } catch { /* headers */ }
+    }
+    if (word.startsWith("AIR:")) {
+      const p = parseMt(toks[1]);
+      const c = clauses(toks, 2);
+      const [lane, width] = [one(c.Ls, "L"), one(c.ws, "w")];
+      if (!c.orphan) err("AIR: diagnostic line must end with orphan");
+      ast.lineInfo.set(lineNo, { kind: "air", p0: p, p1: p });
+      ast.items.push({ k: "orphanAir", dir: word.slice(4), p, lane, width,
+                       rootRaw: c.on, style: c.style });
+      continue;
+    }
+    if (NOTE_WORDS.has(word)) {
+      const p = parseMt(toks[1]);
+      const c = clauses(toks, 2);
+      ast.lineInfo.set(lineNo, {
+        kind: { TAP: "tap", EXTAP: "extap", FLICK: "flick", DAMAGE: "damage" }[word],
+        p0: p, p1: p });
+      ast.items.push({ k: "note", family: word, p,
+                       lane: one(c.Ls, "L"), width: one(c.ws, "w"),
+                       note: c.note, airs: c.airs });
+      continue;
+    }
+    if (HOLD_WORDS.has(word)) {
+      const p = parseMt(toks[1]);
+      const c = clauses(toks, 2);
+      if (c.until === undefined) err(`${word} needs until`);
+      ast.lineInfo.set(lineNo, { kind: "hold", p0: p, p1: c.until });
+      ast.items.push({ k: "hold", family: word, p,
+                       lane: one(c.Ls, "L"), width: one(c.ws, "w"),
+                       endP: c.until, fx: c.fx === "none" ? undefined : c.fx,
+                       airs: c.airs });
+      continue;
+    }
+    if (word === "KEYZONE") {
+      const p = parseMt(toks[1]);
+      const c = clauses(toks, 2);
+      if (c.until === undefined || c.key === undefined) err("KEYZONE needs until and key");
+      ast.items.push({ k: "keyzone", p, lane: one(c.Ls, "L"),
+                       width: one(c.ws, "w"), endP: c.until, key: c.key });
+      continue;
+    }
+    if (!CHAIN_WORDS.has(word)) err(`unknown keyword "${word}"`);
+    const p = parseMt(toks[1]);
+    const c = clauses(toks, 2);
+    const [lane, width] = [one(c.Ls, "L"), one(c.ws, "w")];
+    let item;
+    if (word === "SLIDE" || word === "EXSLIDE") {
+      item = { k: "slide", family: word, p, lane, width,
+               headStyle: c.style, headFx: c.fx === "none" ? undefined : c.fx,
+               headEx: word === "EXSLIDE", steps: [] };
+    } else if (word === "AIRHOLD") {
+      if (c.on === undefined) err("AIRHOLD needs on <FAMILY>");
+      item = { k: "ahold", p, lane, width, on: c.on, note: c.note, steps: [] };
+    } else if (word === "AIRSLIDE") {
+      if (c.on === undefined) err("AIRSLIDE needs on <FAMILY>");
+      item = { k: "aslide", p, lane, width, h0: one(c.hs, "h<v>"), on: c.on,
+               headStyle: c.style, steps: [] };
+    } else if (word === "CRUSH") {
+      if (c.every === undefined) err("CRUSH needs every <n>");
+      item = { k: "crush", p, lane, width, h0: one(c.hs, "h<v>"),
+               interval: c.every, headStyle: c.style, steps: [] };
+      if (c.until !== undefined) {
+        item.single = true;
+        if (c.Ls.length < 2 || c.ws.length < 2 || c.hs.length < 2) {
+          err("inline CRUSH needs end L/w/h after until");
+        }
+        item.steps.push({ p: c.until, lane: c.Ls[1], width: c.ws[1],
+                          h1: c.hs[1], style: c.style, airs: c.airs });
+      }
+    } else if (word === "TRACE") {
+      item = { k: "trace", p, lane, width, pA0: one(c.hAs, "hA"),
+               pB0: one(c.hBs, "hB"), headStyle: c.style, steps: [] };
+      if (c.until !== undefined) {
+        item.single = true;
+        if (c.Ls.length < 2 || c.ws.length < 2 || c.hAs.length < 2 || c.hBs.length < 2) {
+          err("inline TRACE needs end L/w/hA/hB after until");
+        }
+        item.steps.push({ p: c.until, lane: c.Ls[1], width: c.ws[1],
+                          pA1: c.hAs[1], pB1: c.hBs[1], style: c.style,
+                          airs: c.airs });
+      }
+    } else {   // HEAVEN / EXHEAVEN
+      if (c.disc === undefined) err(`${word} needs disc <n>`);
+      item = { k: "heaven", family: word, p, lane, width, h0: one(c.hs, "h<v>"),
+               disc: c.disc, fx: c.fx === "none" ? undefined : c.fx, steps: [] };
+      if (c.until !== undefined) {
+        item.single = true;
+        if (c.Ls.length < 2 || c.ws.length < 2 || c.hs.length < 2) {
+          err("inline HEAVEN needs end L/w/h after until");
+        }
+        item.steps.push({ p: c.until, lane: c.Ls[1], width: c.ws[1],
+                          h1: c.hs[1], airs: c.airs });
+      }
+    }
+    item.__line = lineNo;
+    ast.lineInfo.set(lineNo, { kind: CHAIN_KIND[item.k], p0: p,
+      p1: item.single && item.steps.length ? item.steps[0].p : p });
+    ast.items.push(item);
+    if (!item.single) currentChain = item;
+    continue;
+  }
+  // chain headers highlight for their whole span
+  for (const it of ast.items) {
+    if (it.__line !== undefined && it.steps?.length) {
+      const info = ast.lineInfo.get(it.__line);
+      if (info) info.p1 = it.steps[it.steps.length - 1].p;
+    }
+  }
+  return ast;
+}
+
+  // ---- from cmr/tools/lib/emit_c2s.mjs ----
+// cmr AST -> c2s text. DEV-SIDE ONLY: exists to certify the converters
+// against the private corpus (SPEC §7); never ships, never runs at runtime.
+
+const WORD_TOKEN = {
+  TAP: "TAP", EXTAP: "CHR", FLICK: "FLK", DAMAGE: "MNE",
+  HOLD: "HLD", EXHOLD: "HXD", SLIDE: "SLD", EXSLIDE: "SXD",
+  CRUSH: "ALD", TRACE: "ASO", HEAVEN: "HHD", EXHEAVEN: "HHX",
+};
+const AIR_CMD = { U: "AIR", UL: "AUL", UR: "AUR", D: "ADW", DL: "ADL", DR: "ADR" };
+
+const pos = p => [Math.floor(p / R), p - Math.floor(p / R) * R];
+
+// Token-row form: an array of rows, each row an array of string tokens.
+// emitC2s joins them into c2s text; the viewer corridor consumes the rows
+// directly so no c2s text is ever materialized on the cmr->model path.
+function emitC2sRows(ast) {
+  const out = [];
+  const line = toks => toks.map(fmt);
+  const METACMD = {
+    "version": "VERSION", "music": "MUSIC", "sequence": "SEQUENCEID",
+    "difficulty": "DIFFICULT", "level": "LEVEL", "creator": "CREATOR",
+    "bpm-default": "BPM_DEF", "meter-default": "MET_DEF",
+    "resolution": "RESOLUTION", "clock": "CLK_DEF",
+    "progjudge-bpm": "PROGJUDGE_BPM", "progjudge-aer": "PROGJUDGE_AER",
+    "tutorial": "TUTORIAL",
+  };
+  for (const { key, value } of ast.meta) {
+    const cmd = METACMD[key];
+    if (key === "meter-default") {
+      const [count, unit] = value.split("/");
+      out.push([cmd, unit, count]);                      // re-inverted
+    } else if (key === "creator") {
+      out.push([cmd, value]);                            // raw bytes
+    } else {
+      out.push([cmd, ...value.split(/ +/)]);
+    }
+  }
+  for (const [name, value] of ast.statsOverrides) {
+    out.push([name, ...value.split(/ +/)]);
+  }
+  out.push([]);
+  for (const e of ast.events) {
+    const [m, t] = pos(e.p);
+    switch (e.cmd) {
+      case "BPM": out.push(line(["BPM", m, t, e.bpm])); break;
+      case "MET": out.push(line(["MET", m, t, e.unit, e.count])); break;
+      case "SFL": out.push(line(["SFL", m, t, e.dur, e.factor])); break;
+      case "SLP": out.push(line(["SLP", m, t, e.dur, e.factor, e.key])); break;
+      case "STP": out.push(line(["STP", m, t, e.dur])); break;
+      case "DCM": out.push(line(["DCM", m, t, e.dur, e.factor])); break;
+      case "SFE": out.push(line(["SFE", m, t, e.dur, e.factor])); break;
+      case "CLK": out.push(line(["CLK", m, t])); break;
+    }
+  }
+  out.push([]);
+
+  // resolve a step's inherited clause token
+  const resolved = (stepTok, headTok) =>
+    stepTok === "none" ? undefined : (stepTok !== undefined ? stepTok : headTok);
+
+  const emitAirs = (airs, p, lane, width, ownerWord) => {
+    for (const a of airs || []) {
+      const [m, t] = pos(p);
+      const toks = [AIR_CMD[a.dir], m, t, lane, width, WORD_TOKEN[ownerWord] ?? ownerWord];
+      if (a.style !== undefined) toks.push(a.style);
+      out.push(line(toks));
+    }
+  };
+
+  for (const it of ast.items) {
+    const [m, t] = pos(it.p);
+    switch (it.k) {
+      case "note": {
+        const toks = [WORD_TOKEN[it.family], m, t, it.lane, it.width];
+        if (it.note !== undefined) toks.push(it.note);
+        out.push(line(toks));
+        emitAirs(it.airs, it.p, it.lane, it.width, it.family);
+        break;
+      }
+      case "hold": {
+        const toks = [WORD_TOKEN[it.family], m, t, it.lane, it.width, it.endP - it.p];
+        if (it.fx !== undefined) toks.push(it.fx);
+        out.push(line(toks));
+        emitAirs(it.airs, it.endP, it.lane, it.width, it.family);
+        break;
+      }
+      case "slide": {
+        let prev = { p: it.p, lane: it.lane, width: it.width };
+        for (const s of it.steps) {
+          const ex = s.ex ?? it.headEx;
+          const marked = s.marked;
+          const cmd = ex ? (marked ? "SXD" : "SXC") : (marked ? "SLD" : "SLC");
+          const [pm, pt] = pos(prev.p);
+          const toks = [cmd, pm, pt, prev.lane, prev.width, s.p - prev.p, s.lane];
+          const width = s.sevenField ? s.width : prev.width;
+          if (s.sevenField) {
+            toks.push(s.width);
+            const st = resolved(s.style, it.headStyle);
+            const fx = ex ? resolved(s.fx, it.headEx ? it.headFx : undefined) : undefined;
+            if (st !== undefined || fx !== undefined) toks.push(st ?? "");
+            if (fx !== undefined) toks.push(fx);
+          }
+          out.push(line(toks));
+          emitAirs(s.airs, s.p, s.lane, width, it.headEx ? "EXSLIDE" : "SLIDE");
+          prev = { p: s.p, lane: s.lane, width };
+        }
+        break;
+      }
+      case "ahold": {
+        let prev = it.p, first = true;
+        for (const s of it.steps) {
+          const cmd = s.action ? "AHX" : "AHD";
+          const rootTok = first ? (WORD_TOKEN[it.on] ?? it.on) : "AHD";
+          const [pm, pt] = pos(prev);
+          const toks = [cmd, pm, pt, it.lane, it.width, rootTok, s.p - prev];
+          const label = first ? it.note : s.note;
+          if (label !== undefined) toks.push(label);
+          out.push(line(toks));
+          prev = s.p; first = false;
+        }
+        break;
+      }
+      case "aslide": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        let prevAction = null, first = true;
+        for (const s of it.steps) {
+          const cmd = s.action ? "ASD" : "ASC";
+          const rootTok = first ? (WORD_TOKEN[it.on] ?? it.on)
+            : (prevAction ? "ASD" : "ASC");
+          const [pm, pt] = pos(prev.p);
+          const h0 = s.from !== undefined ? s.from : prev.h;
+          const toks = [cmd, pm, pt, prev.lane, prev.width, rootTok, h0,
+                        s.p - prev.p, s.lane, s.width, s.h1];
+          const st = resolved(s.style, it.headStyle);
+          if (st !== undefined) toks.push(st);
+          out.push(line(toks));
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+          prevAction = s.action; first = false;
+        }
+        break;
+      }
+      case "crush": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        for (const s of it.steps) {
+          const [pm, pt] = pos(prev.p);
+          const toks = ["ALD", pm, pt, prev.lane, prev.width, it.interval,
+                        prev.h, s.p - prev.p, s.lane, s.width, s.h1];
+          const st = resolved(s.style, it.headStyle);
+          if (st !== undefined) toks.push(st);
+          out.push(line(toks));
+          emitAirs(s.airs, s.p, s.lane, s.width, "CRUSH");
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+        }
+        break;
+      }
+      case "trace": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, pA: it.pA0, pB: it.pB0 };
+        for (const s of it.steps) {
+          const [pm, pt] = pos(prev.p);
+          const toks = ["ASO", pm, pt, prev.lane, prev.width, prev.pA, prev.pB,
+                        s.p - prev.p, s.lane, s.width, s.pA1, s.pB1];
+          const st = resolved(s.style, it.headStyle);
+          if (st !== undefined) toks.push(st);
+          out.push(line(toks));
+          emitAirs(s.airs, s.p, s.lane, s.width, "TRACE");
+          prev = { p: s.p, lane: s.lane, width: s.width, pA: s.pA1, pB: s.pB1 };
+        }
+        break;
+      }
+      case "heaven": {
+        const cmd = WORD_TOKEN[it.family];
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        for (const s of it.steps) {
+          const [pm, pt] = pos(prev.p);
+          const toks = [cmd, pm, pt, prev.lane, prev.width, prev.h,
+                        s.p - prev.p, s.lane, s.width, s.h1, it.disc];
+          if (it.family === "EXHEAVEN" && it.fx !== undefined) toks.push(it.fx);
+          out.push(line(toks));
+          emitAirs(s.airs, s.p, s.lane, s.width, "HEAVEN");
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+        }
+        break;
+      }
+      case "keyzone": {
+        out.push(line(["SLA", m, t, it.lane, it.width, it.endP - it.p, it.key]));
+        break;
+      }
+      case "orphanAir": {
+        const toks = [AIR_CMD[it.dir], m, t, it.lane, it.width, it.rootRaw];
+        if (it.style !== undefined) toks.push(it.style);
+        out.push(line(toks));
+        break;
+      }
+    }
+  }
+  out.push([]);
+  return out;
+}
+
+function emitC2s(ast) {
+  return emitC2sRows(ast).map(r => r.join("\t")).join("\r\n");
+}
+
+  // ---- from cmr/tools/c2cmr.mjs ----
+// c2s -> cmr importer. DEV-SIDE ONLY: this is the one-time (per-chart)
+// archival boundary crossing; deployment serves the .cmr it produces.
+
+function convert(text, diag = { warn: () => {} }) {
+  const src = readC2s(text, diag);
+
+  // [meta]: last duplicate wins (the reference header state is
+  // last-assignment); order of first appearance is preserved.
+  const seen = new Map();
+  for (const [cmd, rest] of src.meta) {
+    if (seen.has(cmd)) diag.warn(`duplicate header ${cmd}; last wins`);
+    seen.set(cmd, rest);
+  }
+  const meta = [];
+  const done = new Set();
+  for (const [cmd] of src.meta) {
+    if (done.has(cmd)) continue;
+    done.add(cmd);
+    const rest = seen.get(cmd);
+    const key = META_KEY.get(cmd);
+    const toks = rest.split(/[\t ]+/).filter(s => s.length);
+    let value;
+    switch (key) {
+      case "creator": value = rest; break;                    // raw to EOL
+      case "difficulty": case "version": value = toks.join(" "); break;
+      case "bpm-default": value = toks.slice(0, 4).map(t => fmt(Number.parseFloat(t) || 0)).join(" "); break;
+      case "meter-default": {
+        const unit = Number.parseInt(toks[0], 10) || 0;
+        const count = Number.parseInt(toks[1], 10) || 0;
+        value = `${count}/${unit}`; break;                    // un-inverted
+      }
+      default: value = toks.map(t => fmt(Number.parseFloat(t) || 0)).join(" ");
+    }
+    meta.push({ key, value });
+  }
+
+  const events = src.events.map(e => ({ ...e, p: e.m * R + e.t }));
+  const { items, warnings, errors } = associate(src.records);
+  for (const w of warnings) diag.warn(w);
+  if (errors.length) {
+    throw new Error("non-reproducible source ordering:\n  " + errors.join("\n  "));
+  }
+  const ast = { meta, statsOverrides: src.statLines, events, items };
+  return { ast, text: emitCmr(ast), unknown: src.unknown, warnings };
+}
+
+  // ---- from ilcmr/tools/cmr2ilc.mjs ----
+// cmr AST -> ilcmr text (the decompiler). Priority: sugar > canonical
+// keyword form > ! escape (ruling 13). Deployment-safe: knows only
+// cmr and ilcmr.
+
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const durTxt = ticks => {
+  if (ticks <= 0) return "[1:0]";
+  const g = gcd(ticks, R);
+  return `[${R / g}:${ticks / g}]`;
+};
+const AIR_GLYPH = { U: "^", UL: "^<", UR: "^>", D: "v", DL: "v<", DR: "v>" };
+const span = (lane, width) => `${lane}-${lane + width}`;
+
+// families whose decoded codes match the bare-sugar defaults
+const slideSugarable = it =>
+  it.steps.every(s => {
+    const st = s.sevenField ? (s.style ?? it.headStyle) : undefined;
+    return st === undefined || st === "SLD";
+  }) && (it.headStyle === undefined || it.headStyle === "SLD");
+const aslideSugarable = it =>
+  (it.headStyle === undefined || it.headStyle === "DEF") &&
+  it.steps.every(s => (s.style ?? it.headStyle) === undefined ||
+                      (s.style ?? it.headStyle) === "DEF");
+
+// Recompute secondary ownership from the cmr attachment rules (SPEC §5.3):
+// first compatible root in item order, one secondary slot, attachment at
+// the root's endpoint (hold end, chain final, own time for points).
+const ON_TYPE = { TAP: 0, EXTAP: 4, FLICK: 6, DAMAGE: 11,
+                  HOLD: 1, EXHOLD: 1, SLIDE: 2, EXSLIDE: 2 };
+function resolveOwners(ast) {
+  const roots = [];
+  const point = it => {
+    if (it.k === "note") return { p: it.p, lane: it.lane, width: it.width };
+    if (it.k === "hold") return { p: it.endP, lane: it.lane, width: it.width };
+    // slide: chain final point with six-field width resolution
+    let w = it.width, lane = it.lane, p = it.p;
+    for (const s of it.steps) { w = s.sevenField ? s.width : w; lane = s.lane; p = s.p; }
+    return { p, lane, width: w };
+  };
+  for (const it of ast.items) {
+    if (it.k === "note" || it.k === "hold" || it.k === "slide") {
+      // a suffix AIR consumes the root's single secondary slot too
+      const hasAir = (it.airs?.length ?? 0) > 0 ||
+        (it.steps ?? []).some(x => (x.airs?.length ?? 0) > 0);
+      roots.push({ type: it.k === "note" ? ON_TYPE[it.family]
+                     : it.k === "hold" ? 1 : 2,
+                   it, used: hasAir });
+      continue;
+    }
+    if ((it.k === "ahold" || it.k === "aslide") && !it.ownerItem) {
+      const want = ON_TYPE[it.on];
+      const root = roots.find(r => !r.used && r.type === want &&
+        (() => { const q = point(r.it);
+                 return q.p === it.p && q.lane === it.lane && q.width === it.width; })());
+      if (root) { root.used = true; it.ownerItem = root.it; }
+    } else if (it.ownerItem) {
+      // assoc-built AST: mark the owner's slot used for parity
+      const root = roots.find(r => r.it === it.ownerItem);
+      if (root) root.used = true;
+    }
+  }
+}
+
+function decompile(ast, diag = { warn: () => {} }) {
+  resolveOwners(ast);
+  // ---- slots: pos -> {events: [], notes: []} ------------------------------
+  const slots = new Map();
+  const slot = p => {
+    if (!slots.has(p)) slots.set(p, { events: [], notes: [] });
+    return slots.get(p);
+  };
+  const escapes = new Map();       // tick -> {pre: [], post: []}
+  const escCount = new Map();
+  // meta: highlight span info for the viewer — {kind, t0, t1} in ticks
+  const escapeLines = (p, lines, why, post, meta) => {
+    if (!escapes.has(p)) escapes.set(p, { pre: [], post: [] });
+    escapes.get(p)[post ? "post" : "pre"].push(...lines.map(line => ({ line, meta })));
+    escCount.set(why, (escCount.get(why) || 0) + 1);
+    slot(p);                       // every escape gets a serializer cell
+  };
+  const itemSpanMeta = it => {
+    const lastP = it.steps?.length ? it.steps[it.steps.length - 1].p
+      : (it.endP ?? it.p);
+    const kind = { slide: "slide", crush: "air", ahold: "air", aslide: "air",
+                   orphanAir: "air", heaven: "heaven", trace: "trace",
+                   hold: "hold", note: "note", keyzone: "keyzone" }[it.k];
+    return { kind, t0: it.p, t1: lastP };
+  };
+  // re-emit one AST item as verbatim cmr lines via a single-item emit
+  const itemCmrLines = it => {
+    const mini = { meta: [], statsOverrides: [], events: [], items: [it] };
+    const body = emitCmr(mini).split("\n");
+    const notesAt = body.indexOf("[notes]");
+    return body.slice(notesAt + 1).filter(l => l.trim() && !l.startsWith("@"))
+      .map(l => {
+        const t = l.trim();
+        // escape lines are self-timed: force full m:t on the head line
+        if (!t.startsWith("~>") && !t.startsWith("->")) {
+          const toks = t.split(" ");
+          if (!toks[1].includes(":")) toks[1] = mt(it.p);
+          return toks.join(" ");
+        }
+        return t;
+      });
+  };
+  const eventCmrLines = e => {
+    const mini = { meta: [], statsOverrides: [], events: [e], items: [] };
+    const body = emitCmr(mini).split("\n");
+    const at = body.indexOf("[events]");
+    return [body[at + 1]];
+  };
+
+  // ---- events -> state changes -------------------------------------------
+  const channels = new Map();      // name -> spans[]
+  const chan = k => { if (!channels.has(k)) channels.set(k, []); return channels.get(k); };
+  for (const e of ast.events) {
+    switch (e.cmd) {
+      case "BPM": slot(e.p).events.push(`(${fmt(e.bpm)})`); break;
+      case "MET": slot(e.p).events.push(`(meter ${fmt(e.count)}/${fmt(e.unit)})`); break;
+      case "CLK": slot(e.p).events.push(`(click)`); break;
+      case "STP":
+        if (e.dur < 0) escapeLines(e.p, eventCmrLines(e), "negative-stop");
+        else slot(e.p).events.push(`(stop ${durTxt(e.dur)})`);
+        break;
+      case "SFL": chan("speed").push(e); break;
+      case "SLP": chan(`speed key ${e.key}`).push(e); break;
+      case "DCM": chan("depth").push(e); break;
+      case "SFE": chan("scroll-dead").push(e); break;
+    }
+  }
+  for (const [name, spans] of channels) {
+    const word = name.startsWith("speed key") ? `speed` : name;
+    const keySuffix = name.startsWith("speed key") ? " key " + name.split(" ")[2] : "";
+    let ok = true;
+    for (let i = 0; i < spans.length; i++) {
+      if (spans[i].dur < 0 ||
+          (i > 0 && spans[i].p < spans[i - 1].p + spans[i - 1].dur)) { ok = false; break; }
+    }
+    if (!ok) {
+      for (const e of spans) escapeLines(e.p, eventCmrLines(e), "event-overlap");
+      continue;
+    }
+    for (let i = 0; i < spans.length; i++) {
+      const e = spans[i];
+      slot(e.p).events.push(`(${word} ${fmt(e.factor)}${keySuffix})`);
+      const end = e.p + e.dur;
+      if (!(i + 1 < spans.length && spans[i + 1].p === end)) {
+        slot(end).events.push(`(${word} off${keySuffix})`);
+      }
+    }
+  }
+
+  // ---- notes -> tokens ----------------------------------------------------
+  // Phase A: dispositions. A primary is escaped when its decoded tokens
+  // exceed the sugar defaults; a secondary is escaped when it cannot be a
+  // suffix OR its owner is escaped (the escape stream keeps owner-then-
+  // secondary order so reattachment works on recompile).
+  const isSecondary = it => (it.k === "ahold" || it.k === "aslide") && it.ownerItem;
+  const escaped = new Map();
+  const escapeWhy = new Map();
+  // Continuation attachment is first-created-chain-match; the suffix form
+  // moves initial records to owner order, which flips creation order when
+  // two chains share a junction point. Escape every construct involved in
+  // a shared point so verbatim cmr keeps the source resolution.
+  const junctionCollide = new Set();
+  // Slide-chain crossings: two chains sharing any path point (same decoded
+  // style code) can swap continuations when emission order shifts (e.g.
+  // one escapes while its mirror stays sugar). Escape both so verbatim
+  // order keeps the source resolution.
+  const slideGroups = [];
+  {
+    const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
+    const byPoint = new Map();
+    for (const it of ast.items) {
+      if (it.k !== "slide") continue;
+      const code = Math.max(0, SLIDE_STYLE.indexOf(it.headStyle ?? ""));
+      let w = it.width;
+      const pts = [`${it.p},${it.lane},${it.width},${code}`];
+      for (const st of it.steps) {
+        w = st.sevenField ? st.width : w;
+        pts.push(`${st.p},${st.lane},${w},${code}`);
+      }
+      for (const key of new Set(pts)) {
+        if (!byPoint.has(key)) byPoint.set(key, new Set());
+        byPoint.get(key).add(it);
+      }
+    }
+    for (const set of byPoint.values()) {
+      if (set.size > 1) slideGroups.push([...set]);
+    }
+  }
+  // Initial-attachment contention: several secondaries claiming the same
+  // (point, root-family) map to interchangeable roots by ARRIVAL ORDER;
+  // suffix emission reorders arrivals, so escape the whole contention
+  // group — verbatim lines keep source order.
+  {
+    const byAttach = new Map();
+    for (const it of ast.items) {
+      if ((it.k !== "ahold" && it.k !== "aslide") || !it.ownerItem) continue;
+      const key = `${it.p},${it.lane},${it.width},${ON_TYPE[it.on]}`;
+      if (!byAttach.has(key)) byAttach.set(key, []);
+      byAttach.get(key).push(it);
+    }
+    for (const list of byAttach.values()) {
+      if (list.length > 1) for (const it of list) junctionCollide.add(it);
+    }
+  }
+  for (const kind of ["ahold", "aslide"]) {
+    const byKey = new Map();
+    for (const it of ast.items) {
+      if (it.k !== kind || !it.ownerItem) continue;
+      const seen = new Set();
+      for (const st of it.steps) {
+        const key = kind === "ahold"
+          ? `${st.p},${it.lane},${it.width}`
+          : `${st.p},${st.lane},${st.width},${st.action ? 1 : 0}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!byKey.has(key)) byKey.set(key, []);
+        byKey.get(key).push(it);
+      }
+    }
+    for (const list of byKey.values()) {
+      if (list.length > 1) for (const it of list) junctionCollide.add(it);
+    }
+  }
+  // primaries
+  for (const it of ast.items) {
+    if (it.k === "slide") {
+      const mixedEx = it.steps.some(x => (x.ex ?? it.headEx) !== it.headEx);
+      const fbBad = it.steps.some(x => {
+        const fx = (x.ex ?? it.headEx) ? (x.fx ?? (it.headEx ? it.headFx : undefined)) : undefined;
+        return fx !== undefined && fx !== "UP";
+      }) || (it.headEx && it.headFx !== undefined && it.headFx !== "UP");
+      if (!slideSugarable(it) || mixedEx || fbBad) {
+        escaped.set(it, true); escapeWhy.set(it, "styled-slide");
+      }
+      continue;
+    }
+    if (it.k === "orphanAir") { escaped.set(it, true); escapeWhy.set(it, "orphan-air"); continue; }
+    if (!isSecondary(it) && (it.k === "ahold" || it.k === "aslide")) {
+      escaped.set(it, true); escapeWhy.set(it, "ownerless-secondary");
+    }
+  }
+  // slide-crossing escalation: a colliding group whose members are all
+  // sugar keeps cmr item order in the stream and is safe; once any member
+  // is escaped the group's emission order shifts, so the whole group goes
+  // verbatim. Iterate: escaping a group can infect overlapping groups.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const group of slideGroups) {
+      if (!group.some(it => escaped.get(it))) continue;
+      for (const it of group) {
+        if (!escaped.get(it)) {
+          escaped.set(it, true); escapeWhy.set(it, "slide-junction");
+          changed = true;
+        }
+      }
+    }
+  }
+  // secondaries
+  for (const it of ast.items) {
+    if (!isSecondary(it)) continue;
+    let why = null;
+    if (escaped.get(it.ownerItem)) why = "escaped-owner";
+    else if (junctionCollide.has(it)) why = it.k + "-junction";
+    else if (it.k === "ahold" && it.steps.slice(0, -1).some(x => x.action)) why = "mixed-airhold";
+    else if (it.k === "aslide" && !aslideSugarable(it)) why = "styled-airslide";
+    else if (it.k === "aslide" && it.steps.some(x => x.from !== undefined)) why = "airslide-height-jump";
+    if (why) { escaped.set(it, true); escapeWhy.set(it, why); }
+  }
+
+  // suffix builders
+  const suffixOf = new Map();
+  const addSuffix = (owner, x) => {
+    if (!suffixOf.has(owner)) suffixOf.set(owner, []);
+    suffixOf.get(owner).push(x);
+  };
+  const airTxt = airs => (airs || []).map(a => AIR_GLYPH[a.dir]).join("");
+  const tagTxt = t => t === undefined ? "" : `.${t}`;
+  // span-aware token builder: text plus sub-span highlight metadata
+  const tok = () => ({ text: "", subs: [] });
+  const addT = (t, piece, meta) => {
+    if (!piece) return;
+    if (meta && meta.kind) {
+      t.subs.push({ s: t.text.length, e: t.text.length + piece.length, ...meta });
+    }
+    t.text += piece;
+  };
+  for (const it of ast.items) {
+    if (!isSecondary(it) || escaped.get(it)) continue;
+    const lastStepP = it.steps[it.steps.length - 1].p;
+    if (it.k === "ahold") {
+      const last = it.steps[it.steps.length - 1];
+      let prev = it.p;
+      let txt = `^h${last.action ? "x" : ""}${tagTxt(it.note)}`;
+      it.steps.forEach((x, i) => { txt += (i ? "~" : "") + durTxt(x.p - prev); prev = x.p; });
+      addSuffix(it.ownerItem, { txt, t0: it.p, t1: lastStepP, kind: "air" });
+    } else {
+      let prev = { p: it.p, h: it.h0 };
+      let txt = `^s@${fmt(it.h0)}`;
+      for (const x of it.steps) {
+        txt += durTxt(x.p - prev.p) + (x.action ? ">" : "~") +
+          span(x.lane, x.width) + (x.h1 !== prev.h ? `@${fmt(x.h1)}` : "");
+        prev = { p: x.p, h: x.h1 };
+      }
+      addSuffix(it.ownerItem, { txt, t0: it.p, t1: lastStepP, kind: "air" });
+    }
+  }
+
+  // Phase B: ordered walk
+  for (const it of ast.items) {
+    if (escaped.get(it)) {
+      const post = slots.has(it.p) && slots.get(it.p).notes.length > 0;
+      escapeLines(it.p, itemCmrLines(it), escapeWhy.get(it), post, itemSpanMeta(it));
+      slot(it.p);                     // ensure a grid cell exists at this tick
+      continue;
+    }
+    if (isSecondary(it)) continue;      // emitted as a suffix on its owner
+    const sfxAdd = t => {
+      for (const x of suffixOf.get(it) || []) {
+        addT(t, x.txt, { kind: x.kind, t0: x.t0, t1: x.t1 });
+      }
+    };
+    // airs flash at the owner's attachment point
+    const airsAdd = (t, airs, atP) =>
+      addT(t, airTxt(airs), { kind: "air", t0: atP, t1: atP });
+    switch (it.k) {
+      case "note": {
+        const sig = { TAP: "", EXTAP: "x", FLICK: "f", DAMAGE: "d" }[it.family];
+        let tag = "";
+        if (it.family === "EXTAP") tag = it.note === "UP" ? "" : tagTxt(it.note ?? "");
+        if (it.family === "FLICK") tag = it.note === "L" ? "" : tagTxt(it.note ?? "");
+        const kind = { TAP: "tap", EXTAP: "extap", FLICK: "flick", DAMAGE: "damage" }[it.family];
+        const t = tok();
+        addT(t, `${sig}${span(it.lane, it.width)}${tag}`, { kind, t0: it.p, t1: it.p });
+        airsAdd(t, it.airs, it.p);
+        sfxAdd(t);
+        slot(it.p).notes.push(t);
+        break;
+      }
+      case "hold": {
+        const sig = it.family === "EXHOLD" ? "hx" : "h";
+        const tag = it.family === "EXHOLD" && it.fx !== undefined ? tagTxt(it.fx) : "";
+        const t = tok();
+        addT(t, `${sig}${span(it.lane, it.width)}${durTxt(it.endP - it.p)}${tag}`,
+             { kind: "hold", t0: it.p, t1: it.endP });
+        airsAdd(t, it.airs, it.endP);
+        sfxAdd(t);
+        slot(it.p).notes.push(t);
+        break;
+      }
+      case "slide": {
+        let txt = (it.headEx ? "sx" : "s") + span(it.lane, it.width);
+        let prev = { p: it.p, lane: it.lane, width: it.width };
+        let airs = [];
+        let finalP = it.p;
+        it.steps.forEach((s, i) => {
+          const w = s.sevenField ? s.width : prev.width;
+          txt += durTxt(s.p - prev.p) + (s.marked ? ">" : "~") + span(s.lane, w);
+          prev = { p: s.p, lane: s.lane, width: w };
+          airs.push(...(s.airs || []));
+          finalP = s.p;
+        });
+        const t = tok();
+        addT(t, txt, { kind: "slide", t0: it.p, t1: finalP });
+        airsAdd(t, airs, finalP);
+        sfxAdd(t);
+        slot(it.p).notes.push(t);
+        break;
+      }
+      case "keyzone": {
+        const t = tok();
+        addT(t, `keyzone ${span(it.lane, it.width)} key ${it.key} ${durTxt(it.endP - it.p)}`);
+        slot(it.p).notes.push(t);
+        break;
+      }
+      case "crush": case "trace": case "heaven": {
+        const kind = { crush: "air", trace: "trace", heaven: "heaven" }[it.k];
+        const lastP = it.steps.length ? it.steps[it.steps.length - 1].p : it.p;
+        const meta = { kind, t0: it.p, t1: lastP };
+        const head = it.k === "crush"
+          ? `crush ${span(it.lane, it.width)}@${fmt(it.h0)} every ${it.interval}` +
+            (it.headStyle !== undefined ? ` style ${it.headStyle}` : "")
+          : it.k === "trace"
+          ? `trace ${span(it.lane, it.width)}@${fmt(it.pA0)}:${fmt(it.pB0)}` +
+            (it.headStyle !== undefined ? ` style ${it.headStyle}` : "")
+          : `${it.family === "EXHEAVEN" ? "heavenx" : "heaven"} ` +
+            `${span(it.lane, it.width)}@${fmt(it.h0)} disc ${it.disc}` +
+            (it.fx !== undefined ? tagTxt(it.fx) : "");
+        const t = tok();
+        addT(t, head, meta);
+        let prev = it.p;
+        for (const s of it.steps) {
+          const legSpan = it.k === "trace"
+            ? `${span(s.lane, s.width)}@${fmt(s.pA1)}:${fmt(s.pB1)}`
+            : `${span(s.lane, s.width)}@${fmt(s.h1)}`;
+          addT(t, ` ${durTxt(s.p - prev)} > ${legSpan}`, meta);
+          airsAdd(t, s.airs, s.p);
+          if (it.k !== "heaven") {
+            const st = s.style ?? it.headStyle;
+            if (st !== it.headStyle) {
+              addT(t, st === undefined ? " style none" : ` style ${st}`, meta);
+            }
+          }
+          prev = s.p;
+        }
+        sfxAdd(t);
+        slot(it.p).notes.push(t);
+        break;
+      }
+
+    }
+  }
+
+  // ---- serialize ----------------------------------------------------------
+  const out = [], outTicks = [], outSpans = [];
+  const push = (line, tick, spans) => {
+    out.push(line); outTicks.push(tick ?? null); outSpans.push(spans ?? []);
+  };
+  for (const { key, value } of ast.meta) push(`&${key} ${value}`);
+  push("");
+  const positions = [...slots.keys()].sort((a, b) => a - b);
+  const lastP = positions.length ? positions[positions.length - 1] : 0;
+  const lastMeasure = Math.max(Math.floor(lastP / R),
+    ...[...escapes.keys()].map(p => Math.floor(p / R)), 0);
+  let division = null;
+  let cursor = 0;                  // next unemitted position index
+  for (let m = 0; m <= lastMeasure; m++) {
+    const inMeasure = [];
+    while (cursor < positions.length && positions[cursor] < (m + 1) * R) {
+      inMeasure.push(positions[cursor]); cursor++;
+    }
+    let div = 1;
+    if (inMeasure.length) {
+      let g = R;
+      for (const p of inMeasure) g = gcd(g, p - m * R);
+      div = R / g;
+    }
+    // line builder: identical text to the old parts.join(" ") scheme, plus
+    // char-offset highlight spans for the viewer panes
+    let lb = null;
+    const lbEnsure = () => { if (!lb) lb = { text: "", spans: [], tick: null }; };
+    const lbPart = (piece, subs) => {
+      lbEnsure();
+      const base = lb.text.length + (lb.text.length ? 1 : 0);
+      if (subs) for (const x of subs) {
+        lb.spans.push({ ...x, s: x.s + base, e: x.e + base });
+      }
+      lb.text += (lb.text.length ? " " : "") + piece;
+    };
+    const flush = () => {
+      if (lb && lb.text.length) push(lb.text, lb.tick, lb.spans);
+      lb = null;
+    };
+    const escSpan = (line, meta) => meta && meta.kind
+      ? [{ s: 0, e: line.length + 2, kind: meta.kind, t0: meta.t0, t1: meta.t1,
+           step: /^(~>|->)/.test(line) }]
+      : [];
+    if (div !== division) { lbPart(`{${div}}`); division = div; }
+    const step = R / div;
+    for (let i = 0; i < div; i++) {
+      const p = m * R + i * step;
+      const esc = escapes.get(p);
+      if (esc && esc.pre.length) {
+        flush();
+        for (const { line, meta } of esc.pre) push(`! ${line}`, p, escSpan(line, meta));
+      }
+      const s = slots.get(p);
+      let cellText = "";
+      const cellSubs = [];
+      if (s) {
+        cellText = s.events.join(" ");
+        if (s.notes.length) {
+          const joiner = s.notes.some(n => n.text.includes(" ")) ? " / " : "/";
+          if (cellText) cellText += " ";
+          s.notes.forEach((n, idx) => {
+            if (idx) cellText += joiner;
+            for (const x of n.subs) {
+              cellSubs.push({ ...x, s: x.s + cellText.length, e: x.e + cellText.length });
+            }
+            cellText += n.text;
+          });
+        }
+      }
+      lbEnsure();
+      if (lb.tick === null) lb.tick = p;
+      lbPart(cellText + ",", cellSubs);
+      if (esc && esc.post.length) {
+        flush();
+        for (const { line, meta } of esc.post) push(`! ${line}`, p, escSpan(line, meta));
+      }
+    }
+    lbPart("|");
+    flush();
+  }
+  push("");
+  for (const [why, n] of escCount) diag.warn(`escape fallback: ${why} x${n}`);
+  decompile.lastLineTicks = outTicks;
+  decompile.lastSpans = outSpans;
+  return out.join("\n");
+}
+  return { convert, parseCmr, emitCmr, emitC2sRows, decompile,
+           decompileLineTicks: () => decompile.lastLineTicks };
+  })();
+  // ==== END CMR CORRIDOR ====
 
   // ---- family table -------------------------------------------------------
   // Field layouts read off real records; index 0 is the first token after the
@@ -970,8 +2769,12 @@
   // spec/c2s.md's recovered descriptor table; registered group-3 statistics
   // take the derived-summary overwrite path
   // (claim.parser.derived-command-overwrite).
-  function parseC2s(text) {
-    const lines = text.split(/\r?\n/);
+  function parseC2s(input) {
+    // The cmr corridor hands this function pre-tokenized record rows from
+    // CMR.emitC2sRows -- on that path no c2s text is ever materialized. A
+    // plain string still parses as c2s lines (importer/dev path).
+    const inputRows = Array.isArray(input) ? input
+      : input.split(/\r?\n/).map(raw => raw.split(/[\t ]+/).filter(t => t.length));
     // Recovered reset defaults. BPM_DEF 150 is retained as header state but
     // does not synthesize a BPM event. Source: claim.parser.header-default-dispatch.
     const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
@@ -979,9 +2782,8 @@
     const counts = new Map(), unknown = new Map();
     let eventSourceOrder = 0;
 
-    for (const raw of lines) {
-      if (!raw.trim()) continue;
-      const t = raw.split(/[\t ]+/).filter(s => s.length);
+    for (const t of inputRows) {
+      if (!t.length) continue;
       const cmd = t[0], f = t.slice(1);
       counts.set(cmd, (counts.get(cmd) || 0) + 1);
 
@@ -1165,7 +2967,20 @@
     }
     const { chains: aldChains, samples: aldSamples } =
       buildAirLadderChains(notes, timeAt);
-    notes.sort((a, b) => a.time - b.time);
+    // Within-tick draw layering was historically file-line order — an
+    // accident of the source, unproven either way against the cabinet.
+    // The corridor canonicalizes it: ties break on model content, so the
+    // cmr-built and text-built models layer identically (product choice,
+    // verified by scripts/verify_viewport.mjs).
+    notes.sort((a, b) => a.time - b.time || a.parsedType - b.parsedType ||
+      a.lane - b.lane || a.width - b.width || (a.dur || 0) - (b.dur || 0) ||
+      (a.endLane ?? -1) - (b.endLane ?? -1) ||
+      (a.endWidth ?? -1) - (b.endWidth ?? -1) ||
+      (a.h0 || 0) - (b.h0 || 0) || (a.h1 || 0) - (b.h1 || 0) ||
+      (a.cmd < b.cmd ? -1 : a.cmd > b.cmd ? 1 : 0) ||
+      ((a.root || "") < (b.root || "") ? -1 : (a.root || "") > (b.root || "") ? 1 : 0) ||
+      ((a.style || "") < (b.style || "") ? -1 : (a.style || "") > (b.style || "") ? 1 : 0) ||
+      (a.tag ?? 0) - (b.tag ?? 0));
     for (const k of markers) { k.p = k.m * R + k.t; k.time = timeAt(k.p); }
     markers.sort((a, b) => a.time - b.time);
     for (const r of regions) {
@@ -1729,7 +3544,7 @@
   let overlayN = 0, overlayPat = null;
   const show = { wings: false, air: true, grid: true, bars: false,
                  airNotes: true, cosmetic: true, autoplay: true, applySlp: true,
-                 stripe: false };
+                 stripe: false, anmitsu: false };
   const AIR_KINDS = new Set(["air", "ald", "aslide", "ahold", "asolid"]);
   const solidKeys = new Set(); // per-frame dedup of solid slide/hold notes
 
@@ -1830,6 +3645,47 @@
   // for compensating output latency on the reviewer's own machine.
   const GUIDE_MERGE_MS = 8;
   let guideOn = true, metroOn = false, guideDelayMs = 0;
+
+  // ---- anmitsu detection (owner feature, 2026-08-20) ---------------------
+  // Anmitsu: two hits whose LANES OVERLAP and whose gap fits inside the
+  // judgement window can both be caught by rubbing the shared lanes with
+  // one continuous contact. Thresholds are the owner-specified gaps; EX
+  // notes judge JC across their whole window, so an EX-EX pair has no J
+  // tier. The band marks exactly the rubbable lane intersection.
+  const ANM_JC = 100 / 3, ANM_J = 200 / 3, ANM_EX_JC = 250 / 3;
+  function computeAnmitsu(chart) {
+    const events = [];
+    for (const n of chart.notes) {
+      const hit = (n.kind === "tap" && n.cmd !== "MNE") || n.kind === "hold" ||
+        (n.kind === "slide" && n.isRoot);
+      if (!hit) continue;
+      events.push({
+        time: n.time, lo: n.lane, hi: n.lane + n.width,
+        ex: n.cmd === "CHR" || n.cmd === "HXD" ||
+            (n.kind === "slide" && n.slideExtendedRoot),
+      });
+    }
+    events.sort((a, b) => a.time - b.time);
+    const bands = [];
+    for (let i = 0; i < events.length; i++) {
+      const a = events[i];
+      for (let k = i + 1; k < events.length; k++) {
+        const b = events[k];
+        const gap = b.time - a.time;
+        if (gap > ANM_EX_JC) break;              // sorted: nothing closer follows
+        if (gap < 0.5) continue;                 // a chord is one hit, not anmitsu
+        const lo = Math.max(a.lo, b.lo), hi = Math.min(a.hi, b.hi);
+        if (hi <= lo) continue;                  // no shared lanes, no rub
+        let cls = null;
+        if (gap <= ANM_JC) cls = "jc";
+        else if (a.ex && b.ex && gap <= ANM_EX_JC) cls = "jc";
+        else if (gap <= ANM_J) cls = "j";
+        if (!cls) continue;
+        bands.push({ t0: a.time, t1: b.time, cls, lo, hi });
+      }
+    }
+    return bands;
+  }
   let audioCtx = null, master = null;
   let clickBuf = null, stickBuf = null, guidePrimedTo = Infinity;
   const scheduledClicks = new Set();
@@ -1852,31 +3708,152 @@
     return buf;
   }
 
-  // Guide click: drumstick-on-drumstick. Toneless by construction — pure
-  // band-limited noise (difference of two one-pole lowpasses, ~1.5-7 kHz)
-  // under a 4 ms decay with a small 12 ms tail; no sinusoidal partial exists
-  // for the ear to assign a pitch to. Product choice.
+  // Guide click v10 (final form, owner decision): the reference sample
+  // itself -- wood-click_144bpm.wav, owner-provided -- processed offline
+  // (attack trimmed to 0.3 ms with a 1.5x transient emphasis = "sharper",
+  // peak-normalized = "louder") with its real room reverb tail kept
+  // intact. 199 ms mono, 16-bit PCM at 24 kHz, embedded below; WebAudio
+  // resamples on playback. Synthesis attempts kept missing the sample's
+  // character, so the sample IS the voice now.
+  const STICK_PCM_B64 =
+    "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" +
+    "/2r/2f8MAEEAwAAsATUBEwG/AFIAAgCv/3X/Qf8s/0v/Sv8x/3v/wf/+/2IAkgC2AP4A8gDpANsAdwD6/6f/O//w/sf+uP7f/jT/" +
+    "rP8fAG8A6QB7AbMBZQHwAGcA5f99/0X/FP+x/ob+ov7y/qD/XQDeADcBZAE8AQgBuABbAOb/pP9Z/xL/wv6t/hX/hv/u/2wAjQCZ" +
+    "ANIA3gDLAOQAggDs/3r/Wv9V/zj/Vv9r/2n/vv8hAHYAwADQAJYAZgBDADAACAAAAO3/iv9F/0v/Xv+F/+r/GADu/xYAkwDJAK4A" +
+    "lgBNAAQA5f/x/wsAyv90/07/LP9L/9n/NwBHAEQAUwBhAKMAzQCdAEoAAACy/4f/dP80/x//Tv97/73/DQBuALUAyADEAM4AwACS" +
+    "AFsA7/9U/+P+4P4C/0T/iP+7//D/RQClAOMADQEpAfAAdgAVALD/Xf8//yf/DP8O/0r/kf/g/z4ApgDSAAQBBwHXAJ0AWwD2/53/" +
+    "a/8c/9v+z/79/m3/9v9kAKMA0wDfAAIBKAHUAGUA7v9g//z+/v4l/zT/Pv9v/8P/IACpAPIA1ADLAL0AlgB0AEIA5P+J/zn/6v7K" +
+    "/h//fv/W/yYAUQB1AK8AxgDyAO4AqgBLANv/jv9U/xr//v4f/0//lf/q/0MAhwCkAOAAAgHXAKIAZgDs/37/P/8O//3+Bf86/4//" +
+    "9P9NAKEA3wAQASUB9QCnADwAw/9m/0b/Cv/P/tf+BP9X//r/kwAHAScBFgEFAckAmABWAM//XP/+/rj+t/7//nb/9P8tAFUAkADL" +
+    "AAoBKQH7AJIAKQDF/2b/O/8W//X+Af8j/23/8v9sAMEAuQCfALwA5gDmAKQALgCt/zz/9f4E/zf/av+R/7f/8f87AJYA7AABAcsA" +
+    "jABEAOb/xv/A/3H/PP9i/27/i//h/yEALQBMAFUARQBoAH8AaQA3AAcA6//U/9L/0f+3/43/hv+b/6T/y/8IAE4AkgCoAIsAegBv" +
+    "AEQAAADU/5n/dP9K/zv/Wv+V/+r/NgBoAIgAqACrAIYAUQArABQA0f+j/4z/cf9y/5//tv/s/xwAHQAnAEsAYQBgAFwAUAAbAP7/" +
+    "6f/X/9X/3f/R/67/l/+R/7X/+P8UACUAWgB+AGoAYQBnAGEAMgDS/5r/eP9G/1L/lv/E/93//f8cAFwAtQDqAN0AhwAxAPL/rf9/" +
+    "/3v/e/9e/1X/gP+z/+L/PwB7AJMAvwC7AKQAfgA6APX/uf9z/1D/SP9J/0//cf+x/wkAfwDHAPcACgG4AG8AWQAVALz/Yv8K/+r+" +
+    "Cv9T/5v/4P82AIkA0wAJAQIBwQBSAPL/wv+U/4D/dv9U/1z/ev+l//v/UACAAIQAewBhAFUAUQAvAO7/yf+3/6v/sv+6/8T/x//G" +
+    "/+H/FgBFAGUAYAA9AA0A7//v/wcAEwAAAN7/zP/M/9z/+P8JABgALwAcAPT/3//m////FAAGAAgACgD0//j/DwAEAPz/EQD3/+3/" +
+    "DgAEAPT/BwALAPL//v/8//X/2//Q/+L/4v8FADgAOgBAAF8AWAAqAAMA4v/A/5z/mf+W/5X/tv/i/+v/DABKAIUAtgCwAIMATwAk" +
+    "AOT/rv+M/1z/LP8l/1//uP8GAE4AkgCgAMUA4QC4AIEARADe/4D/Wv9D/zb/OP9V/4v/0P8tAHYAqwDVAOIAxgCNAFQAFgDO/4T/" +
+    "Tf84/yT/Jv9x/7f/4/8zAIwAzgDwAOsAwwCDADgA6/+b/2n/PP8L/w7/Sf+G/9X/OQB4ALMA8gDrAMUAmwBUAPj/sP9s/0D/Gf8j" +
+    "/2T/m//o/zEAXgB9AKAAngCKAHUAXAAeAOb/uf+S/3//e/+I/6L/tv/g/wwALgBXAGgAdgCCAG0AQgAXAN7/rf+M/4H/lP+d/5//" +
+    "zP8SAEAAdgCpAI4AWwAxAAMA8f/b/7T/kP93/4T/tf/g/yoAVQA+AEgAUwBNAE4ANQD1/77/pf+a/6b/yP/z//n/8v8NADUAVgBw" +
+    "AFYAGgD6/+D/1//f/93/1v/b/9f/6v8VABUAAAD4//D/+P8PACUAGgAXABAAAAARAC4AHQD7/+z/1//P/9f/1v/H/9L/6f/6/w8A" +
+    "NwBbAFoARAAhAA4AFwALAOb/wv+w/6v/rP++/9n/9f8AABsAOgBcAGcAUwA+AB4A+//3/+X/zf+w/5b/iv+h/9L/DAA7AEoATgBS" +
+    "AGgAYgBRACoA5f+e/3v/df+W/9L/7P/y/wUAJABAAG0AiwBsACUA8v/a/73/rv/D/7j/sv/I/+z/CgAzAEwAVQBEACwAHwAIAPf/" +
+    "6//p/9j/x//B/8n/z//j/woAKQA2ADwAQgA6ADcAJgADAOH/vf+r/5r/pP/J/+L/BAA8AEcARwBeAGUARAASAO3/2v/L/7L/nP+e" +
+    "/8L/6P8TAEEARAAzACQAHwAkACYAGwDp/87/yv/A/93/FgAVAO//3v/a/+f/CwA3ADcAJwAiACcAKgAvACIA6v+1/5r/h/+W/8D/" +
+    "7/8RADEAQgBOAGAAbwBsADsAAQDW/63/jf9+/4b/o//K//7/KABNAHAAegBfAEMAMQACAOD/1f+3/5b/nP+3/97/AgAeAC4APABB" +
+    "AD4AMQAfAAQA6f/S/9D/4P/u//T/7//e/9n//v8cACkAGQABAAcAGgAkACMAGQAEANz/xv/V/+L/7P/u/+P/5P8AACUAQQBLADkA" +
+    "GQD3//P/BADv/9D/xP+5/77/9/8tADUAJAAIAPj/BAAXAC0AKgAUAPv/0v/L//X/FAAWAP//3v/Y/9n/2//s//f/+/8BAAgAJQBR" +
+    "AFkATAA+AB4AAgDa/6n/mP+n/6L/pv/E/+D/CAAyAF8AfQCFAIUAcAA7AAsA5/+5/4//bf9b/1b/c/+w/+3/LwBzAKIAtwDPAM8A" +
+    "mwBIAPP/of9P/xX/A/8i/1b/jv/S/yUAggDVAPkA8QDcALIAaQAMAKj/RP8I//b+Dv9E/4z/zv8QAF4ArgD6ABQB/AC4AFsA9/+g" +
+    "/3D/Sv8k/wz/If9Z/7D/EwBiAKoA1ADnAOQAzQCWADsAz/9r/zT/E/8U/zL/XP+X/+z/UQCkAOIA8gDeALMAbQAdANP/if9G/yL/" +
+    "Lf9T/4L/uv/8/z4AhgDAANUA1wC0AGAAAQC6/4j/a/9P/0L/WP+I/8X/BgBFAHgAmACqALIAngBpAC0A7/+c/2f/Wv9P/03/a/+T" +
+    "/8v/KgCEAL4A2gDUALEAfgBKAA4Av/9t/yn/A/8H/zj/hv/Z/yAAYwCzAPYAFgEJAcQAYQD7/57/WP8n///+/v4e/0v/pP8cAH8A" +
+    "ygD8AAoBAAHWAJEAPwDT/2D/C//f/uP+B/8+/4v/9v9gAKwA7QAYARkB8QClAFMA+/+b/z7/+v7c/uj+Gf9m/9L/LQB+ANMACwEe" +
+    "AQYBzwB6ABkAvP9f/wz/0P7L/gL/X/++/x4AdQDDAPsAIwEjAesAkwAjAKb/Pv/8/t/+6P4E/0T/rf8bAIMA3gARASEBDgHgAIwA" +
+    "EgCl/0P/9v7d/vb+H/9U/7L/GQB4ANgAEgESAfkAyAB7ACMAvv9i/xf/5P7k/gz/Vv+9/x0AYAChANgADAEeAfUAqABCANP/ZP8X" +
+    "//L+5P7y/ib/g//l/00AwAAEAREBGQEIAcgAZQDv/3f/C//N/tH+6v4i/4T/4P86AKkAAwEqASkBAgG2AEoA7v+g/03/Av/Z/tD+" +
+    "9f5h/9n/NgCaAOUA+gACAQsB5QCNACQArv80/+f+6v76/hb/Y/+s//n/aQDbAB0BKwEMAbwAWQD+/7j/cf8z/wz//v4R/1j/w/8o" +
+    "AHgAtQDVAN4A2gC9AHoAFwC3/2f/Nf8r/zb/U/9+/7H/+v9NAJkAxgDMALwAlgBVABgA5v+q/3f/U/9B/0r/f//G//7/NgBtAIIA" +
+    "kwCpAJkAZwAnAO//u/+R/4L/d/9y/4T/ov/U/xEARQBqAHwAggCBAHMAVgAxAPz/vf+Q/3r/gf+K/5D/pf/N/wAANgBmAHwAgQB5" +
+    "AGIATQA1AAwA4f+1/4T/Zf9w/4f/mv/D/wIANQBbAHcAjQCeAJQAdgBBAPj/wP+a/2v/UP9e/3H/i/+5//z/QgCCALgAxACwAJQA" +
+    "agAoAOT/r/9v/zv/J/8z/2j/t/8CAEMAhgCxALwAtwChAHIANADx/6L/YP9L/0b/Sf9u/6r/6/86AHwAngC0ALkAqQB8ACoA4/+s" +
+    "/2//UP9N/1j/fP+u/+f/MQB2AJ4AtQCrAIUAWQApAPr/vv9+/1f/Tf9b/47/zP8AADoAbgCKAJkAmQCAAD8A+//a/7r/kv+F/4b/" +
+    "iv+e/8f/AAA0AFYAaQBsAGkAYABIACUABADi/7v/m/+E/4L/m//D/+j/DAAzAFgAbwB0AHIAWwAyAAkA1P+i/5D/jv+O/6P/xf/l" +
+    "/wEALgBkAH4AggB1AEsAFgD2/97/wP+s/6H/kf+S/7D/3f8VAEMAVQBSAFIAUQBCACwAFgDw/8n/uf+y/7v/yf/Y/+3/+/8SACYA" +
+    "JAAjACoAJgAeABQACQD7/+n/6//x/+3/8P/o/9X/2//x//r/AwAUABQAEwAgACkAJgAiABwACADt/9z/1f/O/8z/yv/W//j/CwAW" +
+    "ACoANgBBAEEAJgAMAAEA8f/U/73/vP/H/9H/3f/z/xQALwA4AD8ARAA1ABkAAADr/97/2//a/8H/r//F/+r/CwAkADoASABFADcA" +
+    "KgAZAAgA8v/J/6v/pv++/9P/3v/+/yAAMABDAE4AQgA3ACUAAwDj/9P/yP+1/7X/y//e/+7/CgAjADEAQQA9ADAALAAiABAA+//c" +
+    "/8H/tv+3/8f/1v/k/wAAEgAZADQATQBOAEQALgATAPj/5P/U/8H/s/+2/8H/zf/u/xYAKwA6AEkASQBCADoAJgAJAOT/vP+p/6f/" +
+    "t//W/+b/+f8NABwAMwBKAEwARAAwABEA8f/X/8j/yP/M/8z/zf/b//f/EAAmAD0ARAA3AC8AJAAHAOz/2P/E/77/x//Y/+7//v8N" +
+    "ACEAMAA1ADUAMQAeAAIA6//a/83/yP/N/9b/4//5/xAAIAAlACcAKwAoABUACgAGAPP/3//c/9n/0//j//z/AwAHABQAGAAeACkA" +
+    "IwALAPj/6f/c/9r/6P/w//D/+v8DAAsAFQAcABcADwAIAP3/+f/+//3/9//z//L/9f/5//7/AgD+//z/AwAGAAgADQAPAAUA/P/8" +
+    "//v/9v/3//v/+v/2//j///8FAA8ADwAFAP///v/8//j/+v/9//j/+f/9//3/CgAZABMABwD8//D/7//4/////f/5//j/9f/6/woA" +
+    "FgAaABQABgDz/+n/7f/2//v//f/3//j///8IABwAIAAPAAYA/v/y//P/8//p/+L/5//x//f/CQAdABwAFQAaAB0AGAASAAAA6f/Z" +
+    "/9H/2//p/+r/7v///wkAFAAjAC4AKgAVAAcAAgD///z/6f/Q/8v/z//e//v/EwAhACAAGQAZACMAKQAbAAIA7v/Y/9H/3//m/+n/" +
+    "7P/x//n/CgAhAC0AJQAWAA0ABAAAAP7//f/v/93/3P/j/+3//v8HAAMAAwARACQALgAmABEA9f/h/+L/6f/y//T/6P/o//P//f8Q" +
+    "AB4AHQAYABIACwAIAAcABQD//+r/3//a/9f/3f/o//T/BwAaACYAMgA2ADcALQANAPL/4P/L/77/vv/F/9T/5/8AAB0ANwBMAFAA" +
+    "RAA0AB0A///e/8H/s/+x/7H/uf/W//3/HgA6AEwAUwBTAEUALAARAPj/2/+9/6r/p/+x/8L/1v/0/xkAOgBRAF4AWABEADIAFgDy" +
+    "/9T/t/+e/5f/qP/F/+n/DgAtAD8AUABfAF8ASgAqAAIA1v+z/6D/oP+y/8H/z//t/xcAPABSAFMASgA7ACoAFQD4/97/zv+8/6//" +
+    "vP/W//D/BAARAB4AKwA1ADkAMwAkAAsA8f/e/9b/1v/W/9b/3P/q/wAAFAAhACUAJAAcABYAFAAMAPz/6P/Z/9P/2//w/wMACgAO" +
+    "ABQADwAQABcAEAD9/+v/5P/p//L/9v/z//H/BAAUABsAJAAhAA8A///1//H/8v/v/+b/2v/b/+r///8aACsAJwAWAAgACAAPAA8A" +
+    "BgD0/97/1f/a/+b/7v/4/wEABwATACMAKQAjABoACgD3/+//8v/w/+v/6P/h/+T/9v8FAAkACgAKAAwADQAQABEADgAJAAIAAAD+" +
+    "//z/9f/t/+r/6v/v//j//f8AAAIAAwAIABIAHQAiABYACQABAPn/8//u/+b/4f/h/9//5P/t//r/CAAWACUAMAAyADAAKQAVAAAA" +
+    "6//Z/9H/y//F/83/3v/u/wIAGgAvADsAPQA4ACsAFgD8/+j/1//M/8T/wP/I/9///P8ZAC8AOwA9ADUALAAkABIA+v/e/8T/uP+7" +
+    "/8r/4P/y/wAAEwArAD8ASQBGACwADADy/+H/2P/Q/8v/x//G/9f/+P8bADQAPQA8ADUALAAjABAA8v/R/7T/pv+z/9b/+/8NABoA" +
+    "KgA1AEIASwA9AB0A+f/W/7//t/+//8f/0P/f//j/FQAxAEcASwBEADcAJAAPAPf/1/+1/6T/rP/E/9v/7/8FABoAMQBGAFkAXABJ" +
+    "ACIA9v/Z/87/wv+2/7D/sv/C/+D/CwAxAEYAUABOAEYAPAArAAwA5//E/67/qP+v/8X/3f/y/wgAIgA3AEsAWABNADEAEgD1/9n/" +
+    "xv+5/7j/v//S/+n//P8TACoANQA6AD8APQAtABEA8P/W/8r/yv/N/9H/2f/l//H/AwAcADQAPQA5AC0AHQAOAP//7//j/9n/z//I" +
+    "/8//3v/w/wYAGQAjAC0ANQAxACkAIAAPAPj/3f/E/7r/vf/M/+P/9/8NACMAMQA6AEMAQgAyABIA8f/V/8D/uv+9/8P/0v/r/wQA" +
+    "HAA0AEgATQBIADcAHAD+/+D/yP+4/7L/uP/C/9X/7/8MACsARwBYAFkATAA1ABcA+v/f/8b/sv+m/6f/tP/P//b/FwAvAEQAUABS" +
+    "AFEAQwAoAAMA2f+3/6X/qP+1/8b/1P/o/wgAKgBGAFwAYABOADMAFQD7/9//xv+1/6r/rv/E/+H//f8ZACwANwBAAEQAPwAsAA4A" +
+    "8f/d/9D/yf/I/8n/yf/Z//f/EwAsAD8AQgA3AC0AIAARAAAA6P/M/7j/uf/G/9r/8f8EABIAHgArADsAQQA0ABkA/P/k/93/2//d" +
+    "/93/3P/f/+z/AAAaACkALAAoABwADwAFAPz/8P/m/93/";
   function makeStickClick(ctx) {
-    const sr = ctx.sampleRate, len = Math.floor(sr * 0.05);
-    const buf = ctx.createBuffer(1, len, sr);
+    const bin = atob(STICK_PCM_B64);
+    const count = bin.length / 2;
+    const buf = ctx.createBuffer(1, count, 24000);
     const d = buf.getChannelData(0);
-    // two noise bands: a snap (1.2-5 kHz) and a damped low-mid body
-    // (350-1500 Hz) that carries the wood. Still no sinusoidal partial.
-    let s1 = 0, s2 = 0, b1 = 0, b2 = 0;
-    const a5000 = Math.exp(-2 * Math.PI * 5000 / sr);
-    const a1200 = Math.exp(-2 * Math.PI * 1200 / sr);
-    const a1500 = Math.exp(-2 * Math.PI * 1500 / sr);
-    const a350 = Math.exp(-2 * Math.PI * 350 / sr);
-    for (let i = 0; i < len; i++) {
-      const t = i / sr;
-      const x = Math.random() * 2 - 1;
-      s1 = (1 - a5000) * x + a5000 * s1;
-      s2 = (1 - a1200) * x + a1200 * s2;
-      b1 = (1 - a1500) * x + a1500 * b1;
-      b2 = (1 - a350) * x + a350 * b2;
-      const snap = (s1 - s2) * Math.exp(-t / 0.005);
-      const body = (b1 - b2) * 0.9 * Math.exp(-t / 0.016);
-      d[i] = Math.tanh((snap + body) * 6) * 0.95;
+    for (let i = 0; i < count; i++) {
+      const lo = bin.charCodeAt(i * 2), hi = bin.charCodeAt(i * 2 + 1);
+      let v = (hi << 8) | lo;
+      if (v >= 0x8000) v -= 0x10000;
+      d[i] = v / 32768;
     }
     return buf;
   }
@@ -1952,7 +3929,7 @@
     if (!isFinite(guidePrimedTo)) guidePrimedTo = now; // never replay the past
     const horizon = now + 250 * rate; // a quarter second of real time ahead
 
-    const queue = (list, timeOf, buffer, gainOf, rateOf) => {
+    const queue = (list, timeOf, buffer, gainOf, rateOf, pan) => {
       let lo = 0, hi = list.length;
       while (lo < hi) { const m = (lo + hi) >> 1; if (timeOf(list[m]) <= guidePrimedTo) lo = m + 1; else hi = m; }
       for (; lo < list.length && timeOf(list[lo]) <= horizon; lo++) {
@@ -1961,7 +3938,14 @@
         if (rateOf) src.playbackRate.value = rateOf(list[lo]);
         const g = ctx.createGain();
         g.gain.value = gainOf(list[lo]);
-        src.connect(g).connect(master);
+        // slight stereo separation keeps coincident voices distinguishable
+        let tail = g;
+        if (pan !== undefined && ctx.createStereoPanner) {
+          const pn = ctx.createStereoPanner();
+          pn.pan.value = pan;
+          g.connect(pn); tail = pn;
+        }
+        src.connect(g); tail.connect(master);
         const at = ctx.currentTime
           + Math.max(0, (timeOf(list[lo]) - now) / rate / 1000)
           + guideDelayMs / 1000;
@@ -1973,12 +3957,21 @@
     };
 
     if (guideOn && chart.guideEvents.length) {
-      queue(collapsedGuides(), t => t, stickBuf, () => 0.85);
+      queue(collapsedGuides(), t => t, stickBuf, () => 2.0, null, 0.15);
     }
     // Metronome: the meter-aware beat grid, woodblock voice, downbeat accented.
+    // When a beat lands on (or within 35 ms of) a guide click, the metro
+    // ducks: the guide is the cue, the grid must never eat it.
     if (metroOn && chart.beats.length) {
+      const guideTimes = guideOn && chart.guideEvents.length ? collapsedGuides() : [];
+      const nearGuide = t => {
+        let lo = 0, hi = guideTimes.length;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (guideTimes[m] < t - 35) lo = m + 1; else hi = m; }
+        return lo < guideTimes.length && Math.abs(guideTimes[lo] - t) <= 35;
+      };
       queue(chart.beats, b => b.time, clickBuf,
-            b => b.bar ? 0.9 : 0.85, b => b.bar ? 1.5 : 1);
+            b => (b.bar ? 0.9 : 0.85) * (nearGuide(b.time) ? 0.3 : 1),
+            b => b.bar ? 1.5 : 1, -0.3);
     }
     guidePrimedTo = horizon;
   }
@@ -2066,6 +4059,29 @@
           cx2.lineWidth = Math.max(1, 3 - rank * 0.5);
           cx2.beginPath(); cx2.moveTo(a.x, a.y); cx2.lineTo(b.x, b.y); cx2.stroke();
         }
+      }
+    }
+
+    // --- anmitsu overlay: pulsing bands over one-hit-capturable clusters
+    if (show.anmitsu && chart.anmitsu && chart.anmitsu.length) {
+      const pulse = 0.65 + 0.35 * Math.sin(now * 0.022);
+      for (const band of chart.anmitsu) {
+        // pad a few ms so hairline gaps stay visible
+        const d0 = depthAt(band.t0 - 6, 0), d1 = depthAt(band.t1 + 6, 0);
+        const nearD = Math.min(d0, d1), farD = Math.max(d0, d1);
+        if (farD < -backT || nearD > FAR) continue;
+        const dn = Math.max(nearD, -backT), df = Math.min(farD, FAR);
+        const n0 = project(dn, band.lo, 0, W, H), n1 = project(dn, band.hi, 0, W, H);
+        const q0 = project(df, band.lo, 0, W, H), q1 = project(df, band.hi, 0, W, H);
+        const [r, g2, b2] = band.cls === "jc" ? [255, 45, 210] : [255, 255, 255];
+        cx2.fillStyle = `rgba(${r},${g2},${b2},${(band.cls === "jc" ? 0.30 : 0.22) * pulse})`;
+        cx2.beginPath();
+        cx2.moveTo(n0.x, n0.y); cx2.lineTo(n1.x, n1.y);
+        cx2.lineTo(q1.x, q1.y); cx2.lineTo(q0.x, q0.y);
+        cx2.closePath(); cx2.fill();
+        cx2.strokeStyle = `rgba(${r},${g2},${b2},${0.85 * pulse})`;
+        cx2.lineWidth = 1.5;
+        cx2.stroke();
       }
     }
 
@@ -3216,7 +5232,7 @@
     }
     const box = eyeCv.getBoundingClientRect();
     if (box.width > 0 && box.height > 0) {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
       const bw = Math.round(box.width * dpr), bh = Math.round(box.height * dpr);
       if (eyeCv.width !== bw || eyeCv.height !== bh) { eyeCv.width = bw; eyeCv.height = bh; }
     }
@@ -3366,8 +5382,49 @@
     ecx.fillText(`${eyeSpeed.toFixed(1)} · ${(LA / 1000).toFixed(1)}s`, W - 4, 3);
   }
 
+  // Optimization: everything in the strip except the playhead is static
+  // per chart, so it renders once into an offscreen layer and every frame
+  // is a single drawImage plus one line (was: full note/region/marker
+  // iteration per frame).
+  let stripCache = null;
+  function invalidateStripCache() { stripCache = null; }
+  if (typeof window.matchMedia === "function") {
+    // theme flips repaint the cached strip background
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq && mq.addEventListener) {
+      mq.addEventListener("change", () => { invalidateStripCache(); sync(); });
+    }
+  }
   function drawStrip() {
     const W = strip.width, H = strip.height;
+    if (stripCache && stripCache.width === W && stripCache.height === H) {
+      sx2.clearRect(0, 0, W, H);
+      sx2.drawImage(stripCache, 0, 0);
+      drawStripPlayhead(W, H);
+      return;
+    }
+    const layer = document.createElement("canvas");
+    layer.width = W; layer.height = H;
+    const sx2Live = sx2;
+    const cacheCx = layer.getContext && layer.getContext("2d");
+    // headless stubs have no real 2d context; fall back to direct draws
+    const target = cacheCx && cacheCx.canvas ? cacheCx : sx2Live;
+    drawStripStatic(target, W, H);
+    if (target !== sx2Live) {
+      stripCache = layer;
+      sx2.clearRect(0, 0, W, H);
+      sx2.drawImage(stripCache, 0, 0);
+    }
+    drawStripPlayhead(W, H);
+  }
+  function drawStripPlayhead(W, H) {
+    if (!chart || !chart.duration) return;
+    const x = (now / chart.duration) * W;
+    sx2.strokeStyle = "#e8a33d";
+    sx2.lineWidth = 2;
+    sx2.beginPath(); sx2.moveTo(x, 0); sx2.lineTo(x, H); sx2.stroke();
+  }
+  function drawStripStatic(sx2, W, H) {
     const css = getComputedStyle(document.documentElement);
     sx2.clearRect(0, 0, W, H);
     sx2.fillStyle = css.getPropertyValue("--panel").trim() || "#171a24";
@@ -3413,10 +5470,6 @@
       sx2.setLineDash([]);
     }
 
-    const x = (now / chart.duration) * W;
-    sx2.strokeStyle = "#e8a33d";
-    sx2.lineWidth = 2;
-    sx2.beginPath(); sx2.moveTo(x, 0); sx2.lineTo(x, H); sx2.stroke();
   }
 
   // ---- panels -------------------------------------------------------------
@@ -3492,9 +5545,173 @@
   }
 
   // ---- input --------------------------------------------------------------
+  // ---- cmr / ilcmr source panes (the corridor made visible) --------------
+  // Family highlight colors are an owner decision (2026-08-20): tap red,
+  // extap yellow, hold orange, slide authentic blue, flick bright cyan,
+  // damage dark purple, every air construct green, heaven pink, trace none.
+  const SPAN_RGB = {
+    tap: [255, 64, 64], extap: [255, 214, 51], hold: [255, 150, 51],
+    slide: [45, 45, 255], flick: [0, 220, 255], damage: [88, 26, 138],
+    air: [64, 226, 110], heaven: [255, 130, 200],
+  };
+  const CODE_FADE_MS = 450;
+  const paneStates = [];
+  function buildCodePane(id, lineDefs) {
+    // lineDefs: [{ text, spans: [{s, e, kind, t0, t1}] }]
+    const host = el(id);
+    host.textContent = "";
+    const state = { host, spans: [], ptr: 0, active: new Set(),
+                    lastNow: -1, scrollLine: null };
+    for (const def of lineDefs) {
+      const lineEl = document.createElement("div");
+      lineEl.className = "cl";
+      const text = def.text === "" ? " " : def.text;
+      const usable = (def.spans || []).filter(x => SPAN_RGB[x.kind])
+        .sort((a, b) => a.s - b.s);
+      if (!usable.length) {
+        lineEl.textContent = text;
+      } else {
+        let cursor = 0;
+        for (const x of usable) {
+          if (x.s > cursor) {
+            lineEl.appendChild(document.createTextNode(text.slice(cursor, x.s)));
+          }
+          const seg = document.createElement("span");
+          seg.className = "hl";
+          seg.textContent = text.slice(x.s, x.e);
+          lineEl.appendChild(seg);
+          state.spans.push({
+            el: seg, lineEl, kind: x.kind, step: !!x.step,
+            ms0: chart.timeAt(x.t0), ms1: chart.timeAt(x.t1),
+          });
+          cursor = x.e;
+        }
+        if (cursor < text.length) {
+          lineEl.appendChild(document.createTextNode(text.slice(cursor)));
+        }
+      }
+      host.appendChild(lineEl);
+    }
+    state.spans.sort((a, b) => a.ms0 - b.ms0);
+    // slide checkpoints highlight but must not steer the scroll: hopping
+    // between a chain's step lines and current-position notes thrashes
+    state.scrollSpans = state.spans.filter(x => !x.step);
+    state.scrollPtr = 0;
+    paneStates.push(state);
+    return state;
+  }
+  function setCodePanes(cmrText, cmrAst, ilText, ilTicks, ilSpans) {
+    paneStates.length = 0;
+    const cmrDefs = cmrText.split(/\r?\n/).map((text, i) => {
+      const info = cmrAst.lineInfo && cmrAst.lineInfo.get(i + 1);
+      return info && SPAN_RGB[info.kind]
+        ? { text, spans: [{ s: 0, e: text.length, kind: info.kind,
+                            t0: info.p0, t1: info.p1, step: !!info.step }] }
+        : { text, spans: [] };
+    });
+    buildCodePane("cmrPane", cmrDefs);
+    const ilLines = ilText.split("\n");
+    const ilDefs = ilLines.map((text, i) => ({
+      text, spans: (ilSpans && ilSpans[i]) || [],
+    }));
+    buildCodePane("ilPane", ilDefs);
+    el("codepanes").hidden = false;
+  }
+  function paneHighlightTick(state) {
+    const spans = state.spans;
+    if (!spans.length) return;
+    if (now < state.lastNow) {
+      // backward seek: rebuild the active set from scratch
+      for (const x of state.active) x.el.style.background = "";
+      state.active.clear();
+      let lo = 0, hi = spans.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1;
+        if (spans[mid].ms0 <= now) lo = mid + 1; else hi = mid; }
+      state.ptr = lo;
+      let slo = 0, shi = state.scrollSpans.length;
+      while (slo < shi) { const mid = (slo + shi) >> 1;
+        if (state.scrollSpans[mid].ms0 <= now) slo = mid + 1; else shi = mid; }
+      state.scrollPtr = slo;
+      for (const x of spans) {
+        if (x.ms0 <= now && now <= x.ms1 + CODE_FADE_MS) state.active.add(x);
+      }
+    }
+    state.lastNow = now;
+    while (state.ptr < spans.length && spans[state.ptr].ms0 <= now) {
+      state.active.add(spans[state.ptr]); state.ptr++;
+    }
+    for (const x of state.active) {
+      const oneOff = x.ms1 <= x.ms0;
+      let a;
+      if (now < x.ms0) a = 0;
+      else if (!oneOff && now <= x.ms1) a = 1;
+      else a = 1 - (now - (oneOff ? x.ms0 : x.ms1)) / CODE_FADE_MS;
+      if (a <= 0) {
+        x.el.style.background = "";
+        state.active.delete(x);
+        continue;
+      }
+      const [r, g, b] = SPAN_RGB[x.kind];
+      x.el.style.background = `rgba(${r},${g},${b},${(0.55 * a).toFixed(3)})`;
+    }
+    // scroll to the most recently started note
+    while (state.scrollPtr < state.scrollSpans.length &&
+           state.scrollSpans[state.scrollPtr].ms0 <= now) state.scrollPtr++;
+    if (state.scrollPtr > 0) {
+      const line = state.scrollSpans[state.scrollPtr - 1].lineEl;
+      if (line !== state.scrollLine) {
+        state.scrollLine = line;
+        if (typeof line.offsetTop === "number") {
+          state.host.scrollTop = line.offsetTop - state.host.clientHeight / 2;
+        }
+      }
+    }
+  }
+  let followWasOn = false;
+  function updateCodeHighlights() {
+    if (!chart) return;
+    // Optimization: the whole span engine (activation sets, style writes,
+    // scroll) runs only while the toggle is on; turning it off clears any
+    // lingering highlights once and costs nothing per frame after that.
+    const box = el("followCur");
+    const on = !!(box && box.checked);
+    if (!on) {
+      if (followWasOn) {
+        for (const state of paneStates) {
+          for (const x of state.active) x.el.style.background = "";
+          state.active.clear();
+          state.lastNow = -1;
+          state.scrollLine = null;
+        }
+        followWasOn = false;
+      }
+      return;
+    }
+    followWasOn = true;
+    for (const state of paneStates) paneHighlightTick(state);
+  }
+
   function load(text) {
     lastChartText = text;
-    chart = parseC2s(text);
+    // The cmr corridor: every chart becomes cmr first and the model is
+    // built from the cmr AST via token rows -- the viewer builds off cmr.
+    // c2s knowledge is confined to the importer (CMR.convert).
+    const corridorWarnings = [];
+    const diag = { warn: w => corridorWarnings.push(w) };
+    const firstLine = text.split(/\r?\n/)
+      .find(l => l.trim() && !l.trim().startsWith("//"));
+    const cmrText = (firstLine || "").trim() === "cmr 1"
+      ? text : CMR.convert(text, diag).text;
+    const cmrAst = CMR.parseCmr(cmrText);
+    chart = parseC2s(CMR.emitC2sRows(cmrAst));
+    const ilText = CMR.decompile(cmrAst, diag);
+    if (corridorWarnings.length) {
+      console.warn("cmr corridor:", corridorWarnings.slice(0, 30));
+    }
+    setCodePanes(cmrText, cmrAst, ilText,
+                 CMR.decompileLineTicks(), CMR.decompile.lastSpans);
+    invalidateStripCache();
+    chart.anmitsu = computeAnmitsu(chart);
     computeTrims(chart.notes);
     markSlideBoundaries(chart.notes);
     chart.guideEvents = buildGuideEvents(chart);
@@ -3533,6 +5750,7 @@
         ).join("  ")
       : "";
     draw();
+    updateCodeHighlights();
     drawEye();
     drawStrip();
   }
@@ -3667,6 +5885,7 @@
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
   toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
+  toggle("tAnmitsu", "anmitsu");
   el("eyespeed").addEventListener("input", () => {
     eyeSpeed = +el("eyespeed").value / 10;
     el("eyeval").textContent = eyeSpeed.toFixed(1);

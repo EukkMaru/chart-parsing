@@ -52,6 +52,7 @@ const documentStub = {
     return elements.get(id);
   },
   createElement: () => stubElement(),
+  createTextNode: () => ({}),
   addEventListener: noop, removeEventListener: noop,
   body: stubElement(), documentElement: stubElement(),
 };
