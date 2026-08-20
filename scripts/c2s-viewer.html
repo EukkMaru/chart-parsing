@@ -59,13 +59,23 @@
     --shadow: 0 1px 2px rgba(20, 22, 31, .08), 0 8px 24px rgba(20, 22, 31, .06);
   }
 
+  :root {
+    --font-display: "Trebuchet MS", "Segoe UI", sans-serif;
+    --font-body: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  body.chiron-goround-tc-ko {
+    font-family: "Chiron GoRound TC", "NanumSquareRoundExtraBold", "NanumSquareRoundBold", "NanumSquareRound", "Malgun Gothic", sans-serif;
+    --font-display: "Chiron GoRound TC", "NanumSquareRoundExtraBold", "NanumSquareRoundBold", "NanumSquareRound", "Malgun Gothic", sans-serif;
+    --font-body: "Chiron GoRound TC", "NanumSquareRoundExtraBold", "NanumSquareRoundBold", "NanumSquareRound", "Malgun Gothic", sans-serif;
+  }
+
   * { box-sizing: border-box; }
 
   body {
     margin: 0;
     background: var(--ground);
     color: var(--ink);
-    font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-family: var(--font-body);
     font-size: 13px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
@@ -195,6 +205,7 @@
   }
   .card h2 {
     margin: 0;
+    font-family: var(--font-display);
     font-size: 14px;
     font-weight: 800;
     letter-spacing: -0.02em;
