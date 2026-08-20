@@ -1,0 +1,52 @@
+cmr 1
+
+// Tutorial 5 / EXPERT -- sixteenth bursts, a slide, the first airs.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9004
+sequence: 0
+difficulty: 02
+level: 8
+creator: cmr tutorial
+bpm-default: 150 150 150 150
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 150
+METER 0:000 4/4
+
+[notes]
+@0
+TAP 000 L2 w4
+TAP 048 L4 w4
+TAP 096 L6 w4
+TAP 144 L8 w4
+TAP 192 L10 w4 +air:U
+TAP 288 L2 w4
+@1
+SLIDE 000 L0 w4
+  ~> 1:096 L4 w4
+  ~> 1:192 L8 w4
+  -> 2:000 L12 w4 end +air:UR
+TAP 096 L12 w2
+TAP 192 L2 w2
+@2
+EXTAP 096 L4 w8
+TAP 192 L0 w4
+TAP 240 L4 w4
+TAP 288 L8 w4
+TAP 336 L12 w4
+@3
+HOLD 000 L2 w4 until 4:000 +air:U
+TAP 096 L10 w4
+TAP 192 L8 w4
+TAP 288 L10 w4
+@4
+EXTAP 000 L6 w8

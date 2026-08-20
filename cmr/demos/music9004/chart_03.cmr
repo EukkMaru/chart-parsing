@@ -1,0 +1,59 @@
+cmr 1
+
+// Tutorial 5 / MASTER -- chords, an air-hold, everything at once.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9004
+sequence: 0
+difficulty: 03
+level: 11
+creator: cmr tutorial
+bpm-default: 150 150 150 150
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 150
+METER 0:000 4/4
+
+[notes]
+@0
+TAP 000 L0 w4
+TAP 000 L12 w4
+TAP 048 L4 w4
+TAP 096 L8 w4
+TAP 144 L4 w4
+TAP 192 L0 w4 +air:UL
+TAP 192 L12 w4 +air:UR
+TAP 288 L6 w4
+@1
+EXTAP 000 L4 w8
+AIRHOLD 000 L4 w8 on EXTAP
+  ~> 1:288
+  -> 2:000 end
+TAP 096 L0 w2
+TAP 144 L14 w2
+TAP 192 L0 w2
+TAP 240 L14 w2
+@2
+SLIDE 000 L12 w4
+  -> 2:096 L8 w4
+  -> 2:192 L4 w4
+  -> 2:288 L0 w4 end +air:U
+TAP 096 L12 w2
+TAP 192 L14 w2
+TAP 288 L10 w4
+@3
+HOLD 000 L0 w4 until 4:000
+HOLD 096 L12 w4 until 4:000
+TAP 192 L6 w4
+TAP 288 L6 w4
+@4
+EXTAP 000 L2 w4
+EXTAP 000 L10 w4

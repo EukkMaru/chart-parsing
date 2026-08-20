@@ -1,0 +1,48 @@
+cmr 1
+
+// Tutorial 5 / ADVANCED -- eighths appear, holds overlap taps.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9004
+sequence: 0
+difficulty: 01
+level: 5
+creator: cmr tutorial
+bpm-default: 150 150 150 150
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 150
+METER 0:000 4/4
+
+[notes]
+@0
+TAP 000 L2 w4
+TAP 096 L10 w4
+TAP 144 L6 w4
+TAP 192 L2 w4
+TAP 288 L10 w4
+@1
+HOLD 000 L0 w4 until 2:000
+TAP 096 L8 w4
+TAP 192 L12 w4
+TAP 288 L8 w4
+@2
+EXTAP 000 L6 w4
+TAP 096 L2 w4
+TAP 144 L6 w4
+TAP 192 L10 w4
+TAP 288 L6 w4
+@3
+HOLD 000 L8 w4 until 4:000
+TAP 096 L2 w4
+TAP 192 L4 w4
+@4
+EXTAP 000 L6 w4
