@@ -1,2 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<MusicData><name><id>9004</id><str>Tutorial 5 — difficulties</str></name></MusicData>
+<MusicData><name><id>9004</id><str>Tutorial 5 — difficulties</str></name><fumens>
+<MusicFumenData><type><id>0</id></type><level>2</level><levelDecimal>0</levelDecimal></MusicFumenData>
+<MusicFumenData><type><id>1</id></type><level>5</level><levelDecimal>0</levelDecimal></MusicFumenData>
+<MusicFumenData><type><id>2</id></type><level>8</level><levelDecimal>0</levelDecimal></MusicFumenData>
+<MusicFumenData><type><id>3</id></type><level>11</level><levelDecimal>0</levelDecimal></MusicFumenData>
+<MusicFumenData><type><id>4</id></type><level>14</level><levelDecimal>20</levelDecimal></MusicFumenData>
+</fumens></MusicData>

@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<MusicData><name><id>9002</id><str>Tutorial 3 — slides</str></name></MusicData>
+<MusicData><name><id>9002</id><str>Tutorial 3 — slides</str></name><fumens>
+<MusicFumenData><type><id>0</id></type><level>3</level><levelDecimal>0</levelDecimal></MusicFumenData>
+</fumens></MusicData>
