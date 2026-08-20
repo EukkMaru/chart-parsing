@@ -32,10 +32,10 @@ const MIRROR_AIR = { AUL: "AUR", AUR: "AUL", ADL: "ADR", ADR: "ADL" };
 const REGION_DEF = {
   STP: { label: "Stop",        color: "#e8a33d", factor: false, key: false },
   SFL: { label: "Scroll",      color: "#e8a33d", factor: true,  key: false },
-  SLP: { label: "Scroll keyed",color: "#f2c46b", factor: true,  key: true  },
-  DCM: { label: "Factor span", color: "#b98cd8", factor: true,  key: false },
-  SFE: { label: "Rejected",    color: "#6d7590", factor: true,  key: false, dead: true },
-  CLK: { label: "Click",       color: "#8891ad", factor: false, key: false, point: true },
+  SLP: { label: "Scroll keyed",color: "#ffcc77", factor: true,  key: true  },
+  DCM: { label: "Factor span", color: "#bb88dd", factor: true,  key: false },
+  SFE: { label: "Rejected",    color: "#777788", factor: true,  key: false, dead: true },
+  CLK: { label: "Click",       color: "#8899aa", factor: false, key: false, point: true },
 };
 
 export function materialize(ast, mirror) {
