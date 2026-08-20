@@ -180,13 +180,21 @@
   .drop strong { color: #e4e7f0; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
   .drop span { max-width: 44ch; line-height: 1.6; }
 
-  .rail { display: flex; flex-direction: column; gap: 12px; }
+  .rail {
+    display: flex; flex-direction: column; gap: 12px;
+    border: 1px solid var(--line); border-radius: 18px;
+    padding: 10px; background: var(--ground);
+  }
   .railtoggle {
     align-self: flex-end;
     min-width: 34px; min-height: 30px; padding: 0;
     border-radius: 999px; font-size: 14px; line-height: 1;
   }
-  .stage.rail-collapsed { grid-template-columns: minmax(0, 1142px) 44px; }
+  /* collapsed: the rail shrinks to an outlined strip and the stage
+     content grows into the freed width */
+  .stage.rail-collapsed { grid-template-columns: minmax(0, 1fr) 44px; }
+  .stage.rail-collapsed .stageleft { grid-template-columns: minmax(0, 1fr) 90px; }
+  .stage.rail-collapsed .rail { padding: 5px; }
   .stage.rail-collapsed .rail .card { display: none; }
   .stage.rail-collapsed .railtoggle { align-self: stretch; }
   @media (max-width: 700px) {
