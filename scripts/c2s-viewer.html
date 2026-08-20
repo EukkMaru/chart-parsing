@@ -171,6 +171,18 @@
   .drop span { max-width: 44ch; line-height: 1.6; }
 
   .rail { display: flex; flex-direction: column; gap: 12px; }
+  .railtoggle {
+    align-self: flex-end;
+    min-width: 34px; min-height: 30px; padding: 0;
+    border-radius: 999px; font-size: 14px; line-height: 1;
+  }
+  .stage.rail-collapsed { grid-template-columns: minmax(0, 1142px) 44px; }
+  .stage.rail-collapsed .rail .card { display: none; }
+  .stage.rail-collapsed .railtoggle { align-self: stretch; }
+  @media (max-width: 700px) {
+    .railtoggle { display: none; }
+    .stage.rail-collapsed .rail .card { display: flex; }
+  }
 
   .card {
     background: var(--panel);
@@ -320,6 +332,7 @@
     </div>
     </div>
     <div class="rail">
+      <button id="railToggle" class="railtoggle" type="button" aria-expanded="true" title="Collapse the panel">&#10217;</button>
       <div class="card">
         <h2 data-i18n="chart_viewer.card.transport">Transport</h2>
         <div class="btnrow">
@@ -6587,6 +6600,30 @@ function compile(text, diag = { warn: () => {} }) {
   el("back").addEventListener("click", () => { now = Math.max(0, now - 1000); cancelGuides(); sync(); });
   el("fwd").addEventListener("click", () => { now += 1000; cancelGuides(); sync(); });
   el("reset").addEventListener("click", () => { now = 0; cancelGuides(); sync(); });
+
+  // collapsible options rail, remembered across visits
+  {
+    const stage = typeof document.querySelector === "function"
+      ? document.querySelector(".stage") : null;
+    const railToggle = el("railToggle");
+    const apply = collapsed => {
+      stage.classList.toggle("rail-collapsed", collapsed);
+      railToggle.innerHTML = collapsed ? "&#10216;" : "&#10217;";
+      railToggle.setAttribute("aria-expanded", String(!collapsed));
+      railToggle.title = collapsed ? "Expand the panel" : "Collapse the panel";
+    };
+    let collapsed = false;
+    try { collapsed = localStorage.getItem("chunimaru.viewerRail") === "collapsed"; } catch {}
+    if (stage && railToggle) {
+      apply(collapsed);
+      railToggle.addEventListener("click", () => {
+        collapsed = !collapsed;
+        apply(collapsed);
+        try { localStorage.setItem("chunimaru.viewerRail", collapsed ? "collapsed" : "open"); } catch {}
+        sync();
+      });
+    }
+  }
 
   const toggle = (id, key) => el(id).addEventListener("click", () => {
     show[key] = !show[key];
