@@ -202,6 +202,12 @@
   input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
 
   .btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  /* the step-nav row must stay one line: its pills share the width
+     instead of wrapping */
+  .btnrow:has(#seekPrev) { flex-wrap: nowrap; }
+  .btnrow:has(#seekPrev) button {
+    flex: 1 1 0; min-width: 0; padding: 6px 0; text-align: center;
+  }
   button {
     font: inherit;
     font-size: 12px;
