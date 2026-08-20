@@ -194,10 +194,12 @@ writeFileSync(outPath, page, "utf8");
   const { execFileSync } = await import("node:child_process");
   const src = join(here, "../cmr/demos");
   const dstSrc = "/home/etri/chunimaru/chart-src";
-  fs.rmSync(dstSrc, { recursive: true, force: true });
   fs.mkdirSync(dstSrc, { recursive: true });
+  // merge, never wipe: chart-src holds the whole imported library; this
+  // sync owns only the demo folders it mirrors
   for (const folder of fs.readdirSync(src).sort()) {
     if (!/^music\d+$/.test(folder)) continue;
+    fs.rmSync(join(dstSrc, folder), { recursive: true, force: true });
     fs.mkdirSync(join(dstSrc, folder), { recursive: true });
     for (const f of fs.readdirSync(join(src, folder)).sort()) {
       copyFileSync(join(src, folder, f), join(dstSrc, folder, f));
