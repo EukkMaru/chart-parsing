@@ -8,25 +8,27 @@ Tool usage is in `cmr/tools/HOWTO.md`.*
 
 ## 1. Why two formats
 
-**cmr** is the normalized chart language: the system of record. Every
-construct maps 1:1 onto the runtime record set, deterministically, in
-both directions. It answers "what exactly is in this chart" in words a
-person can read — `EXTAP`, not a bare four-letter token; `until 12:336`,
-not a tick count buried in field six.
+**cmr** is the *resolved* chart: every gameplay element stated exactly
+once, bare, with nothing left to infer — no duplicate encodings, no
+alternate spellings for the same thing, no derived values riding along.
+It answers "what exactly plays" in words a person can read — `EXTAP`,
+not an opaque token; `until 12:336`, not a duration buried in a numeric
+field.
 
-**ilcmr** is the authoring layer above it: comma-per-beat rhythm text in
-the simai tradition. It answers "let me write a jack in one line". Many
-ilcmr spellings mean the same chart; the compiler resolves them onto cmr,
-where exactly one spelling exists.
+**ilcmr** is the intermediate language between cmr and the visible
+gameplay — an interface, of a kind: it writes charts the way they read
+on screen (rhythm as comma streams, notes as the lane spans you see),
+and compiles down to the resolved form. Many ilcmr spellings mean the
+same chart; in cmr exactly one exists.
 
 ```
 chart.ilcmr  --ilc-->  chart.cmr  --->  the viewer's model
 ```
 
-Both formats are **certified**: over a 7,752-chart corpus, every cmr
-emission reparses to an identical model under the reference
-implementation, and the ilcmr round trip holds a semantic fixed point.
-The viewer builds its model natively from cmr.
+Both formats are **certified**: corpus-wide, every cmr emission
+reparses to an identical model under the reference implementation, and
+the ilcmr round trip holds a semantic fixed point. The viewer builds
+its model natively from cmr.
 
 ## 2. Shared concepts
 
