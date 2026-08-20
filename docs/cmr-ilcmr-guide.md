@@ -20,13 +20,13 @@ ilcmr spellings mean the same chart; the compiler resolves them onto cmr,
 where exactly one spelling exists.
 
 ```
-chart.ilcmr  --ilc-->  chart.cmr  <--(dev-side proof only)-->  upstream
+chart.ilcmr  --ilc-->  chart.cmr  --->  the viewer's model
 ```
 
-Both formats are **certified**: converting the entire 7,752-chart local
-corpus through cmr and back is model-equal under the recovered reference
-parser, and the ilcmr round trip holds a semantic fixed point. The
-viewer builds its model natively from cmr.
+Both formats are **certified**: over a 7,752-chart corpus, every cmr
+emission reparses to an identical model under the reference
+implementation, and the ilcmr round trip holds a semantic fixed point.
+The viewer builds its model natively from cmr.
 
 ## 2. Shared concepts
 
@@ -88,8 +88,8 @@ Things worth knowing:
 - **`[meta]`** uses friendly lowercase keys; `difficulty:` and
   `creator:` are raw strings (comment stripping is off for them).
   Statistics are never authored: `stats: derived` declares the converter
-  owns them, and `stats.overrides:` records any authored values from an
-  imported chart verbatim.
+  owns them, and `stats.overrides:` preserves any preexisting authored
+  values verbatim.
 - **`[events]`** lines are self-timed and stay in source order (the
   depth query is order-sensitive). Spans end with `until`, factors are
   `x2`, `x-0.5`; a keyed scroll writes `key <n>` and pairs with a
@@ -197,9 +197,10 @@ will rarely need one.
 
 ## 5. Guarantees
 
-- **cmr round trip**: import → emit reparses to an identical model
-  (records, chains, attachments, regions, tempo/meter, header), proven
-  corpus-wide. Byte equality is *not* promised; meaning is.
+- **cmr round trip**: emitting and reparsing a chart yields an
+  identical model (records, chains, attachments, regions, tempo/meter,
+  header), proven corpus-wide. Byte equality is *not* promised;
+  meaning is.
 - **ilcmr fixed point**: decompile → recompile is model-identical to the
   original, corpus-wide.
 - **Viewer equivalence**: the viewer's cmr-built model and its draw-call
