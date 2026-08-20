@@ -1,0 +1,63 @@
+cmr 1
+
+// cmr tutorial 1 -- point notes and holds.
+// Time is measure:tick on a 384-tick grid; a @N line opens measure N and
+// note lines then give just the tick. Lanes are L0..L15, widths in lanes.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9000
+sequence: 0
+difficulty: 00
+level: 1
+creator: cmr tutorial
+bpm-default: 140 140 140 140
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 140
+METER 0:000 4/4
+
+[notes]
+@0
+// four quarter-note taps walking across the field
+TAP 000 L0 w4
+TAP 096 L4 w4
+TAP 192 L8 w4
+TAP 288 L12 w4
+@1
+// EXTAP always judges Justice Critical; FLICK wants a sideways swipe
+EXTAP 000 L2 w4
+EXTAP 096 L10 w4
+FLICK 192 L0 w8
+FLICK 288 L8 w8
+@2
+// DAMAGE is a mine: touching it hurts. Thread the gap.
+TAP 000 L6 w4
+DAMAGE 096 L0 w2
+TAP 192 L6 w4
+DAMAGE 288 L14 w2
+@3
+// holds run from their tick to the until point
+HOLD 000 L2 w4 until 3:288
+HOLD 192 L10 w4 until 4:096
+@4
+EXHOLD 192 L4 w8 until 5:000
+@5
+// an eighth-note run to finish
+TAP 000 L0 w4
+TAP 048 L2 w4
+TAP 096 L4 w4
+TAP 144 L6 w4
+TAP 192 L8 w4
+TAP 240 L10 w4
+TAP 288 L12 w4
+TAP 336 L12 w4
+@6
+TAP 000 L4 w8

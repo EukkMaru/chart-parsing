@@ -1,0 +1,54 @@
+cmr 1
+
+// cmr tutorial 2 -- the air layer.
+// +air:DIR rides its owner line and fires at the owner's attachment point
+// (a hold's air fires at the hold END). AIRHOLD and AIRSLIDE are chain
+// blocks anchored on a root note.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9001
+sequence: 0
+difficulty: 00
+level: 2
+creator: cmr tutorial
+bpm-default: 140 140 140 140
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 140
+METER 0:000 4/4
+
+[notes]
+@0
+// straight up-air, then the diagonal directions
+TAP 000 L6 w4 +air:U
+TAP 192 L2 w4 +air:UR
+@1
+TAP 000 L10 w4 +air:UL
+TAP 192 L6 w4 +air:D
+@2
+// the hold's air attaches at the hold end (3:000), not its start
+HOLD 000 L4 w8 until 3:000 +air:U
+@3
+// AIRHOLD: hold a hand in the air above the root. ~> steps extend the
+// path; an -> end step carries a judged air action.
+TAP 096 L6 w4
+AIRHOLD 096 L6 w4 on TAP
+  ~> 3:288
+  -> 4:096 end
+@5
+// AIRSLIDE: move the raised hand. h is the height in air units
+// (5 is the ordinary air height); steps give the endpoint per segment.
+TAP 000 L2 w4
+AIRSLIDE 000 L2 w4 h5 on TAP
+  ~> 5:192 L6 w4 h7
+  -> 6:000 L10 w4 h5 end
+@6
+TAP 192 L10 w4 +air:U

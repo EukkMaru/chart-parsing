@@ -83,16 +83,6 @@
     gap: 20px;
   }
 
-  header.top { display: flex; flex-direction: column; gap: 6px; }
-  h1 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-  }
-  .sub { margin: 0; color: var(--ink-2); max-width: 68ch; }
-  .sub b { color: var(--ink); font-weight: 600; }
 
   .stage {
     display: grid;
@@ -112,6 +102,28 @@
   }
   @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 300px; } .stageleft { grid-template-columns: minmax(0, 1fr) 90px; } }
   @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .stageleft { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } .codepanes { grid-column: 1; } .cp-body { height: 220px; } }
+  /* Phone layout: not a shrunken desktop. The grid flattens
+     (display: contents) so the reading order becomes nav, field,
+     transport, timeline, then the remaining cards; the bird's-eye and
+     source panes step aside; every control grows to a touch target. */
+  @media (max-width: 700px) {
+    .wrap { display: flex; flex-direction: column; gap: 10px; padding: 8px; }
+    .stage, .stageleft, .rail { display: contents; }
+    .viewport { order: 1; margin: 0 -8px; }
+    .timeline { order: 3; margin: 0; }
+    .rail .card { order: 4; }
+    .rail .card:nth-of-type(1) { order: 2; }   /* Transport under the field */
+    #statCard, #legCard, #unkCard { order: 5; }
+    .eyepanel, .codepanes { display: none; }
+    .card { border-radius: 14px; }
+    .btnrow { gap: 8px; }
+    .btnrow button { flex: 1 1 auto; min-height: 42px; font-size: 14px; }
+    .ctl .lab { font-size: 13px; }
+    .ctl .lab b { font-size: 13px; }
+    input[type="range"] { height: 36px; }
+    .sitenav { gap: 8px; }
+    .sitenav a { flex: 1; justify-content: center; min-height: 40px; font-size: 13px; }
+  }
 
   .viewport {
     position: relative;
@@ -163,19 +175,18 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 4px;
-    padding: 12px 13px;
+    border-radius: 16px;
+    padding: 14px 15px;
     display: flex;
     flex-direction: column;
     gap: 10px;
   }
   .card h2 {
     margin: 0;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: .18em;
-    text-transform: uppercase;
-    color: var(--ink-3);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--ink);
   }
 
   .ctl { display: flex; flex-direction: column; gap: 5px; }
@@ -185,26 +196,30 @@
     align-items: baseline;
     gap: 8px;
     color: var(--ink-2);
-    font-size: 11px;
+    font-size: 12px;
   }
-  .ctl .lab b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ctl .lab b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
 
   .btnrow { display: flex; gap: 6px; flex-wrap: wrap; }
   button {
     font: inherit;
-    font-size: 11px;
-    letter-spacing: .06em;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--ink);
     background: var(--panel-2);
     border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 5px 10px;
+    border-radius: 999px;
+    padding: 6px 13px;
     cursor: pointer;
   }
   button:hover { border-color: var(--accent); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+  button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--ground);
+  }
 
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 11px; }
   .kv dt { color: var(--ink-3); }
@@ -228,13 +243,13 @@
   .flag b { color: var(--warn); font-weight: 600; letter-spacing: .04em; }
   .flag code { color: var(--ink); }
 
-  .timeline { position: relative; }
+  .timeline { position: relative; margin-bottom: 14px; }
   /* The rail runs much taller than the field, so the source panes sit in
      the leftover space: columns 1-2 (field + bird's-eye width), row 2,
      stretching down to the rail's bottom edge. */
   .codepanes { grid-column: 1 / span 2; margin-top: 0;
                display: flex; flex-direction: column; min-height: 0; }
-  .cp-bar { display: flex; justify-content: space-between; align-items: center;
+  .cp-bar { display: flex; justify-content: flex-end; align-items: center;
             font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
   .cp-follow { display: flex; gap: 6px; align-items: center; cursor: pointer;
                user-select: none; }
@@ -254,15 +269,6 @@
   .cp-body .hl { border-radius: 3px; }
   canvas#strip { display: block; width: 100%; height: 54px; cursor: crosshair; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); }
 
-  footer.note {
-    color: var(--ink-3);
-    font-size: 11px;
-    line-height: 1.7;
-    max-width: 88ch;
-    border-top: 1px solid var(--line);
-    padding-top: 14px;
-  }
-  footer.note b { color: var(--ink-2); font-weight: 600; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -270,17 +276,17 @@
 <body>
 
 <div class="wrap">
-  <header class="top">
-    <h1>cmr corridor</h1>
-    <p class="sub">Chart inspector for <b>.c2s</b> files. Renders the playfield as the cabinet presents it — sixteen lanes tapering toward the far end, judgement line across the bottom, air notes floating above at their authored height. Nothing is uploaded; the file is parsed in this page.</p>
-  </header>
+
+  <div class="timeline">
+    <canvas id="strip" width="2240" height="108"></canvas>
+  </div>
 
   <div class="stage">
     <div class="stageleft">
     <div class="viewport">
       <canvas id="field" width="1280" height="720"></canvas>
       <div class="drop" id="drop">
-        <strong>Drop a .c2s file</strong>
+        <strong>Drop a .c2s or .cmr file</strong>
         <span>Or click to choose one. The file stays on your machine — this page reads it locally and keeps no copy.</span>
         <button id="pick" type="button">Choose file</button>
       </div>
@@ -292,9 +298,8 @@
 
   <div class="codepanes" id="codepanes" hidden>
       <div class="cp-bar">
-        <b>chart source &mdash; the cmr corridor</b>
         <label class="cp-follow" title="Highlight notes in family colors as they play and keep both panes scrolled to the active note.">
-          <input type="checkbox" id="followCur"> follow cursor
+          <input type="checkbox" id="followCur"> <span data-i18n="chart_viewer.follow_cursor">follow cursor</span>
         </label>
       </div>
       <div class="cp-cols">
@@ -305,7 +310,7 @@
     </div>
     <div class="rail">
       <div class="card">
-        <h2>Transport</h2>
+        <h2 data-i18n="chart_viewer.card.transport">Transport</h2>
         <div class="btnrow">
           <button id="play" type="button">Play</button>
           <button id="back" type="button">−1s</button>
@@ -321,61 +326,62 @@
           <button id="seekNext" type="button" title="Next grid line">▶</button>
         </div>
         <div class="ctl">
-          <div class="lab"><span>Position</span><b id="tval">0.00 s</b><b id="posval" style="color:var(--ink-3);font-weight:400"></b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.position">Position</span><b id="tval">0.00 s</b><b id="posval" style="color:var(--ink-3);font-weight:400"></b></div>
           <input id="time" type="range" min="0" max="1000" value="0" step="1" aria-label="Playback position">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Note speed</span><b id="sval">9.0</b> <b id="lval" style="color:var(--ink-3);font-weight:400"></b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.note_speed">Note speed</span><b id="sval">9.0</b> <b id="lval" style="color:var(--ink-3);font-weight:400"></b></div>
           <input id="speed" type="range" min="10" max="120" value="90" step="1" aria-label="Note speed">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Playback rate</span><b id="rval">1.00×</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.playback_rate">Playback rate</span><b id="rval">1.00×</b></div>
           <input id="rate" type="range" min="10" max="200" value="100" step="5" aria-label="Playback rate">
         </div>
         <div class="ctl">
-          <div class="lab"><span><button id="tGuide" type="button" aria-pressed="true" title="Guide clicks (owner-provided wood click sample, attack-sharpened) at owner-specified cue instants. The judgement line pulses at each click for silent environments.">Guide</button> <button id="tMetro" type="button" aria-pressed="false" title="Woodblock metronome on the meter-aware beat grid, downbeat accented.">Metro</button></span><b id="gmval">0 ms</b></div>
+          <div class="lab"><span><button id="tGuide" data-i18n="chart_viewer.guide" type="button" aria-pressed="true" title="Guide clicks (owner-provided wood click sample, attack-sharpened) at owner-specified cue instants. The judgement line pulses at each click for silent environments.">Guide</button> <button id="tMetro" data-i18n="chart_viewer.metro" type="button" aria-pressed="false" title="Woodblock metronome on the meter-aware beat grid, downbeat accented.">Metro</button></span><b id="gmval">0 ms</b></div>
           <input id="gmerge" type="range" min="-200" max="200" value="0" step="5" aria-label="Sound delay">
         </div>
       </div>
 
       <div class="card">
-        <h2>Overlays</h2>
+        <h2 data-i18n="chart_viewer.card.overlays">Overlays</h2>
         <div class="btnrow">
-          <button id="tWings" type="button" aria-pressed="false">Windows</button>
-          <button id="tAir" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
-          <button id="tGrid" type="button" aria-pressed="true">Beat grid</button>
-          <button id="tShape" type="button" aria-pressed="false" title="Show shape-only SLC/SXC controls as faint debug rules. Binary-backed SLD/SXD endpoint resources remain visible.">Shape pts</button>
-          <button id="tStripe" type="button" aria-pressed="false" title="One-lane bright stripe along the slide path center, recovered as JointSlide stream 1. Slides only: the recovered hold body is a single quad with no second stream.">Center stripe</button>
-          <button id="tMirror" type="button" aria-pressed="false" title="The recovered chart-mirror play option: every lane becomes 16 − lane − width at ingest, before chain matching, and AIR left/right direction codes swap. Reparses the loaded chart.">Mirror</button>
-          <button id="tAirN" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
-          <button id="tCos" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
-          <button id="tAuto" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
-          <button id="tAnmitsu" type="button" aria-pressed="false" title="Highlight rubbable note pairs: overlapping lanes with a gap inside the judgement window, so one continuous contact catches both. Magenta: both land Justice Critical (gap ≤ 33.33 ms; ≤ 83.33 ms when both are EX — EX judges JC across its whole window). White: Justice-range (gap ≤ 66.67 ms). The band marks the shared lanes to rub.">Anmitsu</button>
-          <button id="tSlp" type="button" aria-pressed="true" title="Apply the recovered chart-region transforms: STP/SFL/SLP shift a note along the track, keyed per note by its containing SLA region; DCM scales its projected distance.">Apply scroll</button>
+          <button id="tWings" data-i18n="chart_viewer.overlay.windows" type="button" aria-pressed="false">Windows</button>
+          <button id="tAir" data-i18n="chart_viewer.overlay.plane" type="button" aria-pressed="true" title="The air plane boundary outline. Air notes are always drawn.">Plane bounds</button>
+          <button id="tGrid" data-i18n="chart_viewer.overlay.grid" type="button" aria-pressed="true">Beat grid</button>
+          <button id="tShape" data-i18n="chart_viewer.overlay.shape" type="button" aria-pressed="false" title="Show shape-only SLC/SXC controls as faint debug rules. Binary-backed SLD/SXD endpoint resources remain visible.">Shape pts</button>
+          <button id="tStripe" data-i18n="chart_viewer.overlay.stripe" type="button" aria-pressed="false" title="One-lane bright stripe along the slide path center, recovered as JointSlide stream 1. Slides only: the recovered hold body is a single quad with no second stream.">Center stripe</button>
+          <button id="tMirror" data-i18n="chart_viewer.overlay.mirror" type="button" aria-pressed="false" title="The recovered chart-mirror play option: every lane becomes 16 − lane − width at ingest, before chain matching, and AIR left/right direction codes swap. Reparses the loaded chart.">Mirror</button>
+          <button id="tAirN" data-i18n="chart_viewer.overlay.air_notes" type="button" aria-pressed="true" title="All air-family notes: AIR family, air hold, air slide, air crush, traces.">Air notes</button>
+          <button id="tCos" data-i18n="chart_viewer.overlay.cosmetics" type="button" aria-pressed="true" title="Elements that submit no result: ASO traces, chart-region intervals, unrecognised commands.">Cosmetics</button>
+          <button id="tAuto" data-i18n="chart_viewer.overlay.autoplay" type="button" aria-pressed="true" title="Consume notes exactly at the judgement plane instead of letting them run past it.">Autoplay</button>
+          <button id="tEvents" data-i18n="chart_viewer.overlay.events" type="button" aria-pressed="false" title="Track-event gutter off the right edge: STP/SFL/SLP intervals with their scroll factors, DCM spans, clicks.">Events</button>
+          <button id="tAnmitsu" data-i18n="chart_viewer.overlay.anmitsu" type="button" aria-pressed="false" title="Highlight rubbable note pairs: overlapping lanes with a gap inside the judgement window, so one continuous contact catches both. Magenta: both land Justice Critical (gap ≤ 33.33 ms; ≤ 83.33 ms when both are EX — EX judges JC across its whole window). White: Justice-range (gap ≤ 66.67 ms). The band marks the shared lanes to rub.">Anmitsu</button>
+          <button id="tSlp" data-i18n="chart_viewer.overlay.apply_scroll" type="button" aria-pressed="true" title="Apply the recovered chart-region transforms: STP/SFL/SLP shift a note along the track, keyed per note by its containing SLA region; DCM scales its projected distance.">Apply scroll</button>
         </div>
         <div class="ctl">
-          <div class="lab"><span>Window half-width</span><b id="wval">33 ms</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.window">Window half-width</span><b id="wval">33 ms</b></div>
           <input id="win" type="range" min="5" max="120" value="33" step="1" aria-label="Judgement window half-width">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Camera pitch</span><b id="tiltval">default</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.tilt">Camera pitch</span><b id="tiltval">default</b></div>
           <input id="tilt" type="range" min="0" max="100" value="62" step="1" aria-label="Camera pitch">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Bird's-eye speed</span><b id="eyeval">1.0</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.eye_speed">Bird's-eye speed</span><b id="eyeval">1.0</b></div>
           <input id="eyespeed" type="range" min="4" max="30" value="10" step="1" aria-label="Bird's-eye scroll speed, same scale as note speed (tenths)">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Bar subdivision</span><b id="oval">off</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.subdiv">Bar subdivision</span><b id="oval">off</b></div>
           <input id="overlay" type="range" min="0" max="16" value="0" step="1" aria-label="Bar subdivision overlay">
           <div id="opat" style="font-size:10px;color:var(--ink-3);letter-spacing:.06em;min-height:14px"></div>
         </div>
         <div class="ctl">
-          <div class="lab"><span>Beat grid</span><b id="gval">35%</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.grid_alpha">Beat grid</span><b id="gval">35%</b></div>
           <input id="gridop" type="range" min="0" max="100" value="35" step="1" aria-label="Beat grid opacity">
         </div>
         <div class="ctl">
-          <div class="lab"><span>Air plane height</span><b id="aval">0.31</b></div>
+          <div class="lab"><span data-i18n="chart_viewer.label.air_height">Air plane height</span><b id="aval">0.31</b></div>
           <input id="airh" type="range" min="5" max="90" value="25" step="1" aria-label="Air plane height">
         </div>
       </div>
@@ -397,16 +403,7 @@
     </div>
   </div>
 
-  <div class="timeline">
-    <canvas id="strip" width="2240" height="108"></canvas>
-  </div>
 
-
-  <footer class="note">
-    <b>What is measured and what is drawn.</b> Times come from the chart's own <code>BPM</code> schedule on this snapshot's fixed 384-tick grid; authored <code>RESOLUTION</code> is recognized but rejected. The perspective projection/view/viewport algorithm is recovered and normative; only the resource-selected camera pose — represented here by owner-calibrated fitted parameters — and the framebuffer dimensions remain external inputs. Note speed maps to visible lookahead through the recovered materialization projection — <code>5388.9 / speed</code> milliseconds — so the speed setting means roughly what it means on the cabinet. The one unproven step is that the projection's eligibility band, which is established to gate note construction, is also the visible extent. Judgement window widths are external configuration absent from the analysed binary, so the <b>Windows</b> overlay is driven by the slider, not by recovered values: use it to compare geometry, not to read absolute timing. Front windows are trimmed per lane against the nearest preceding note that overlaps that lane, which is the shape of the recovered rule but not its capped magnitude.
-    <br><br>
-    <b>Chart regions.</b> <code>STP</code>, <code>SFL</code>, <code>SLP</code> and <code>DCM</code> intervals are marked in the gutter off the right edge of the playfield, labelled with their scroll speed. They rewrite a pending note's scheduled position before the materialization test, and only above the <code>30.0F</code> raw-delta shortcut — so they never move a near note. With <b>Apply scroll</b> enabled, the recovered interval composition and DCM selection are applied to drawn distance; the remaining caveat is the unavailable external view calibration. <code>SFE</code> is recognised by the parser but has no handler case, so it is drawn dashed and dead.
-  </footer>
 </div>
 
 <script src="./c2s-schedule-reference.js"></script>
@@ -1408,6 +1405,256 @@ function parseCmr(text) {
   return ast;
 }
 
+  // ---- from cmr/tools/lib/materialize.mjs ----
+// cmr AST -> viewer record pack, directly. Deployment-safe: this is the
+// module that lets the shipped viewer build its model from cmr with no
+// other chart format involved. The record objects carry exactly the fields
+// the reference ingest produces; verify_corridor and verify_viewport hold
+// the two paths equal.
+
+const STYLE_TABLE = [
+  "DEF","RED","ORN","YEL","LIM","GRN","AQA","CYN",
+  "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
+];
+const SLIDE_TABLE = ["SLD", "HLD", "GRN"];
+const FEEDBACK_TABLE = ["UP","DW","CE","RC","LC","RS","LS","BS"];
+const idx = (table, tok) => { const i = table.indexOf(tok || ""); return i < 0 ? 0 : i; };
+const toTenths = v => Math.trunc(v * 10 + 0.5) * 0.1;
+const clampW = v => Math.max(1, Math.min(16, v | 0));
+const FAMILY_WORD = {
+  TAP: "TAP", EXTAP: "CHR", FLICK: "FLK", DAMAGE: "MNE",
+  HOLD: "HLD", EXHOLD: "HXD", SLIDE: "SLD", EXSLIDE: "SXD",
+  CRUSH: "ALD", TRACE: "ASO", HEAVEN: "HHD", EXHEAVEN: "HHX",
+};
+const AIR_WORD_OF = { U: "AIR", UL: "AUL", UR: "AUR", D: "ADW", DL: "ADL", DR: "ADR" };
+const KIND = {
+  TAP: "tap", CHR: "tap", FLK: "tap", MNE: "tap",
+  HLD: "hold", HXD: "hold", SLD: "slide", SXD: "slide", SLC: "slide", SXC: "slide",
+  AIR: "air", AUL: "air", AUR: "air", ADW: "air", ADL: "air", ADR: "air",
+  AHD: "ahold", AHX: "ahold", ASC: "aslide", ASD: "aslide",
+  ALD: "ald", ASO: "asolid", HHD: "heaven", HHX: "heaven", SLA: "region",
+};
+const MIRROR_AIR = { AUL: "AUR", AUR: "AUL", ADL: "ADR", ADR: "ADL" };
+
+const REGION_DEF = {
+  STP: { label: "Stop",        color: "#e8a33d", factor: false, key: false },
+  SFL: { label: "Scroll",      color: "#e8a33d", factor: true,  key: false },
+  SLP: { label: "Scroll keyed",color: "#f2c46b", factor: true,  key: true  },
+  DCM: { label: "Factor span", color: "#b98cd8", factor: true,  key: false },
+  SFE: { label: "Rejected",    color: "#6d7590", factor: true,  key: false, dead: true },
+  CLK: { label: "Click",       color: "#8891ad", factor: false, key: false, point: true },
+};
+
+function materialize(ast, mirror) {
+  const head = { resolution: 384, bpmDef: 150, metNum: 4, metDen: 4, creator: "", version: "" };
+  const counts = new Map();
+  const bump = cmd => counts.set(cmd, (counts.get(cmd) || 0) + 1);
+  const META_TO_CMD = {
+    "version": "VERSION", "music": "MUSIC", "sequence": "SEQUENCEID",
+    "difficulty": "DIFFICULT", "level": "LEVEL", "creator": "CREATOR",
+    "bpm-default": "BPM_DEF", "meter-default": "MET_DEF",
+    "resolution": "RESOLUTION", "clock": "CLK_DEF",
+    "progjudge-bpm": "PROGJUDGE_BPM", "progjudge-aer": "PROGJUDGE_AER",
+    "tutorial": "TUTORIAL",
+  };
+  for (const { key, value } of ast.meta) {
+    const cmd = META_TO_CMD[key];
+    if (!cmd) continue;
+    bump(cmd);
+    if (key === "bpm-default") head.bpmDef = Number.parseFloat(value) || 0;
+    else if (key === "meter-default") {
+      const [count, unit] = value.split("/");
+      head.metNum = Number.parseInt(unit, 10) || 0;
+      head.metDen = Number.parseInt(count, 10) || 0;
+    }
+    else if (key === "creator") head.creator = value.replace(/[\t ]+/g, " ");
+    else if (key === "version") head.version = value.split(/[\t ]+/)[0] || "";
+  }
+  for (const [name] of ast.statsOverrides) bump(name);
+
+  const bpmEvents = [], metEvents = [], regions = [];
+  const pos = p => [Math.floor(p / R), p - Math.floor(p / R) * R];
+  for (const e of ast.events) {
+    bump(e.cmd);
+    const [m, t] = pos(e.p);
+    if (e.cmd === "BPM") { bpmEvents.push({ m, t, bpm: e.bpm }); continue; }
+    if (e.cmd === "MET") { metEvents.push({ m, t, n: e.unit, d: e.count }); continue; }
+    const def = REGION_DEF[e.cmd];
+    regions.push({
+      cmd: e.cmd, def, sourceOrder: regions.length, m, t,
+      dur: def.point ? 0 : e.dur,
+      factor: def.factor ? e.factor : null,
+      key: def.key ? e.key : 0,
+    });
+  }
+
+  const rawNotes = [];
+  let order = 0;
+  const rec = (cmd, p, lane, width, extra) => {
+    const [m, t] = pos(p);
+    const n = {
+      cmd, kind: KIND[cmd], color: undefined, sourceOrder: order++,
+      m, t, lane, width: clampW(width),
+      dur: 0, endLane: null, endWidth: null, h0: 0, h1: 0, style: "", root: "",
+      ...extra,
+    };
+    if (mirror) {
+      n.lane = (16 - n.lane - n.width) | 0;
+      if (n.endLane !== null && n.endLane !== undefined &&
+          (n.kind === "slide" || n.kind === "aslide" || n.kind === "ald" ||
+           n.kind === "asolid" || n.kind === "heaven")) {
+        n.endLane = (16 - n.endLane - (n.endWidth ?? n.width)) | 0;
+      }
+      if (n.kind === "air" && MIRROR_AIR[n.cmd]) n.cmd = MIRROR_AIR[n.cmd];
+    }
+    bump(cmd);                       // pre-mirror cmd counted? reference counts post-parse cmd; bump uses original arg
+    rawNotes.push(n);
+    return n;
+  };
+  const airs = (list, p, lane, width, ownerWord) => {
+    for (const a of list || []) {
+      rec(AIR_WORD_OF[a.dir], p, lane, width,
+          { root: FAMILY_WORD[ownerWord] ?? ownerWord, style: a.style ?? "" });
+    }
+  };
+  const slideExtras = (cmd, style, fx) => {
+    const code = idx(SLIDE_TABLE, style);
+    const ex = cmd === "SXD" || cmd === "SXC";
+    return {
+      style: style ?? "",
+      slideStyleCode: code,
+      slideExtendedRoot: ex,
+      slideFeedbackCode: ex ? idx(FEEDBACK_TABLE, fx) : 0,
+      slideRuntime: code === 1 ? "heaven_hold" : "slide",
+      slideResultTableIndex: 0xff,
+    };
+  };
+
+  for (const it of ast.items) {
+    switch (it.k) {
+      case "note":
+        rec(FAMILY_WORD[it.family], it.p, it.lane, it.width, {});
+        airs(it.airs, it.p, it.lane, it.width, it.family);
+        break;
+      case "hold":
+        rec(FAMILY_WORD[it.family], it.p, it.lane, it.width,
+            { dur: it.endP - it.p, style: it.fx ?? "" });
+        airs(it.airs, it.endP, it.lane, it.width, it.family);
+        break;
+      case "slide": {
+        let prev = { p: it.p, lane: it.lane, width: it.width };
+        for (const s of it.steps) {
+          const ex = s.ex ?? it.headEx;
+          const cmd = ex ? (s.marked ? "SXD" : "SXC") : (s.marked ? "SLD" : "SLC");
+          const w = s.sevenField ? s.width : prev.width;
+          const style = s.style === undefined ? undefined
+            : s.style;                          // resolved token or undefined
+          const fx = ex ? s.fx : undefined;
+          rec(cmd, prev.p, prev.lane, prev.width, {
+            dur: s.p - prev.p, endLane: s.lane, endWidth: clampW(w),
+            ...slideExtras(cmd, s.sevenField ? style : undefined,
+                           s.sevenField ? fx : undefined),
+          });
+          airs(s.airs, s.p, s.lane, w, it.headEx ? "EXSLIDE" : "SLIDE");
+          prev = { p: s.p, lane: s.lane, width: w };
+        }
+        break;
+      }
+      case "ahold": {
+        let prev = it.p, first = true;
+        for (const s of it.steps) {
+          const cmd = s.action ? "AHX" : "AHD";
+          rec(cmd, prev, it.lane, it.width, {
+            root: first ? (FAMILY_WORD[it.on] ?? it.on) : "AHD",
+            dur: s.p - prev,
+            ignoredTrailingLabel: (first ? it.note : s.note) ?? "",
+            isAction: s.action,
+          });
+          prev = s.p; first = false;
+        }
+        break;
+      }
+      case "aslide": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        let prevAction = null, first = true;
+        for (const s of it.steps) {
+          const cmd = s.action ? "ASD" : "ASC";
+          const h0 = s.from !== undefined ? s.from : prev.h;
+          rec(cmd, prev.p, prev.lane, prev.width, {
+            root: first ? (FAMILY_WORD[it.on] ?? it.on) : (prevAction ? "ASD" : "ASC"),
+            h0, dur: s.p - prev.p,
+            endLane: s.lane, endWidth: clampW(s.width), h1: s.h1,
+            style: (s.style ?? "") || "",
+            styleCode: Math.max(0, STYLE_TABLE.indexOf(s.style ?? "")),
+            isAction: s.action,
+          });
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+          prevAction = s.action; first = false;
+        }
+        break;
+      }
+      case "crush": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        for (const s of it.steps) {
+          const style = (s.style ?? "") || "";
+          const code = Math.max(0, STYLE_TABLE.indexOf(style));
+          rec("ALD", prev.p, prev.lane, prev.width, {
+            interval: it.interval, h0: toTenths(prev.h),
+            dur: s.p - prev.p, endLane: s.lane, endWidth: clampW(s.width),
+            h1: toTenths(s.h1), style, styleCode: code,
+            aldRuntime: it.interval === 0 && code === 15 ? "heaven_hold" : "air_ladder",
+          });
+          airs(s.airs, s.p, s.lane, s.width, "CRUSH");
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+        }
+        break;
+      }
+      case "trace": {
+        let prev = { p: it.p, lane: it.lane, width: it.width, pA: it.pA0, pB: it.pB0 };
+        for (const s of it.steps) {
+          const style = (s.style ?? "") || "";
+          rec("ASO", prev.p, prev.lane, prev.width, {
+            pA0: toTenths(prev.pA), pB0: toTenths(prev.pB),
+            dur: s.p - prev.p, endLane: s.lane, endWidth: clampW(s.width),
+            pA1: toTenths(s.pA1), pB1: toTenths(s.pB1),
+            style, asoStyleCode: Math.max(0, STYLE_TABLE.indexOf(style)),
+          });
+          airs(s.airs, s.p, s.lane, s.width, "TRACE");
+          prev = { p: s.p, lane: s.lane, width: s.width, pA: s.pA1, pB: s.pB1 };
+        }
+        break;
+      }
+      case "heaven": {
+        const cmd = FAMILY_WORD[it.family];
+        let prev = { p: it.p, lane: it.lane, width: it.width, h: it.h0 };
+        for (const s of it.steps) {
+          const disc = it.disc;
+          rec(cmd, prev.p, prev.lane, prev.width, {
+            h0: toTenths(prev.h), dur: s.p - prev.p,
+            endLane: s.lane, endWidth: clampW(s.width), h1: toTenths(s.h1),
+            heavenDiscriminator: disc, heavenParity: disc % 2 === 1,
+            heavenExtended: cmd === "HHX",
+            heavenFeedbackCode: cmd === "HHX" ? idx(FEEDBACK_TABLE, it.fx) : 0,
+            heavenRuntime: "heaven_hold",
+          });
+          airs(s.airs, s.p, s.lane, s.width, "HEAVEN");
+          prev = { p: s.p, lane: s.lane, width: s.width, h: s.h1 };
+        }
+        break;
+      }
+      case "keyzone":
+        rec("SLA", it.p, it.lane, it.width, { dur: it.endP - it.p, key: undefined, tag: it.key });
+        break;
+      case "orphanAir":
+        rec(AIR_WORD_OF[it.dir], it.p, it.lane, it.width,
+            { root: it.rootRaw ?? "", style: it.style ?? "" });
+        break;
+    }
+  }
+  return { __pack: true, head, bpmEvents, metEvents, rawNotes,
+           markers: [], regions, counts, unknown: new Map() };
+}
+
   // ---- from cmr/tools/lib/emit_c2s.mjs ----
 // cmr AST -> c2s text. DEV-SIDE ONLY: exists to certify the converters
 // against the private corpus (SPEC §7); never ships, never runs at runtime.
@@ -2162,7 +2409,410 @@ function decompile(ast, diag = { warn: () => {} }) {
   decompile.lastSpans = outSpans;
   return out.join("\n");
 }
-  return { convert, parseCmr, emitCmr, emitC2sRows, decompile,
+
+  // ---- from ilcmr/tools/ilc.mjs ----
+// The ilcmr compiler: ilcmr text -> cmr AST (-> cmr text). Deployment-safe.
+
+const gcdOf = (a, b) => b ? gcdOf(b, a % b) : a;
+const GLYPH_DIR = { "^": "U", "^<": "UL", "^>": "UR", "v": "D", "v<": "DL", "v>": "DR" };
+const EVENT_KEYWORDS = new Set(["BPM","METER","SCROLL","STOP","DEPTH","SCROLL-DEAD","CLICK","KEYZONE"]);
+const KEYWORDS = new Set(["crush","trace","heaven","heavenx","keyzone"]);
+
+function compile(text, diag = { warn: () => {} }) {
+  const ast = { meta: [], statsOverrides: [], events: [], items: [] };
+  let lineNo = 0;
+  const err = msg => { throw new Error(`ilcmr line ${lineNo}: ${msg}`); };
+
+  // exact rational stream position, in ticks
+  let posN = 0, posD = 1;                    // pos = posN/posD ticks
+  let division = 4;
+  const advance = () => {
+    // += R/division
+    const d = posD * division;
+    posN = posN * division + R * posD;
+    posD = d;
+    const g = gcdOf(posN, posD); posN /= g; posD /= g;
+  };
+  const tickHere = () => {
+    if (posN % posD === 0) return posN / posD;
+    const t = Math.round(posN / posD);
+    diag.warn(`line ${lineNo}: onset snapped to tick ${t} ` +
+      `(drift ${(posN / posD - t).toFixed(3)})`);
+    return t;
+  };
+  const durTicks = spec => {
+    const m = spec.match(/^\[(\d+):(\d+)\]$/);
+    if (!m) err(`bad duration "${spec}"`);
+    const val = Number(m[2]) * R / Number(m[1]);
+    if (!Number.isInteger(val)) {
+      const t = Math.round(val);
+      diag.warn(`line ${lineNo}: duration ${spec} snapped to ${t} ticks`);
+      return t;
+    }
+    return val;
+  };
+
+  // ---- gimmick state channels --------------------------------------------
+  const open = new Map();          // channel -> {p, factor, key, cmd}
+  const chanChange = (name, cmd, key, factor, p) => {
+    const o = open.get(name);
+    if (o) {
+      const e = { cmd: o.cmd, p: o.p, dur: p - o.p, factor: o.factor };
+      if (o.cmd === "SLP") e.key = o.key;
+      ast.events.push(e);
+      open.delete(name);
+    }
+    if (factor !== null) open.set(name, { p, factor, key, cmd });
+  };
+  const finishChannels = p => {
+    for (const name of [...open.keys()]) {
+      diag.warn(`unclosed ${name} state closed at stream end`);
+      chanChange(name, null, null, null, p);
+    }
+  };
+
+  // ---- escapes ------------------------------------------------------------
+  let escapeRun = [];
+  const flushEscapes = () => {
+    if (!escapeRun.length) return;
+    const noteLines = [], eventLines = [];
+    for (const l of escapeRun) {
+      const w = l.split(/[ \t]+/)[0];
+      (EVENT_KEYWORDS.has(w) && w !== "KEYZONE" ? eventLines : noteLines).push(l);
+    }
+    if (eventLines.length) {
+      const sub = parseCmr("cmr 1\n[events]\n" + eventLines.join("\n") + "\n");
+      ast.events.push(...sub.events);
+      ast.items.push(...sub.items);
+    }
+    if (noteLines.length) {
+      const sub = parseCmr("cmr 1\n[notes]\n" +
+        noteLines.map(l => /^(~>|->)/.test(l) ? "  " + l : l).join("\n") + "\n");
+      ast.items.push(...sub.items);
+    }
+    escapeRun = [];
+  };
+
+  // ---- note-token scanner -------------------------------------------------
+  const scanToken = (tok, p) => {
+    let i = 0;
+    const peek = () => tok[i];
+    const take = re => {
+      const m = tok.slice(i).match(re);
+      if (!m || m.index !== 0) return null;
+      i += m[0].length; return m[0];
+    };
+    const takeSpan = () => {
+      const m = take(/^(\d+)-(\d+)/);
+      if (!m) err(`expected span in "${tok}" at offset ${i}`);
+      const [a, b] = m.split("-").map(Number);
+      if (b <= a) err(`bad span ${m} (right edge must exceed left)`);
+      return { lane: a, width: b - a };
+    };
+    const takeDur = () => {
+      const m = take(/^\[\d+:\d+\]/);
+      if (!m) err(`expected [div:count] in "${tok}" at offset ${i}`);
+      return durTicks(m);
+    };
+    const takeTag = () => {
+      const m = take(/^\.[A-Z0-9_-]*/);
+      return m === null ? undefined : m.slice(1);   // "." -> "" empty tag
+    };
+    const takeHeight = () => {
+      const m = take(/^@-?[\d.]+/);
+      return m === null ? undefined : Number(m.slice(1));
+    };
+
+    const sigil = take(/^(hx|sx|x|f|d|h|s)(?=\d)/) || "";
+    const span = takeSpan();
+    const items = [];
+    let owner;
+
+    if (sigil === "" || sigil === "x" || sigil === "f" || sigil === "d") {
+      const family = { "": "TAP", x: "EXTAP", f: "FLICK", d: "DAMAGE" }[sigil];
+      let tag = takeTag();
+      let note;
+      if (family === "EXTAP") note = tag === undefined ? "UP" : (tag === "" ? undefined : tag);
+      else if (family === "FLICK") note = tag === undefined ? "L" : (tag === "" ? undefined : tag);
+      else if (tag !== undefined) err(`${family} takes no tag`);
+      owner = { k: "note", family, p, lane: span.lane, width: span.width,
+                note, airs: [] };
+      items.push(owner);
+    } else if (sigil === "h" || sigil === "hx") {
+      const dur = takeDur();
+      const tag = takeTag();
+      if (sigil === "h" && tag !== undefined) err("HOLD takes no tag");
+      owner = { k: "hold", family: sigil === "hx" ? "EXHOLD" : "HOLD",
+                p, lane: span.lane, width: span.width, endP: p + dur,
+                fx: tag === "" ? undefined : tag, airs: [] };
+      items.push(owner);
+    } else {          // s / sx
+      const headEx = sigil === "sx";
+      owner = { k: "slide", family: headEx ? "EXSLIDE" : "SLIDE",
+                p, lane: span.lane, width: span.width,
+                headStyle: undefined, headFx: undefined, headEx, steps: [] };
+      let cursor = p;
+      for (;;) {
+        const dur = takeDur();
+        const arrow = take(/^[>~]/);
+        if (!arrow) err(`expected > or ~ leg in "${tok}"`);
+        const target = takeSpan();
+        cursor += dur;
+        owner.steps.push({ p: cursor, lane: target.lane, width: target.width,
+                           sevenField: true, marked: arrow === ">", ex: headEx,
+                           style: undefined, fx: undefined, airs: [] });
+        if (!/^\[/.test(tok.slice(i))) break;
+      }
+      items.push(owner);
+    }
+
+    // suffixes: air glyphs, ^h/^hx, ^s
+    const ownerPoint = () => {
+      if (owner.k === "note") return { p: owner.p, lane: owner.lane, width: owner.width };
+      if (owner.k === "hold") return { p: owner.endP, lane: owner.lane, width: owner.width };
+      const last = owner.steps[owner.steps.length - 1];
+      return { p: last.p, lane: last.lane, width: last.width };
+    };
+    const airHostOf = () => owner.k === "slide"
+      ? owner.steps[owner.steps.length - 1] : owner;
+    while (i < tok.length) {
+      if (peek() === "^" && (tok[i + 1] === "h")) {
+        i += 2;
+        const action = tok[i] === "x" ? (i++, true) : false;
+        const tag = takeTag();
+        const q = ownerPoint();
+        const item = { k: "ahold", p: q.p, lane: q.lane, width: q.width,
+                       on: owner.family, note: tag === "" ? undefined : tag,
+                       steps: [], ownerItem: owner };
+        let cursor = q.p;
+        for (;;) {
+          cursor += takeDur();
+          item.steps.push({ p: cursor, action: false });
+          if (peek() === "~") { i++; continue; }
+          break;
+        }
+        item.steps[item.steps.length - 1].action = action;
+        items.push(item);
+        continue;
+      }
+      if (peek() === "^" && tok[i + 1] === "s") {
+        i += 2;
+        const q = ownerPoint();
+        const h0 = takeHeight() ?? 1;
+        const item = { k: "aslide", p: q.p, lane: q.lane, width: q.width,
+                       h0, on: owner.family, headStyle: undefined,
+                       steps: [], ownerItem: owner };
+        let cursor = q.p, h = h0;
+        for (;;) {
+          const dur = takeDur();
+          const arrow = take(/^[>~]/);
+          if (!arrow) err(`expected > or ~ air-slide leg in "${tok}"`);
+          const target = takeSpan();
+          const nh = takeHeight();
+          if (nh !== undefined) h = nh;
+          cursor += dur;
+          item.steps.push({ p: cursor, lane: target.lane, width: target.width,
+                            h1: h, from: undefined, action: arrow === ">",
+                            style: undefined });
+          if (!/^\[/.test(tok.slice(i))) break;
+        }
+        items.push(item);
+        continue;
+      }
+      const glyph = take(/^(\^<|\^>|v<|v>|\^|v)/);
+      if (glyph) {
+        airHostOf().airs.push({ dir: GLYPH_DIR[glyph] });
+        continue;
+      }
+      err(`unexpected suffix at "${tok.slice(i)}" in "${tok}"`);
+    }
+    return items;
+  };
+
+  // ---- keyword-form scanner ----------------------------------------------
+  const scanKeyword = (words, p) => {
+    const word = words[0];
+    let i = 1;
+    const next = () => words[i++];
+    const spanAt = tok => {
+      const m = tok.match(/^(\d+)-(\d+)(@(.*))?$/);
+      if (!m) err(`expected span[@h] got "${tok}"`);
+      return { lane: Number(m[1]), width: Number(m[2]) - Number(m[1]),
+               h: m[4] };
+    };
+    const glyphSplit = tok => {
+      // strip trailing air glyphs from a leg token
+      const m = tok.match(/(\^<|\^>|v<|v>|\^|v)+$/);
+      if (!m) return [tok, []];
+      const glyphs = m[0].match(/\^<|\^>|v<|v>|\^|v/g).map(g => ({ dir: GLYPH_DIR[g] }));
+      return [tok.slice(0, tok.length - m[0].length), glyphs];
+    };
+    if (word === "keyzone") {
+      const s = spanAt(next());
+      if (next() !== "key") err("keyzone needs key <n>");
+      const key = Number(next());
+      const dur = durTicks(next());
+      return [{ k: "keyzone", p, lane: s.lane, width: s.width,
+                endP: p + dur, key }];
+    }
+    if (word === "crush" || word === "trace") {
+      const head = spanAt(next());
+      const item = word === "crush"
+        ? { k: "crush", p, lane: head.lane, width: head.width,
+            h0: Number(head.h), interval: 0, headStyle: undefined, steps: [] }
+        : { k: "trace", p, lane: head.lane, width: head.width,
+            pA0: Number(head.h.split(":")[0]), pB0: Number(head.h.split(":")[1]),
+            headStyle: undefined, steps: [] };
+      let cursor = p, pendingStyle;
+      while (i < words.length) {
+        const w = next();
+        if (w === "every") { item.interval = Number(next()); continue; }
+        if (w === "style") {
+          const v = next();
+          if (!item.steps.length && item.headStyle === undefined && pendingStyle === undefined) {
+            item.headStyle = v === "none" ? undefined : v;
+            if (item.steps.length === 0) { pendingStyle = null; continue; }
+          }
+          const lastStep = item.steps[item.steps.length - 1];
+          if (lastStep) lastStep.style = v === "none" ? undefined : v;
+          continue;
+        }
+        if (/^\[/.test(w)) {
+          const dur = durTicks(w);
+          if (next() !== ">") err(`${word} legs use ">"`);
+          const [legTok, airs] = glyphSplit(next());
+          const s = spanAt(legTok);
+          cursor += dur;
+          const step = word === "crush"
+            ? { p: cursor, lane: s.lane, width: s.width, h1: Number(s.h),
+                style: item.headStyle, airs }
+            : { p: cursor, lane: s.lane, width: s.width,
+                pA1: Number(s.h.split(":")[0]), pB1: Number(s.h.split(":")[1]),
+                style: item.headStyle, airs };
+          item.steps.push(step);
+          continue;
+        }
+        err(`unexpected "${w}" in ${word} form`);
+      }
+      if (item.steps.length === 1) item.single = true;
+      return [item];
+    }
+    // heaven / heavenx
+    const family = word === "heavenx" ? "EXHEAVEN" : "HEAVEN";
+    const headTok = next();
+    const tagM = headTok.match(/^(.*?)(\.([A-Za-z0-9_-]+))?$/);
+    const head = spanAt(headTok.split(".")[0]);
+    const item = { k: "heaven", family, p, lane: head.lane, width: head.width,
+                   h0: Number(head.h), disc: 0, fx: undefined, steps: [] };
+    let cursor = p;
+    while (i < words.length) {
+      const w = next();
+      if (w === "disc") { item.disc = Number(next()); continue; }
+      if (w.startsWith(".")) { item.fx = FX_TOKEN.get(w.slice(1)) ?? w.slice(1); continue; }
+      if (/^\[/.test(w)) {
+        const dur = durTicks(w);
+        if (next() !== ">") err("heaven legs use \">\"");
+        const [legTok, airs] = glyphSplit(next());
+        const s = spanAt(legTok);
+        cursor += dur;
+        item.steps.push({ p: cursor, lane: s.lane, width: s.width,
+                          h1: Number(s.h), airs });
+        continue;
+      }
+      err(`unexpected "${w}" in ${word} form`);
+    }
+    if (item.steps.length === 1) item.single = true;
+    return [item];
+  };
+
+  // ---- event parser -------------------------------------------------------
+  const handleEvent = (body, p) => {
+    const w = body.split(/[ \t]+/);
+    if (/^-?[\d.]+$/.test(w[0])) { ast.events.push({ cmd: "BPM", p, bpm: Number(w[0]) }); return; }
+    switch (w[0]) {
+      case "bpm": ast.events.push({ cmd: "BPM", p, bpm: Number(w[1]) }); return;
+      case "meter": {
+        const m = w[1].match(/^(-?\d+)\/(-?\d+)$/);
+        if (!m) err(`bad meter "${w[1]}"`);
+        ast.events.push({ cmd: "MET", p, count: Number(m[1]), unit: Number(m[2]) });
+        return;
+      }
+      case "click": ast.events.push({ cmd: "CLK", p }); return;
+      case "stop": ast.events.push({ cmd: "STP", p, dur: durTicks(w[1]) }); return;
+      case "speed": {
+        const keyed = w[2] === "key" || w[3] === "key";
+        const key = keyed ? Number(w[w.indexOf("key") + 1]) : null;
+        const name = keyed ? `speed key ${key}` : "speed";
+        const cmd = keyed ? "SLP" : "SFL";
+        if (w[1] === "off") chanChange(name, cmd, key, null, p);
+        else chanChange(name, cmd, key, Number(w[1]), p);
+        return;
+      }
+      case "depth": {
+        if (w[1] === "off") chanChange("depth", "DCM", null, null, p);
+        else chanChange("depth", "DCM", null, Number(w[1]), p);
+        return;
+      }
+      case "scroll-dead": {
+        if (w[1] === "off") chanChange("scroll-dead", "SFE", null, null, p);
+        else chanChange("scroll-dead", "SFE", null, Number(w[1]), p);
+        return;
+      }
+    }
+    err(`unknown event "(${body})"`);
+  };
+
+  // ---- main loop ----------------------------------------------------------
+  for (let raw of text.split(/\r?\n/)) {
+    lineNo++;
+    if (raw.startsWith("!")) { escapeRun.push(raw.slice(1).trim()); continue; }
+    flushEscapes();
+    if (raw.startsWith("&")) {
+      const m = raw.match(/^&([a-z-]+)[ \t]?(.*)$/);
+      if (!m) err(`bad header line "${raw}"`);
+      if (!META_CMD.has(m[1])) err(`unknown header key "&${m[1]}"`);
+      ast.meta.push({ key: m[1], value: m[2] });
+      continue;
+    }
+    const c = raw.indexOf("//");
+    const line = (c >= 0 ? raw.slice(0, c) : raw);
+    if (!line.trim()) continue;
+    const lexemes = line.match(/\([^)]*\)|,|\|/g) !== null
+      ? (line.match(/\([^)]*\)|,|\||[^\s,|]+/g) || []) : (line.match(/[^\s]+/g) || []);
+    let li = 0;
+    while (li < lexemes.length) {
+      const lex = lexemes[li];
+      if (lex === ",") { advance(); li++; continue; }
+      if (lex === "|") {
+        if (!(posN % posD === 0 && (posN / posD) % R === 0)) {
+          err(`bar check failed at position ${posN / posD} ticks`);
+        }
+        li++; continue;
+      }
+      if (lex === "/") { li++; continue; }   // slot-construct separator
+      if (/^\{\d+\}$/.test(lex)) { division = Number(lex.slice(1, -1)); li++; continue; }
+      if (lex.startsWith("(")) { handleEvent(lex.slice(1, -1).trim(), tickHere()); li++; continue; }
+      if (KEYWORDS.has(lex)) {
+        const group = [];
+        while (li < lexemes.length && lexemes[li] !== "," &&
+               lexemes[li] !== "|" && lexemes[li] !== "/") {
+          group.push(lexemes[li]); li++;
+        }
+        ast.items.push(...scanKeyword(group, tickHere()));
+        continue;
+      }
+      // note chord
+      for (const part of lex.split("/")) {
+        ast.items.push(...scanToken(part, tickHere()));
+      }
+      li++;
+    }
+  }
+  flushEscapes();
+  finishChannels(posN % posD === 0 ? posN / posD : Math.round(posN / posD));
+  return ast;
+}
+  return { convert, parseCmr, emitCmr, emitC2sRows, materialize, decompile, compile,
            decompileLineTicks: () => decompile.lastLineTicks };
   })();
   // ==== END CMR CORRIDOR ====
@@ -2204,10 +2854,12 @@ function decompile(ast, diag = { warn: () => {} }) {
   // invariant is claim.parser.command-descriptor-schema. Zero-default
   // prefix-accepting numeric conversion is claim.parser.event-token-fallback
   // and the [1,16] width clamp is claim.parser.common-lane-width-encoding.
+  // ==== DEV ONLY (stripped from deployment builds) ====
   const C2S_STYLE = [
     "DEF","RED","ORN","YEL","LIM","GRN","AQA","CYN",
     "DGR","BLU","PPL","VLT","PNK","GRY","BLK","NON",
   ];
+  // ==== END DEV ONLY ====
   const SLIDE_STYLE = ["SLD", "HLD", "GRN"];
   const SLIDE_HLD_STYLE_CODE = 1;
   // Recovered exact order for extended Slide/Heaven feedback decoding.
@@ -2284,6 +2936,7 @@ function decompile(ast, diag = { warn: () => {} }) {
 
   // Exact descriptor IDs 0x00..0x5a from the executable. Prefixes are never
   // accepted: an unknown T_* spelling is unknown, not an inert statistic.
+  // ==== DEV ONLY (stripped from deployment builds) ====
   const DERIVED_CMDS = [
     "T_REC_TAP","T_REC_CHR","T_REC_FLK","T_REC_MNE","T_REC_HLD","T_REC_SLD","T_REC_AIR","T_REC_AHD","T_REC_ALL",
     "T_NOTE_TAP","T_NOTE_CHR","T_NOTE_FLK","T_NOTE_MNE","T_NOTE_HLD","T_NOTE_SLD","T_NOTE_AIR","T_NOTE_AHD","T_NOTE_ALL",
@@ -2309,8 +2962,10 @@ function decompile(ast, diag = { warn: () => {} }) {
   if (REGISTERED_CMDS.size !== 91 || DERIVED_CMDS.length !== 45) {
     throw new Error("internal C2S descriptor registry mismatch");
   }
+  // ==== END DEV ONLY ====
 
   // ---- parsing ------------------------------------------------------------
+  // ==== DEV ONLY (stripped from deployment builds) ====
   const c2sInt = value => Number.isNaN(Number.parseInt(value, 10))
     ? 0 : Number.parseInt(value, 10);
   const c2sFloat = value => {
@@ -2330,6 +2985,7 @@ function decompile(ast, diag = { warn: () => {} }) {
     const parsed = Number.parseFloat(value);
     return Number.isNaN(parsed) ? 0 : Math.trunc(parsed * 10 + 0.5) * 0.1;
   };
+  // ==== END DEV ONLY ====
 
   // Exact 32-bit MSVC three-way introsort instantiated by this snapshot for
   // BPM and keyed interval records. Keeping it here defines equivalent/NaN
@@ -2461,6 +3117,7 @@ function decompile(ast, diag = { warn: () => {} }) {
   // execute the exact shipped parser path. Shapes are the executable's
   // accepted STP/SFL/SLP/DCM/CLK cases plus registered-but-rejected SFE;
   // see claim.timing.projection-schedule-materialization.
+  // ==== DEV ONLY (stripped from deployment builds) ====
   function parseProjectionRecord(cmd, fields, sourceOrder) {
     const def = REGION[cmd];
     if (!def) return null;
@@ -2472,6 +3129,7 @@ function decompile(ast, diag = { warn: () => {} }) {
       key: def.key ? c2sInt(fields[4]) : 0,
     };
   }
+  // ==== END DEV ONLY ====
 
   // Build the two independent projection structures from parsed group-1
   // records. Only STP/SFL/SLP enter keyed adjustment. DCM stays source-order
@@ -2769,10 +3427,13 @@ function decompile(ast, diag = { warn: () => {} }) {
   // spec/c2s.md's recovered descriptor table; registered group-3 statistics
   // take the derived-summary overwrite path
   // (claim.parser.derived-command-overwrite).
+  // ==== DEV ONLY (stripped from deployment builds) ====
+  // (the deployed page builds its model from the cmr AST via
+  // CMR.materialize; this text path is the dev reference)
   function parseC2s(input) {
-    // The cmr corridor hands this function pre-tokenized record rows from
-    // CMR.emitC2sRows -- on that path no c2s text is ever materialized. A
-    // plain string still parses as c2s lines (importer/dev path).
+    return buildChart(ingestChart(input));
+  }
+  function ingestChart(input) {
     const inputRows = Array.isArray(input) ? input
       : input.split(/\r?\n/).map(raw => raw.split(/[\t ]+/).filter(t => t.length));
     // Recovered reset defaults. BPM_DEF 150 is retained as header state but
@@ -2917,6 +3578,18 @@ function decompile(ast, diag = { warn: () => {} }) {
       rawNotes.push(n);
     }
 
+    return { __pack: true, head, bpmEvents, metEvents, rawNotes,
+             markers, regions, counts, unknown };
+  }
+  // ==== END DEV ONLY ====
+
+  function buildChart(pack) {
+    const { head, bpmEvents, metEvents, rawNotes, markers, regions,
+            counts, unknown } = pack;
+    // records from the cmr materializer carry no display color yet
+    for (const n of rawNotes) {
+      if (n.color === undefined && FAM[n.cmd]) n.color = FAM[n.cmd].color;
+    }
     // position in ticks -> milliseconds, walking the tempo schedule
     const R = head.resolution;
     const pos = e => e.m * R + e.t;
@@ -3524,6 +4197,11 @@ function decompile(ast, diag = { warn: () => {} }) {
     for (const key of ["yNear", "yFar", "Z", "halfNear"]) {
       GEO[key] = TILT_MID[key] + (to[key] - TILT_MID[key]) * u;
     }
+    // The slider's flat end would make yNear === yFar: a degenerate pose
+    // whose non-finite intermediate values can make a real canvas throw
+    // mid-frame (gradients and radii reject them), which used to strand
+    // the trim clip at its lowest point. Stay a hair away from flat.
+    if (GEO.yNear - GEO.yFar < 0.002) GEO.yFar = GEO.yNear - 0.002;
   }
 
   function project(t, u, h, W, H) {
@@ -3544,7 +4222,7 @@ function decompile(ast, diag = { warn: () => {} }) {
   let overlayN = 0, overlayPat = null;
   const show = { wings: false, air: true, grid: true, bars: false,
                  airNotes: true, cosmetic: true, autoplay: true, applySlp: true,
-                 stripe: false, anmitsu: false };
+                 stripe: false, anmitsu: false, events: false };
   const AIR_KINDS = new Set(["air", "ald", "aslide", "ahold", "asolid"]);
   const solidKeys = new Set(); // per-frame dedup of solid slide/hold notes
 
@@ -3959,18 +4637,12 @@ function decompile(ast, diag = { warn: () => {} }) {
     if (guideOn && chart.guideEvents.length) {
       queue(collapsedGuides(), t => t, stickBuf, () => 2.0, null, 0.15);
     }
-    // Metronome: the meter-aware beat grid, woodblock voice, downbeat accented.
-    // When a beat lands on (or within 35 ms of) a guide click, the metro
-    // ducks: the guide is the cue, the grid must never eat it.
+    // Metronome: the meter-aware beat grid, woodblock voice, downbeat
+    // accented. The metro always yields to the guide (owner decision):
+    // it plays quiet full-time so the guide clicks own the foreground.
     if (metroOn && chart.beats.length) {
-      const guideTimes = guideOn && chart.guideEvents.length ? collapsedGuides() : [];
-      const nearGuide = t => {
-        let lo = 0, hi = guideTimes.length;
-        while (lo < hi) { const m = (lo + hi) >> 1; if (guideTimes[m] < t - 35) lo = m + 1; else hi = m; }
-        return lo < guideTimes.length && Math.abs(guideTimes[lo] - t) <= 35;
-      };
       queue(chart.beats, b => b.time, clickBuf,
-            b => (b.bar ? 0.9 : 0.85) * (nearGuide(b.time) ? 0.3 : 1),
+            b => (b.bar ? 0.9 : 0.85) * 0.3,
             b => b.bar ? 1.5 : 1, -0.3);
     }
     guidePrimedTo = horizon;
@@ -4013,6 +4685,9 @@ function decompile(ast, diag = { warn: () => {} }) {
     cx2.beginPath();
     cx2.rect(0, yTrim, W, H - yTrim);
     cx2.clip();
+    // the restore below must run even if a degenerate pose makes a canvas
+    // call throw mid-frame; a stranded clip is permanent
+    try {
 
     // --- corridor floor
     // The cabinet's field runs past the judgement line to the frame bottom
@@ -4159,7 +4834,7 @@ function decompile(ast, diag = { warn: () => {} }) {
 
     // --- chart-region intervals, marked as a gutter strip off the right edge
     // rather than a band across the floor, which read too much like a hold.
-    for (const r of (show.cosmetic ? chart.regions : [])) {
+    for (const r of (show.events && show.cosmetic ? chart.regions : [])) {
       // The strip rides just outside lane 16, so it converges with the
       // playfield edge. Only its thickness is screen-space — in lane space it
       // would balloon at the near end and project off the canvas.
@@ -4433,7 +5108,7 @@ function decompile(ast, diag = { warn: () => {} }) {
     clipNote = null;
 
     // --- judgement line
-    cx2.restore();
+    } finally { cx2.restore(); }
     const j0 = project(0, 0, 0, W, H), j16 = project(0, 16, 0, W, H);
     cx2.strokeStyle = "#e8a33d";
     cx2.lineWidth = 2.5;
@@ -5431,29 +6106,40 @@ function decompile(ast, diag = { warn: () => {} }) {
     sx2.fillRect(0, 0, W, H);
     if (!chart || !chart.duration) return;
 
+    // One stacked density graph (owner decision 2026-08-20; was three
+    // separate rows): per bin, ground notes sit at the bottom, air-family
+    // above them, air-crush on top, all sharing one height scale so the
+    // stack's silhouette is total density.
     const bins = 560, binW = W / bins;
-    const rows = [
+    const cats = [
       { test: n => n.kind === "tap" || n.kind === "hold" || n.kind === "slide", color: "#ff4d4d" },
       { test: n => n.kind === "air" || n.kind === "ahold" || n.kind === "aslide", color: "#7ef08a" },
       { test: n => n.kind === "ald", color: "#a35cff" },
     ];
-    const rowH = (H - 8) / rows.length;
-    rows.forEach((r, ri) => {
-      const acc = new Array(bins).fill(0);
-      for (const n of chart.notes) if (r.test(n)) {
+    const acc = cats.map(() => new Array(bins).fill(0));
+    for (const n of chart.notes) {
+      for (let c = 0; c < cats.length; c++) {
+        if (!cats[c].test(n)) continue;
         const i = Math.min(bins - 1, Math.floor((n.time / chart.duration) * bins));
-        acc[i]++;
+        acc[c][i]++;
+        break;
       }
-      const peak = Math.max(1, ...acc);
-      for (let i = 0; i < bins; i++) {
-        if (!acc[i]) continue;
-        const h = (acc[i] / peak) * (rowH - 3);
-        sx2.fillStyle = r.color;
-        sx2.globalAlpha = 0.35 + 0.65 * (acc[i] / peak);
-        sx2.fillRect(i * binW, 4 + ri * rowH + (rowH - 3 - h), Math.max(1, binW), h);
+    }
+    let peak = 1;
+    for (let i = 0; i < bins; i++) {
+      peak = Math.max(peak, acc[0][i] + acc[1][i] + acc[2][i]);
+    }
+    const usable = H - 8;
+    for (let i = 0; i < bins; i++) {
+      let y = H - 4;
+      for (let c = 0; c < cats.length; c++) {
+        if (!acc[c][i]) continue;
+        const h = (acc[c][i] / peak) * usable;
+        sx2.fillStyle = cats[c].color;
+        sx2.fillRect(i * binW, y - h, Math.max(1, binW), h);
+        y -= h;
       }
-      sx2.globalAlpha = 1;
-    });
+    }
 
     for (const r of chart.regions) {
       const x0 = (r.time / chart.duration) * W;
@@ -5703,7 +6389,7 @@ function decompile(ast, diag = { warn: () => {} }) {
     const cmrText = (firstLine || "").trim() === "cmr 1"
       ? text : CMR.convert(text, diag).text;
     const cmrAst = CMR.parseCmr(cmrText);
-    chart = parseC2s(CMR.emitC2sRows(cmrAst));
+    chart = buildChart(CMR.materialize(cmrAst, mirrorOn));
     const ilText = CMR.decompile(cmrAst, diag);
     if (corridorWarnings.length) {
       console.warn("cmr corridor:", corridorWarnings.slice(0, 30));
@@ -5756,14 +6442,28 @@ function decompile(ast, diag = { warn: () => {} }) {
   }
 
   const drop = el("drop");
-  const fileIn = document.createElement("input");
-  fileIn.type = "file";
-  fileIn.accept = ".c2s,text/plain";
-  const loadFile = f => f.text().then(load).catch(error => {
+  // Extension decides the parse: .ilcmr compiles through the corridor's
+  // ilc, everything else goes to load() (cmr pragma detection; the dev
+  // build also accepts the upstream text format there).
+  const loadNamed = (name, text) => {
+    if (/\.ilcmr$/i.test(name || "")) {
+      const warns = [];
+      const ast = CMR.compile(text, { warn: w => warns.push(w) });
+      if (warns.length) console.warn("ilcmr compile warnings:", warns.slice(0, 20));
+      load(CMR.emitCmr(ast));
+      return;
+    }
+    load(text);
+  };
+  const loadFile = f => f.text().then(text => loadNamed(f.name, text)).catch(error => {
     console.error("chart load failed:", error);
     el("unknown").textContent = "load failed: " + (error && error.message || error);
     el("unkCard").hidden = false;
   });
+  // ==== LOCAL LOAD (stripped from deployment builds) ====
+  const fileIn = document.createElement("input");
+  fileIn.type = "file";
+  fileIn.accept = ".c2s,.cmr,.ilcmr,text/plain";
   fileIn.addEventListener("change", () => {
     const f = fileIn.files && fileIn.files[0];
     if (f) loadFile(f);
@@ -5771,6 +6471,7 @@ function decompile(ast, diag = { warn: () => {} }) {
   });
   el("pick").addEventListener("click", e => { e.stopPropagation(); fileIn.click(); });
   drop.addEventListener("click", () => fileIn.click());
+  // ==== END LOCAL LOAD ====
   // Drag-and-drop, exactly the listener shape that worked before the
   // bird's-eye restructure: plain preventDefault on the drag events (no
   // dropEffect writes — setting dropEffect against an OS source whose
@@ -5814,9 +6515,9 @@ function decompile(ast, diag = { warn: () => {} }) {
     target.addEventListener("drop", e => {
       e.preventDefault();
       drop.classList.remove("hot");
-      if (e.__c2sHandled) return;
+      if (e.__chartDropHandled) return;
       const f = pickDroppedFile(e.dataTransfer);
-      if (f) { e.__c2sHandled = true; readDropped(f); }
+      if (f) { e.__chartDropHandled = true; readDropped(f); }
       else if (target === document) {
         const dt = e.dataTransfer;
         console.warn("drop received without a file (types: " + (dt ? [...dt.types].join(",") : "none") +
@@ -5825,7 +6526,6 @@ function decompile(ast, diag = { warn: () => {} }) {
       }
     });
   }
-
   el("time").addEventListener("input", e => { now = +e.target.value; cancelGuides(); sync(); });
   el("speed").addEventListener("input", e => { speed = +e.target.value / 10; sync(); });
   el("rate").addEventListener("input", e => { rate = +e.target.value / 100; cancelGuides(); sync(); });
@@ -5885,7 +6585,7 @@ function decompile(ast, diag = { warn: () => {} }) {
   toggle("tWings", "wings"); toggle("tAir", "air"); toggle("tGrid", "grid");
   toggle("tShape", "bars"); toggle("tAirN", "airNotes"); toggle("tCos", "cosmetic");
   toggle("tAuto", "autoplay"); toggle("tSlp", "applySlp"); toggle("tStripe", "stripe");
-  toggle("tAnmitsu", "anmitsu");
+  toggle("tAnmitsu", "anmitsu"); toggle("tEvents", "events");
   el("eyespeed").addEventListener("input", () => {
     eyeSpeed = +el("eyespeed").value / 10;
     el("eyeval").textContent = eyeSpeed.toFixed(1);
@@ -5946,6 +6646,7 @@ function decompile(ast, diag = { warn: () => {} }) {
     if (e.key === "ArrowRight") { now += 250; sync(); }
   });
 
+  // ==== DEV ONLY (stripped from deployment builds) ====
   // Optional local automation hook for corpus/reference sweeps. Normal users
   // still use the file picker; `?src=../music/.../chart.c2s` loads only a
   // same-origin URL (including another local file beside this offline viewer).
@@ -6107,6 +6808,7 @@ function decompile(ast, diag = { warn: () => {} }) {
       }
     }
   }
+  // ==== END DEV ONLY ====
 
   sync();
 })();

@@ -1,0 +1,72 @@
+cmr 1
+
+// cmr tutorial 4 -- events and gimmicks.
+// [events] lines carry their own measure:tick. SCROLL stretches approach
+// speed over a span, STOP freezes it, and the key clause binds a SCROLL
+// to notes inside a KEYZONE. CRUSH is the air wall; HEAVEN a held disc.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9003
+sequence: 0
+difficulty: 00
+level: 4
+creator: cmr tutorial
+bpm-default: 140 140 140 180
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 140
+METER 0:000 4/4
+BPM 2:000 180
+METER 4:000 3/4
+METER 6:000 4/4
+SCROLL 6:000 x2 until 7:000
+STOP 7:000 until 7:048
+SCROLL 8:000 x0.5 until 9:000
+SCROLL 9:000 x2 until 10:000 key 1
+
+[notes]
+@0
+TAP 000 L4 w4
+TAP 096 L8 w4
+TAP 192 L4 w4
+TAP 288 L8 w4
+@2
+// the tempo doubled here -- same grid, faster clock
+TAP 000 L2 w4
+TAP 096 L6 w4
+TAP 192 L10 w4
+TAP 288 L14 w2
+@4
+// in 3/4 the bar lines land every three beats
+TAP 000 L4 w4
+TAP 096 L8 w4
+TAP 192 L4 w4
+@6
+// these notes ride the x2 scroll span
+TAP 000 L0 w4
+TAP 096 L6 w4
+TAP 192 L12 w4
+@8
+// half-speed crawl, then the keyed span: only notes inside the KEYZONE
+// take the x2 -- the lane region assigns scroll key 1
+TAP 000 L6 w4
+KEYZONE 000 L0 w8 until 10:000 key 1
+@9
+TAP 000 L2 w4
+TAP 192 L10 w4
+@10
+// CRUSH: an air wall sampled every 48 ticks from h1 up to h5
+CRUSH 000 L0 w16 h1 every 48 until 11:000 L0 w16 h5 style RED
+@11
+// HEAVEN: a held disc floating at air height
+HEAVEN 000 L6 w4 h5 disc 0 until 12:000 L6 w4 h5
+@12
+TAP 000 L4 w8

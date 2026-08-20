@@ -5,9 +5,9 @@ import { emitCmr, META_CMD, FX_TOKEN } from "../../cmr/tools/lib/ast.mjs";
 import { parseCmr } from "../../cmr/tools/lib/parse_cmr.mjs";
 
 const R = 384;
-const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const gcdOf = (a, b) => b ? gcdOf(b, a % b) : a;
 const GLYPH_DIR = { "^": "U", "^<": "UL", "^>": "UR", "v": "D", "v<": "DL", "v>": "DR" };
-const EVENT_WORDS = new Set(["BPM","METER","SCROLL","STOP","DEPTH","SCROLL-DEAD","CLICK","KEYZONE"]);
+const EVENT_KEYWORDS = new Set(["BPM","METER","SCROLL","STOP","DEPTH","SCROLL-DEAD","CLICK","KEYZONE"]);
 const KEYWORDS = new Set(["crush","trace","heaven","heavenx","keyzone"]);
 
 export function compile(text, diag = { warn: () => {} }) {
@@ -23,7 +23,7 @@ export function compile(text, diag = { warn: () => {} }) {
     const d = posD * division;
     posN = posN * division + R * posD;
     posD = d;
-    const g = gcd(posN, posD); posN /= g; posD /= g;
+    const g = gcdOf(posN, posD); posN /= g; posD /= g;
   };
   const tickHere = () => {
     if (posN % posD === 0) return posN / posD;
@@ -70,7 +70,7 @@ export function compile(text, diag = { warn: () => {} }) {
     const noteLines = [], eventLines = [];
     for (const l of escapeRun) {
       const w = l.split(/[ \t]+/)[0];
-      (EVENT_WORDS.has(w) && w !== "KEYZONE" ? eventLines : noteLines).push(l);
+      (EVENT_KEYWORDS.has(w) && w !== "KEYZONE" ? eventLines : noteLines).push(l);
     }
     if (eventLines.length) {
       const sub = parseCmr("cmr 1\n[events]\n" + eventLines.join("\n") + "\n");

@@ -1,0 +1,54 @@
+cmr 1
+
+// cmr tutorial 3 -- slides.
+// A slide block is a header (the start point) plus steps, each giving the
+// segment's END. ~> is a shape-only control (bends the path, no bar);
+// -> is a marked step (a judged bar). EXSLIDE roots judge like EXTAP.
+
+[meta]
+version: 1.00.00 1.00.00
+music: 9002
+sequence: 0
+difficulty: 00
+level: 3
+creator: cmr tutorial
+bpm-default: 140 140 140 140
+meter-default: 4/4
+resolution: 384
+clock: 384
+progjudge-bpm: 240
+progjudge-aer: 0.999
+tutorial: 1
+stats: derived
+
+[events]
+BPM 0:000 140
+METER 0:000 4/4
+
+[notes]
+@0
+// a gentle S-curve: shape controls bend it, the end is the judged bar
+SLIDE 000 L0 w4
+  ~> 0:096 L2 w4
+  ~> 0:192 L6 w4
+  ~> 0:288 L8 w4
+  -> 1:000 L12 w4 end
+@1
+// mid-chain marked steps put judgement bars along the path
+SLIDE 192 L12 w4
+  -> 2:000 L8 w4
+  -> 2:192 L4 w4
+  -> 3:000 L0 w4 end
+@3
+// a slide can hold its lane -- and carry an air on its final point
+SLIDE 096 L6 w4
+  ~> 3:288 L6 w4
+  -> 4:096 L10 w4 end +air:U
+@4
+// EXSLIDE: the whole chain judges Justice Critical
+EXSLIDE 192 L2 w6
+  ~> 5:000 L5 w6
+  ~> 5:096 L8 w6
+  -> 5:192 L10 w6 end
+@6
+TAP 000 L6 w4
