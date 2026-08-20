@@ -261,6 +261,11 @@
   .flag b { color: var(--warn); font-weight: 600; letter-spacing: .04em; }
   .flag code { color: var(--ink); }
 
+  .nowplaying {
+    color: var(--ink-3); font-size: 12px; margin-bottom: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nowplaying b { color: var(--ink-2); font-weight: 600; }
   .timeline { position: relative; margin-bottom: 14px; }
   /* The rail runs much taller than the field, so the source panes sit in
      the leftover space: columns 1-2 (field + bird's-eye width), row 2,
@@ -295,6 +300,8 @@
 <body>
 
 <div class="wrap">
+
+  <div class="nowplaying" id="nowPlaying" hidden></div>
 
   <div class="timeline">
     <canvas id="strip" width="2240" height="108"></canvas>
@@ -6420,6 +6427,29 @@ function compile(text, diag = { warn: () => {} }) {
     }
     setCodePanes(cmrText, cmrAst, ilText,
                  CMR.decompileLineTicks(), CMR.decompile.lastSpans);
+    // the quiet now-playing line: title from the caller, difficulty from
+    // the chart's own meta
+    {
+      const DIFF_NAMES = ["BASIC", "ADVANCED", "EXPERT", "MASTER", "ULTIMA", "WORLD'S END"];
+      const meta = cmrAst.meta.find(m => m.key === "difficulty");
+      const slot = meta ? Number.parseInt(meta.value, 10) : NaN;
+      const diff = Number.isInteger(slot) && DIFF_NAMES[slot] ? DIFF_NAMES[slot] : null;
+      const label = el("nowPlaying");
+      if (label) {
+        const bits = [];
+        if (pendingChartTitle) bits.push(pendingChartTitle);
+        if (diff) bits.push(diff);
+        label.textContent = "";
+        if (bits.length) {
+          const b = document.createElement("b");
+          b.textContent = bits[0];
+          label.appendChild(b);
+          if (bits[1]) label.appendChild(document.createTextNode(" \u00b7 " + bits[1]));
+        }
+        label.hidden = !bits.length;
+      }
+      pendingChartTitle = null;
+    }
     invalidateStripCache();
     chart.anmitsu = computeAnmitsu(chart);
     computeTrims(chart.notes);
@@ -6466,10 +6496,14 @@ function compile(text, diag = { warn: () => {} }) {
   }
 
   const drop = el("drop");
+  let pendingChartTitle = null;
   // Extension decides the parse: .ilcmr compiles through the corridor's
   // ilc, everything else goes to load() (cmr pragma detection; the dev
   // build also accepts the upstream text format there).
   const loadNamed = (name, text) => {
+    if (pendingChartTitle === null && name) {
+      pendingChartTitle = String(name).replace(/\.[a-z0-9]+$/i, "");
+    }
     if (/\.ilcmr$/i.test(name || "")) {
       const warns = [];
       const ast = CMR.compile(text, { warn: w => warns.push(w) });

@@ -94,6 +94,10 @@ const deployStyle = themedStyle + `
   /* deployment: diagnostic rail cards stay in markup and code but do not
      render (owner, 2026-08-20) */
   #statCard, #legCard, #unkCard { display: none !important; }
+  /* deployment: the cmr pane is parked for now -- still built and
+     populated by the legacy code, just not rendered; the ilcmr pane
+     takes the full double width (owner, 2026-08-20) */
+  .cp-cols .cp:first-child { display: none; }
   /* deployment: slim site nav in place of the topbar */
   .sitenav { display: flex; gap: 8px; margin-bottom: 14px; }
   .sitenav a {
@@ -137,9 +141,16 @@ const SNIPPET = `
   {
     const wanted = new URLSearchParams(location.search).get("chart");
     if (wanted && /^music\\d+\\/[\\w.-]+\\.cmr$/.test(wanted)) {
-      fetch("./data/cmr/" + wanted, { cache: "no-cache" })
-        .then(r => r.ok ? r.text() : Promise.reject(r.status))
-        .then(load)
+      const titleReady = fetch("./data/charts-catalogue.json", { cache: "no-cache" })
+        .then(r => r.ok ? r.json() : null)
+        .then(cat => {
+          const folder = wanted.split("/")[0];
+          const song = cat && cat.songs.find(x => x.folder === folder);
+          if (song) pendingChartTitle = song.title;
+        })
+        .catch(() => {});
+      Promise.all([window.ChartPack.file(wanted), titleReady])
+        .then(([text]) => load(text))
         .catch(() => { el("drop").classList.remove("hidden"); });
     }
   }
@@ -156,6 +167,7 @@ const page = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script>try{var l=localStorage.getItem("chunimaru.language");if(l)document.documentElement.lang=l;var t=new URLSearchParams(location.search).get("theme")||localStorage.getItem("chunimaru.theme")||"auto";if(/^[1-9]$/.test(t))t="theme-"+t;if(t==="dark")t="theme-2";else if(t==="light")t="theme-1";var K={"theme-1":"light","theme-2":"dark","theme-3":"light","theme-4":"dark","theme-5":"light","theme-6":"dark","theme-7":"dark","theme-8":"light","theme-9":"dark"};if(t==="auto")t=(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"theme-9":"theme-8";if(!K[t])t="theme-8";document.documentElement.dataset.theme=t;document.documentElement.dataset.scheme=K[t];var sh=localStorage.getItem("chunimaru.shape");if(sh==="square")document.documentElement.dataset.shape="square";else if(sh!=="legacy")document.documentElement.dataset.shape="mixed"}catch(e){}</scr` + `ipt>
 <title data-i18n="chart_viewer.page_title">Chart Viewer | ChuniMaru</title>
+<script src="./chart-pack.js"></scr` + `ipt>
 <link rel="icon" type="image/svg+xml" href="./imgs/chunimaru.svg" />
 <link rel="stylesheet" href="./css/theme.css" />
 <link id="chunimaru-shape-styles" rel="stylesheet" href="./css/shape-common.css" />
@@ -171,27 +183,28 @@ ${withCard}
 `;
 writeFileSync(outPath, page, "utf8");
 
-// ---- served chart data: mirror cmr/demos music folders + manifest ----
+// ---- served chart data ----
+// cmr/demos is the canonical source; it mirrors into chunimaru's
+// chart-src (repo-private plaintext) and the chart artifact builder
+// generates what the site actually serves: the plaintext catalogue for
+// chart.html and the per-song redacted pack blobs for the viewer. The
+// chunimaru pre-commit hook verifies the artifacts stay in sync.
 {
   const fs = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
   const src = join(here, "../cmr/demos");
-  const dst = "/home/etri/chunimaru/data/cmr";
-  fs.rmSync(dst, { recursive: true, force: true });
-  fs.mkdirSync(dst, { recursive: true });
-  const manifest = [];
+  const dstSrc = "/home/etri/chunimaru/chart-src";
+  fs.rmSync(dstSrc, { recursive: true, force: true });
+  fs.mkdirSync(dstSrc, { recursive: true });
   for (const folder of fs.readdirSync(src).sort()) {
     if (!/^music\d+$/.test(folder)) continue;
-    fs.mkdirSync(join(dst, folder), { recursive: true });
-    const charts = [];
+    fs.mkdirSync(join(dstSrc, folder), { recursive: true });
     for (const f of fs.readdirSync(join(src, folder)).sort()) {
-      copyFileSync(join(src, folder, f), join(dst, folder, f));
-      if (f.endsWith(".cmr")) charts.push(f);
+      copyFileSync(join(src, folder, f), join(dstSrc, folder, f));
     }
-    manifest.push({ folder, charts });
   }
-  fs.writeFileSync(join(dst, "index.json"),
-    JSON.stringify(manifest, null, 2) + "\n");
-  console.log("data/cmr:", manifest.length, "music folders shipped");
+  execFileSync("node", ["scripts/build_charts.mjs"],
+    { cwd: "/home/etri/chunimaru", stdio: "inherit" });
 }
 
 // ---- id coverage check ----
