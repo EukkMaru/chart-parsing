@@ -6450,9 +6450,8 @@ function compile(text, diag = { warn: () => {} }) {
     // the chart's own meta
     {
       const DIFF_NAMES = ["BASIC", "ADVANCED", "EXPERT", "MASTER", "ULTIMA", "WORLD'S END"];
-      const meta = cmrAst.meta.find(m => m.key === "difficulty");
-      const slot = meta ? Number.parseInt(meta.value, 10) : NaN;
-      const diff = Number.isInteger(slot) && DIFF_NAMES[slot] ? DIFF_NAMES[slot] : null;
+      const diff = Number.isInteger(pendingChartSlot) && DIFF_NAMES[pendingChartSlot]
+        ? DIFF_NAMES[pendingChartSlot] : null;
       const label = el("nowPlaying");
       if (label) {
         const bits = [];
@@ -6468,6 +6467,7 @@ function compile(text, diag = { warn: () => {} }) {
         label.hidden = !bits.length;
       }
       pendingChartTitle = null;
+      pendingChartSlot = null;
     }
     invalidateStripCache();
     chart.anmitsu = computeAnmitsu(chart);
@@ -6516,12 +6516,17 @@ function compile(text, diag = { warn: () => {} }) {
 
   const drop = el("drop");
   let pendingChartTitle = null;
+  let pendingChartSlot = null;
   // Extension decides the parse: .ilcmr compiles through the corridor's
   // ilc, everything else goes to load() (cmr pragma detection; the dev
   // build also accepts the upstream text format there).
   const loadNamed = (name, text) => {
     if (pendingChartTitle === null && name) {
       pendingChartTitle = String(name).replace(/\.[a-z0-9]+$/i, "");
+    }
+    if (pendingChartSlot === null && name) {
+      const m = String(name).match(/(?:^|_)(\d+)\.[a-z0-9]+$/i);
+      if (m) pendingChartSlot = Number(m[1]);
     }
     if (/\.ilcmr$/i.test(name || "")) {
       const warns = [];

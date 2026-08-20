@@ -147,6 +147,8 @@ const SNIPPET = `
           const folder = wanted.split("/")[0];
           const song = cat && cat.songs.find(x => x.folder === folder);
           if (song) pendingChartTitle = song.title;
+          const sm = wanted.match(/(?:^|_)(\\d+)\\.cmr$/);
+          if (sm) pendingChartSlot = Number(sm[1]);
         })
         .catch(() => {});
       Promise.all([window.ChartPack.file(wanted), titleReady])
