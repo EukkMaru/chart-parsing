@@ -112,46 +112,6 @@
   }
   @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 300px; } .stageleft { grid-template-columns: minmax(0, 1fr) 90px; } }
   @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .stageleft { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } .codepanes { grid-column: 1; } .cp-body { height: 220px; } }
-  /* Phone layout, deterministic: JS reparents the sections into the
-     order [viewer, transport, units, timeline, options, ilcmr]; this
-     block only styles them. The bird's-eye stays beside the field. */
-  .mtbar, .mtunits, .mtoptions, .mtoptionsbody { display: none; }
-  @media (max-width: 700px) {
-    .wrap { padding: 8px; }
-    /* every stage variant collapses to the same phone geometry, including
-       the persisted rail-collapsed state whose desktop rules otherwise
-       out-rank this block */
-    .stage, .stage.rail-collapsed {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: none;
-      gap: 8px;
-    }
-    .stageleft, .stage.rail-collapsed .stageleft {
-      grid-template-columns: minmax(0, 1fr) 44px;
-      grid-template-rows: 58vh;
-      gap: 8px;
-    }
-    .rail { display: none; }
-    .viewport { height: 58vh; }
-    .eyepanel { height: 58vh !important; display: block; }
-    canvas#field { width: 100%; height: 100%; }
-    .timeline canvas#strip { height: 40px; }
-    .nowplaying { margin-bottom: 0; }
-    .mtbar { display: flex; gap: 8px; }
-    .mtbar button { flex: 1 1 0; min-height: 46px; font-size: 17px; }
-    .mtbar #mtPlay { flex: 2 1 0; font-size: 14px; }
-    .mtunits { display: flex; gap: 8px; }
-    .mtunits button { flex: 1 1 0; min-height: 36px; }
-    .mtoptions { display: block; width: 100%; min-height: 40px; text-align: center; }
-    .mtoptionsbody { flex-direction: column; gap: 10px; }
-    .mtoptionsbody.open { display: flex; }
-    .codepanes { display: block; }
-    .cp-body { height: 200px; }
-    .btnrow button { min-height: 40px; }
-    input[type="range"] { height: 34px; }
-    .sitenav { gap: 8px; }
-    .sitenav a { flex: 1; justify-content: center; min-height: 40px; font-size: 13px; }
-  }
 
   .viewport {
     position: relative;
@@ -215,10 +175,6 @@
   .stage.rail-collapsed .rail { padding: 5px; }
   .stage.rail-collapsed .rail .card { display: none; }
   .stage.rail-collapsed .railtoggle { align-self: stretch; }
-  @media (max-width: 700px) {
-    .railtoggle { display: none; }
-    .stage.rail-collapsed .rail .card { display: flex; }
-  }
 
   .card {
     background: var(--panel);
@@ -332,6 +288,49 @@
 
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  /* Phone layout, deterministic: JS reparents the sections into the
+     order [viewer, transport, units, timeline, options, ilcmr]; this
+     block only styles them. The bird's-eye stays beside the field. */
+  .mtbar, .mtunits, .mtoptions, .mtoptionsbody { display: none; }
+
+  @media (max-width: 700px) {
+    .wrap { padding: 8px; }
+    /* every stage variant collapses to the same phone geometry, including
+       the persisted rail-collapsed state whose desktop rules otherwise
+       out-rank this block */
+    .stage, .stage.rail-collapsed {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+      gap: 8px;
+    }
+    .stageleft, .stage.rail-collapsed .stageleft {
+      grid-template-columns: minmax(0, 1fr) 44px;
+      grid-template-rows: 58vh;
+      gap: 8px;
+    }
+    .rail { display: none; }
+    .viewport { height: 58vh; }
+    .eyepanel { height: 58vh !important; display: block; }
+    canvas#field { width: 100%; height: 100%; }
+    .timeline canvas#strip { height: 40px; }
+    .nowplaying { margin-bottom: 0; }
+    .mtbar { display: flex; gap: 8px; }
+    .mtbar button { flex: 1 1 0; min-height: 46px; font-size: 17px; }
+    .mtbar #mtPlay { flex: 2 1 0; font-size: 14px; }
+    .mtunits { display: flex; gap: 8px; }
+    .mtunits button { flex: 1 1 0; min-height: 36px; }
+    .mtoptions { display: block; width: 100%; min-height: 40px; text-align: center; }
+    .mtoptionsbody { flex-direction: column; gap: 10px; }
+    .mtoptionsbody.open { display: flex; }
+    .codepanes { display: block; }
+    .cp-body { height: 200px; }
+    .btnrow button { min-height: 40px; }
+    input[type="range"] { height: 34px; }
+    .sitenav { gap: 8px; }
+    .sitenav a { flex: 1; justify-content: center; min-height: 40px; font-size: 13px; }
+    .railtoggle { display: none; }
+  }
 </style>
 </head>
 <body>
