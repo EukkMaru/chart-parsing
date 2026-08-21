@@ -112,32 +112,32 @@
   }
   @media (max-width: 1400px) { .stage { grid-template-columns: minmax(0, 1fr) 300px; } .stageleft { grid-template-columns: minmax(0, 1fr) 90px; } }
   @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } .stageleft { grid-template-columns: minmax(0, 1fr); } .eyepanel { display: none; } .codepanes { grid-column: 1; } .cp-body { height: 220px; } }
-  /* Phone layout: not a shrunken desktop. The grid flattens
-     (display: contents) so the reading order becomes nav, field,
-     transport, timeline, then the remaining cards; the bird's-eye and
-     source panes step aside; every control grows to a touch target. */
+  /* Phone layout, deterministic: JS reparents the sections into the
+     order [viewer, transport, units, timeline, options, ilcmr]; this
+     block only styles them. The bird's-eye stays beside the field. */
+  .mtbar, .mtunits, .mtoptions, .mtoptionsbody { display: none; }
   @media (max-width: 700px) {
-    .wrap { display: flex; flex-direction: column; gap: 10px; padding: 8px; }
-    .stage, .stageleft, .rail { display: contents; }
-    .viewport {
-      order: 1; margin: 0 -8px;
-      height: 66vh;
-      border-radius: 0; border-left: 0; border-right: 0;
-    }
+    .wrap { padding: 8px; }
+    .stage { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .stageleft { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
+    .rail { display: none; }
+    .viewport { height: 58vh; }
     canvas#field { width: 100%; height: 100%; }
+    .eyepanel { display: block; }
     .timeline canvas#strip { height: 40px; }
     .nowplaying { margin-bottom: 0; }
-    .timeline { order: 3; margin: 0; }
-    .rail .card { order: 4; }
-    .rail .card:nth-of-type(1) { order: 2; }   /* Transport under the field */
-    #statCard, #legCard, #unkCard { order: 5; }
-    .eyepanel, .codepanes { display: none; }
-    .card { border-radius: 14px; }
-    .btnrow { gap: 8px; }
-    .btnrow button { flex: 1 1 auto; min-height: 42px; font-size: 14px; }
-    .ctl .lab { font-size: 13px; }
-    .ctl .lab b { font-size: 13px; }
-    input[type="range"] { height: 36px; }
+    .mtbar { display: flex; gap: 8px; }
+    .mtbar button { flex: 1 1 0; min-height: 46px; font-size: 17px; }
+    .mtbar #mtPlay { flex: 2 1 0; font-size: 14px; }
+    .mtunits { display: flex; gap: 8px; }
+    .mtunits button { flex: 1 1 0; min-height: 36px; }
+    .mtoptions { display: block; width: 100%; min-height: 40px; text-align: center; }
+    .mtoptionsbody { flex-direction: column; gap: 10px; }
+    .mtoptionsbody.open { display: flex; }
+    .codepanes { display: block; }
+    .cp-body { height: 200px; }
+    .btnrow button { min-height: 40px; }
+    input[type="range"] { height: 34px; }
     .sitenav { gap: 8px; }
     .sitenav a { flex: 1; justify-content: center; min-height: 40px; font-size: 13px; }
   }
@@ -332,6 +332,21 @@
   <div class="timeline">
     <canvas id="strip" width="2240" height="108"></canvas>
   </div>
+
+  <div class="mtbar" id="mtBar">
+    <button id="mtBigBack" type="button">&laquo;</button>
+    <button id="mtBack" type="button">&lsaquo;</button>
+    <button id="mtPlay" type="button">Play</button>
+    <button id="mtFwd" type="button">&rsaquo;</button>
+    <button id="mtBigFwd" type="button">&raquo;</button>
+  </div>
+  <div class="mtunits" id="mtUnits">
+    <button type="button" data-unit="sec" aria-pressed="true">Second</button>
+    <button type="button" data-unit="bar" aria-pressed="false">Bar</button>
+    <button type="button" data-unit="tick" aria-pressed="false">Tick</button>
+  </div>
+  <button class="mtoptions" id="mtOptions" type="button" aria-expanded="false">Options</button>
+  <div class="mtoptionsbody" id="mtOptionsBody"></div>
 
   <div class="stage">
     <div class="stageleft">
@@ -6513,6 +6528,7 @@ function compile(text, diag = { warn: () => {} }) {
     el("sval").textContent = speed.toFixed(1);
     el("lval").textContent = Math.round(lookahead()) + " ms";
     el("rval").textContent = rate.toFixed(2) + "×";
+    el("mtPlay").textContent = playing ? "Pause" : "Play";
     el("wval").textContent = winMs + " ms";
     el("aval").textContent = GEO.airTop.toFixed(2);
     el("gmval").textContent = (guideDelayMs > 0 ? "+" : "") + guideDelayMs + " ms";
@@ -6677,6 +6693,81 @@ function compile(text, diag = { warn: () => {} }) {
   el("back").addEventListener("click", () => { now = Math.max(0, now - 1000); cancelGuides(); sync(); });
   el("fwd").addEventListener("click", () => { now += 1000; cancelGuides(); sync(); });
   el("reset").addEventListener("click", () => { now = 0; cancelGuides(); sync(); });
+
+  // ---- phone layout: explicit DOM order + transport ----------------------
+  {
+    const mq = typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 700px)") : null;
+    const q = sel => typeof document.querySelector === "function"
+      ? document.querySelector(sel) : null;
+    const wrapEl = q(".wrap"), stageEl = q(".stage"), timelineEl = q(".timeline");
+    const stageleftEl = q(".stageleft"), railEl = q(".rail");
+    if (mq && wrapEl && stageEl && timelineEl && stageleftEl && railEl) {
+      const codepanesEl = el("codepanes");
+      const optionsBody = el("mtOptionsBody");
+      const railCards = () => [...railEl.querySelectorAll(":scope > .card")];
+      const applyLayout = () => {
+        if (mq.matches) {
+          for (const n of [stageEl, el("mtBar"), el("mtUnits"), timelineEl,
+                           el("mtOptions"), optionsBody, codepanesEl]) {
+            wrapEl.appendChild(n);
+          }
+          for (const c of railCards()) optionsBody.appendChild(c);
+        } else {
+          for (const n of [timelineEl, stageEl, el("mtBar"), el("mtUnits"),
+                           el("mtOptions"), optionsBody]) {
+            wrapEl.appendChild(n);
+          }
+          stageleftEl.appendChild(codepanesEl);
+          const anchor = el("statCard");
+          for (const c of [...optionsBody.children]) railEl.insertBefore(c, anchor);
+        }
+      };
+      applyLayout();
+      if (mq.addEventListener) mq.addEventListener("change", applyLayout);
+
+      // options disclosure, collapsed by default
+      el("mtOptions").addEventListener("click", () => {
+        const open = !optionsBody.classList.contains("open");
+        optionsBody.classList.toggle("open", open);
+        el("mtOptions").setAttribute("aria-expanded", String(open));
+      });
+
+      // transport: << < play > >> stepping by the selected unit
+      let mtUnit = "sec";
+      for (const b of el("mtUnits").querySelectorAll("button")) {
+        b.addEventListener("click", () => {
+          mtUnit = b.dataset.unit;
+          for (const other of el("mtUnits").querySelectorAll("button")) {
+            other.setAttribute("aria-pressed", String(other === b));
+          }
+        });
+      }
+      const mtStep = (dir, big) => {
+        if (!chart) return;
+        if (mtUnit === "sec") {
+          now = Math.max(0, now + dir * (big ? 5 : 1) * 1000);
+        } else if (mtUnit === "bar") {
+          const R = chart.R, cur = chart.posAt(now);
+          const bars = (big ? 4 : 1);
+          const p = dir > 0
+            ? (Math.floor(cur / R + 1e-6) + bars) * R
+            : Math.max(0, (Math.ceil(cur / R - 1e-6) - bars) * R);
+          now = Math.max(0, chart.timeAt(p));
+        } else {
+          const cur = chart.posAt(now);
+          const p = Math.max(0, cur + dir * (big ? 48 : 1));
+          now = Math.max(0, chart.timeAt(p));
+        }
+        cancelGuides(); sync();
+      };
+      el("mtBigBack").addEventListener("click", () => mtStep(-1, true));
+      el("mtBack").addEventListener("click", () => mtStep(-1, false));
+      el("mtFwd").addEventListener("click", () => mtStep(1, false));
+      el("mtBigFwd").addEventListener("click", () => mtStep(1, true));
+      el("mtPlay").addEventListener("click", () => el("play").click());
+    }
+  }
 
   // collapsible options rail, remembered across visits
   {
