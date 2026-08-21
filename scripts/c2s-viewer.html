@@ -306,13 +306,15 @@
     }
     .stageleft, .stage.rail-collapsed .stageleft {
       grid-template-columns: minmax(0, 1fr) 44px;
-      grid-template-rows: 58vh;
+      grid-template-rows: none;
+      align-items: start;
       gap: 8px;
     }
     .rail { display: none; }
-    .viewport { height: 58vh; }
-    .eyepanel { height: 58vh !important; display: block; }
-    canvas#field { width: 100%; height: 100%; }
+    /* the field keeps its native resolution and simply scales down; the
+       box hugs it so nothing below inherits empty space */
+    .viewport { height: auto; }
+    .eyepanel { display: block; }
     .timeline canvas#strip { height: 40px; }
     .nowplaying { margin-bottom: 0; }
     .mtbar { display: flex; gap: 8px; }
@@ -4731,18 +4733,6 @@ function compile(text, diag = { warn: () => {} }) {
   }
 
   function draw() {
-    if (typeof window.matchMedia === "function" && cv.getBoundingClientRect) {
-      const phone = window.matchMedia("(max-width: 700px)").matches;
-      if (phone) {
-        const box = cv.getBoundingClientRect();
-        if (box.width > 0 && box.height > 0) {
-          const want = Math.max(320, Math.round(PROJ_H * box.width / box.height));
-          if (Math.abs(cv.width - want) > 1) cv.width = want;
-        }
-      } else if (cv.width !== 1280) {
-        cv.width = 1280;
-      }
-    }
     const W = cv.width, H = PROJ_H;
     if (cv.height !== H) cv.height = H;
     cx2.setTransform(1, 0, 0, 1, 0, 0);
