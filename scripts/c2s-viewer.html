@@ -346,18 +346,18 @@
   </div>
 
   <div class="mtbar" id="mtBar">
-    <button id="mtBigBack" type="button">&laquo;</button>
-    <button id="mtBack" type="button">&lsaquo;</button>
-    <button id="mtPlay" type="button">Play</button>
-    <button id="mtFwd" type="button">&rsaquo;</button>
-    <button id="mtBigFwd" type="button">&raquo;</button>
+    <button id="mtBigBack" type="button" data-i18n-title="chart_viewer.step.big_back" title="Jump back">&laquo;</button>
+    <button id="mtBack" type="button" data-i18n-title="chart_viewer.step.back" title="Step back">&lsaquo;</button>
+    <button id="mtPlay" type="button" data-i18n="chart_viewer.play">Play</button>
+    <button id="mtFwd" type="button" data-i18n-title="chart_viewer.step.forward" title="Step forward">&rsaquo;</button>
+    <button id="mtBigFwd" type="button" data-i18n-title="chart_viewer.step.big_forward" title="Jump forward">&raquo;</button>
   </div>
   <div class="mtunits" id="mtUnits">
-    <button type="button" data-unit="sec" aria-pressed="true">Second</button>
-    <button type="button" data-unit="bar" aria-pressed="false">Bar</button>
-    <button type="button" data-unit="tick" aria-pressed="false">Tick</button>
+    <button type="button" data-unit="sec" data-i18n="chart_viewer.unit.second" aria-pressed="true">Second</button>
+    <button type="button" data-unit="bar" data-i18n="chart_viewer.unit.bar" aria-pressed="false">Bar</button>
+    <button type="button" data-unit="tick" data-i18n="chart_viewer.unit.tick" aria-pressed="false">Tick</button>
   </div>
-  <button class="mtoptions" id="mtOptions" type="button" aria-expanded="false">Options</button>
+  <button class="mtoptions" id="mtOptions" type="button" data-i18n="chart_viewer.options" aria-expanded="false">Options</button>
   <div class="mtoptionsbody" id="mtOptionsBody"></div>
 
   <div class="stage">
@@ -4386,6 +4386,30 @@ function compile(text, diag = { warn: () => {} }) {
   const LOOK_BASE = 5388.9;
 
   const el = id => document.getElementById(id);
+  // translate a key when the site's i18n is loaded (the standalone dev
+  // page has none, so the English fallback stands)
+  const t = (key, fallback) =>
+    (window.ChuniI18n && window.ChuniI18n.t(key) !== key)
+      ? window.ChuniI18n.t(key) : fallback;
+  // dynamic labels keep their key on the element so a language switch
+  // re-renders them through the site's own applyTranslations pass
+  const setLabel = (node, key, fallback) => {
+    if (!node) return;
+    node.setAttribute("data-i18n", key);
+    node.textContent = t(key, fallback);
+  };
+  const applyTitles = () => {
+    if (typeof document.querySelectorAll !== "function") return;
+    for (const node of document.querySelectorAll("[data-i18n-title]")) {
+      const key = node.getAttribute("data-i18n-title");
+      const translated = t(key, null);
+      if (translated) node.title = translated;
+    }
+  };
+  window.addEventListener("chuni-language-change", () => {
+    applyTitles();
+    sync();          // dynamic labels re-render with the new language
+  });
 
   function lookahead() { return LOOK_BASE / speed; }
 
@@ -6528,7 +6552,8 @@ function compile(text, diag = { warn: () => {} }) {
     el("sval").textContent = speed.toFixed(1);
     el("lval").textContent = Math.round(lookahead()) + " ms";
     el("rval").textContent = rate.toFixed(2) + "×";
-    el("mtPlay").textContent = playing ? "Pause" : "Play";
+    setLabel(el("mtPlay"), playing ? "chart_viewer.pause" : "chart_viewer.play",
+             playing ? "Pause" : "Play");
     el("wval").textContent = winMs + " ms";
     el("aval").textContent = GEO.airTop.toFixed(2);
     el("gmval").textContent = (guideDelayMs > 0 ? "+" : "") + guideDelayMs + " ms";
@@ -6657,7 +6682,8 @@ function compile(text, diag = { warn: () => {} }) {
   });
   el("play").addEventListener("click", () => {
     playing = !playing;
-    el("play").textContent = playing ? "Pause" : "Play";
+    setLabel(el("play"), playing ? "chart_viewer.pause" : "chart_viewer.play",
+             playing ? "Pause" : "Play");
     last = performance.now();
     if (playing) { ensureAudio(); requestAnimationFrame(tick); }
     else cancelGuides();
@@ -7026,6 +7052,7 @@ function compile(text, diag = { warn: () => {} }) {
   }
   // ==== END DEV ONLY ====
 
+  applyTitles();
   sync();
 })();
 </script>
