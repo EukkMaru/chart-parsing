@@ -118,12 +118,23 @@
   .mtbar, .mtunits, .mtoptions, .mtoptionsbody { display: none; }
   @media (max-width: 700px) {
     .wrap { padding: 8px; }
-    .stage { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-    .stageleft { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
+    /* every stage variant collapses to the same phone geometry, including
+       the persisted rail-collapsed state whose desktop rules otherwise
+       out-rank this block */
+    .stage, .stage.rail-collapsed {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+      gap: 8px;
+    }
+    .stageleft, .stage.rail-collapsed .stageleft {
+      grid-template-columns: minmax(0, 1fr) 44px;
+      grid-template-rows: 58vh;
+      gap: 8px;
+    }
     .rail { display: none; }
     .viewport { height: 58vh; }
+    .eyepanel { height: 58vh !important; display: block; }
     canvas#field { width: 100%; height: 100%; }
-    .eyepanel { display: block; }
     .timeline canvas#strip { height: 40px; }
     .nowplaying { margin-bottom: 0; }
     .mtbar { display: flex; gap: 8px; }
